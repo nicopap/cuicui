@@ -6,16 +6,12 @@ A quick and dirty UI lib for bevy built on bevy's excellent 2d primitives.
 
 - A very simple layout algorithm you can keep in your head.
 - Reuses the same rendering as 2d, the final game binary will be smaller.
-- `bevy_ui` is so barebone that really it isn't difficult to reach feature
-  parity. Especially if you've bee using [`bevy_mod_picking`].
-- Due to <https://github.com/bevyengine/bevy/issues/5721> it's not possible
-  to display something on top of UI in bevy
-- Bevy's UI is basically just squares, using sprites allows getting
-  beyond that. Specifically, you can directly manipulate the element's
-  `Transform`
-- Better integration with 3rd party crates.
-  You want to add particles? [Go ahead][bevy_hanabi].
-  You want sprite outlines? [Go ahead][bevy_2d_outline].
+- You can directly manipulate UI element's `Transform`.
+- Better integration with 3rd party crates, as it uses pre-existing 2d primitives.
+  - You want to add particles? [Go ahead][bevy_hanabi].
+  - You want UI element outlines? [Go ahead][bevy_2d_outline].
+  - May be interested in the beta branch of [`bevy_mod_picking`]
+- cuicui is built on top of a composable `Prefab` system.
 - There is a few widgets I ABSOLUTELY NEED for my game, and `bevy_ui` has
   nothing more than buttons (yikes!!)
 - Oh god I expected this list to only have two items
@@ -72,11 +68,17 @@ cuicui runs on `bevy_ecs` and therefore can ~~abuse~~ use it as a backing storag
 
 Layouts are generally backed by a tree,
 [`taffy`]'s implementation of Flexbox internally uses a [`slotmap`].
-cuicui uses the ECS, which is basically a slotmap.
+cuicui uses the ECS, which is basically a faster slotmap.
 
 Also, cuicui's layouting system relinquishes control to give more power to users.
 Meaning that you can tell cuicui to not manage UI entities `Transform`
 and instead chose yourself to build the UI based on what info cuicui gives you.
+
+### Limitations
+
+cuicui layout returns postion as offset from parent, which may not be useful
+if you do not use bevy's transform hierarchy. This also locks you into using
+bevy hierarchy for your Ui.
 
 ## Usage
 
@@ -88,6 +90,7 @@ In which case, add `CuicuiPlugin` the following way:
 ```rust
 todo!()
 ```
+
 
 [bevy_2d_outline]: https://lib.rs/crates/bevy_simple_2d_outline
 [bevy_hanabi]: https://lib.rs/crates/bevy_hanabi

@@ -37,7 +37,8 @@ use std::fmt;
 
 use bevy::prelude::*;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Default, Copy, PartialEq)]
+#[cfg_attr(feature = "reflect", derive(Reflect, FromReflect))]
 pub struct Pos {
     pub left: f32,
     pub top: f32,
@@ -45,18 +46,19 @@ pub struct Pos {
 impl Pos {
     fn set_cross(&mut self, direction: Direction, cross: f32) {
         match direction {
-            Direction::Vertical => self.top = cross,
-            Direction::Horizontal => self.left = cross,
+            Direction::Vertical => self.left = cross,
+            Direction::Horizontal => self.top = cross,
         }
     }
     fn set_axis(&mut self, direction: Direction, axis: f32) {
         match direction {
-            Direction::Vertical => self.left = axis,
-            Direction::Horizontal => self.top = axis,
+            Direction::Vertical => self.top = axis,
+            Direction::Horizontal => self.left = axis,
         }
     }
 }
 #[derive(Clone, Copy, Default, PartialEq)]
+#[cfg_attr(feature = "reflect", derive(Reflect, FromReflect))]
 pub struct Size {
     pub width: f32,
     pub height: f32,
@@ -96,7 +98,8 @@ impl fmt::Display for Size {
 ///
 /// Note that `Pos` will always be relative to the top left position of the
 /// containing node.
-#[derive(Component, Clone, Copy, PartialEq)]
+#[derive(Component, Clone, Copy, Default, PartialEq)]
+#[cfg_attr(feature = "reflect", derive(Reflect, FromReflect))]
 pub struct PosRect {
     size: Size,
     pos: Pos,
@@ -111,11 +114,13 @@ impl PosRect {
 }
 
 #[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "reflect", derive(Reflect, FromReflect))]
 pub struct Container {
     pub direction: Direction,
     pub space_use: SpaceUse,
 }
 #[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "reflect", derive(Reflect, FromReflect))]
 pub enum Direction {
     Vertical,
     Horizontal,
@@ -129,15 +134,18 @@ impl Direction {
     }
 }
 #[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "reflect", derive(Reflect, FromReflect))]
 pub enum SpaceUse {
     Stretch,
     Compact,
 }
 #[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "reflect", derive(Reflect, FromReflect))]
 pub struct Spacer {
     pub parent_ratio: f32,
 }
 #[derive(Component)]
+#[cfg_attr(feature = "reflect", derive(Reflect, FromReflect))]
 pub enum Node {
     Container(Container),
     Spacer(Spacer),
@@ -145,6 +153,7 @@ pub enum Node {
 }
 
 #[derive(Component)]
+#[cfg_attr(feature = "reflect", derive(Reflect, FromReflect))]
 pub struct Root {
     pub container: Container,
     pub bounds: Size,
@@ -152,8 +161,8 @@ pub struct Root {
 
 #[derive(Clone, Copy, PartialEq)]
 struct AtOutput {
-    axe_offset: f32,
-    cross_size: f32,
+    axis: f32,
+    cross: f32,
 }
 impl Container {
     fn layout(
@@ -166,61 +175,64 @@ impl Container {
         names: &Query<&Name>,
     ) -> Size {
         use SpaceUse::*;
-        let Self { direction: node_dir, space_use } = *self;
+        let Self { direction, space_use } = *self;
         if children.is_empty() {
             return Size::default();
         }
         let mut children_size = 0.0;
         let mut cross_max = 0.0_f32;
+        // TODO: check we do not have multiple Stretch going in same direction
+        // recursively in this.
+        // Currently, it just gives full length to the first one.
+        // TODO: also if there is only one, make sure to first comute all
+        // the other layouts before computing this one.
+        // TODO: check for Spacer (or %) in Compact containers. I guess it makes
+        // sense technically.
+        let mut node_children_count = 0;
         for child in nodes.iter_many(children) {
-            let result = layout_at(child, node_dir, bounds, to_update, nodes, names);
-            children_size += result.axe_offset;
-            cross_max = cross_max.max(result.cross_size);
+            let result = layout_at(child, direction, bounds, to_update, nodes, names);
+            children_size += result.axis;
+            cross_max = cross_max.max(result.cross);
+            node_children_count += 1;
         }
-        let size = match space_use {
+        match space_use {
             Stretch => {
-                let total_space_between = bounds.on(node_dir) - children_size;
+                let total_space_between = bounds.on(direction) - children_size;
                 if total_space_between < 0.0 {
                     let name = names
                         .get(current)
-                        .map_or(format!("{current:?}"), |n| n.to_string());
+                        .map_or_else(|_| format!("{current:?}"), |n| n.to_string());
                     let n = children.len();
-                    let dir_name = node_dir.size_name();
+                    let dir_name = direction.size_name();
                     panic!(
-                        "Yo container {name} of size {bounds} contains more \
-                            stuff than it possibly can!\n\
-                            You gotta either make it larger or reduce the size \
-                            of things within it.\n\
-                            It has exactly {n} items for a total {dir_name} \
-                            of {children_size}."
+                        "Yo container {name} of size {bounds} contains more stuff than it possibly can!\n\
+                         You gotta either make it larger or reduce the size of things within it.\n\
+                         It has exactly {n} items for a total {dir_name} of {children_size}."
                     );
                 }
-                let space_between = total_space_between / (children.len() - 1) as f32;
+                let space_between = total_space_between / (node_children_count - 1) as f32;
                 let mut iter = to_update.iter_many_mut(children);
                 let mut axis_offset = 0.0;
                 while let Some(mut space) = iter.fetch_next() {
-                    space.pos.set_axis(node_dir, axis_offset);
-                    // TODO: centering (should be (bounds.cross(node_dir) - space.size.cross(node_dir)) / 2.0)
-                    space.pos.set_cross(node_dir, 0.0);
-                    axis_offset += space.size.on(node_dir) + space_between;
+                    space.pos.set_axis(direction, axis_offset);
+                    // TODO: centering (should be )
+                    let offset = (bounds.cross(direction) - space.size.cross(direction)) / 2.0;
+                    space.pos.set_cross(direction, offset);
+                    axis_offset += space.size.on(direction) + space_between;
                 }
-                Size::with(node_dir, bounds.on(node_dir), cross_max)
+                Size::with(direction, bounds.on(direction), cross_max)
             }
             Compact => {
                 let mut axis_offset = 0.0;
                 let mut iter = to_update.iter_many_mut(children);
                 while let Some(mut space) = iter.fetch_next() {
-                    space.pos.set_axis(node_dir, axis_offset);
-                    space.pos.set_cross(node_dir, 0.0);
-                    axis_offset += space.size.on(node_dir);
+                    space.pos.set_axis(direction, axis_offset);
+                    space.pos.set_cross(direction, 0.0);
+                    axis_offset += space.size.on(direction);
                 }
-                Size::with(node_dir, children_size, cross_max)
+                Size::with(direction, children_size, cross_max)
             }
-        };
-        if let Ok(mut to_update) = to_update.get_mut(current) {
-            to_update.size = size;
         }
-        size
     }
 }
 // This functions' responsability is to compute the layout for `current` Entity,
@@ -241,26 +253,29 @@ fn layout_at(
     match node {
         (Node::Container(container), children) => {
             let size = container.layout(current, children, bounds, to_update, nodes, names);
-            AtOutput {
-                axe_offset: size.on(parent_dir),
-                cross_size: size.cross(parent_dir),
-            }
-        }
-        (Node::Spacer(spacer), children) => {
-            let axe_offset = bounds.on(parent_dir) * spacer.parent_ratio;
-            let inner_bounds = bounds.with_on(parent_dir, axe_offset);
-            let cross_size = if let Some(child) = nodes.iter_many(children).next() {
-                let result = layout_at(child, parent_dir, inner_bounds, to_update, nodes, names);
-                // TODO: set child position
-                result.cross_size
-            } else {
-                0.0
-            };
-            let size = Size::with(parent_dir, axe_offset, cross_size);
             if let Ok(mut to_update) = to_update.get_mut(current) {
                 to_update.size = size;
             }
-            AtOutput { axe_offset, cross_size }
+            AtOutput {
+                axis: size.on(parent_dir),
+                cross: size.cross(parent_dir),
+            }
+        }
+        (Node::Spacer(spacer), children) => {
+            let axis = bounds.on(parent_dir) * spacer.parent_ratio;
+            let inner_bounds = bounds.with_on(parent_dir, axis);
+            let cross = if let Some(child) = nodes.iter_many(children).next() {
+                let result = layout_at(child, parent_dir, inner_bounds, to_update, nodes, names);
+                // TODO: set child position
+                result.cross
+            } else {
+                0.0
+            };
+            let size = Size::with(parent_dir, axis, cross);
+            if let Ok(mut to_update) = to_update.get_mut(current) {
+                to_update.size = size;
+            }
+            AtOutput { axis, cross }
         }
         (Node::Static(size), children) => {
             if let Some(child) = nodes.iter_many(children).next() {
@@ -271,12 +286,17 @@ fn layout_at(
                 to_update.size = *size;
             }
             AtOutput {
-                axe_offset: size.on(parent_dir),
-                cross_size: size.cross(parent_dir),
+                axis: size.on(parent_dir),
+                cross: size.cross(parent_dir),
             }
         }
     }
 }
+// TODO:
+// - minimize recomputation using `Changed`
+// - better error handling (log::error!)
+// - maybe parallelize
+/// Run the layout algorithm on
 pub fn compute_layout(
     mut to_update: Query<&mut PosRect>,
     nodes: Query<(Entity, (&Node, &Children))>,
@@ -284,10 +304,22 @@ pub fn compute_layout(
     roots: Query<(Entity, &Root, &Children)>,
 ) {
     for (entity, Root { container, bounds }, children) in &roots {
+        if let Ok(mut to_update) = to_update.get_mut(entity) {
+            to_update.size = *bounds;
+        }
         container.layout(entity, children, *bounds, &mut to_update, &nodes, &names);
     }
 }
-pub fn update_transforms(mut positioned: Query<(&PosRect, &mut Transform), Changed<PosRect>>) {}
+/// Update transform of things that have a `PosRect` component.
+pub fn update_transforms(mut positioned: Query<(&PosRect, &mut Transform), Changed<PosRect>>) {
+    for (pos, mut transform) in &mut positioned {
+        transform.translation.x = pos.pos.left;
+        transform.translation.y = pos.pos.top;
+    }
+}
+// pub fn add_layout(mut spirtes: Query<&mut Sprite, Added<Sprite>>, mut cmds: Commands) {
+//     todo!()
+// }
 
 #[derive(SystemLabel)]
 pub enum Systems {
@@ -298,5 +330,16 @@ pub struct Plug;
 impl Plugin for Plug {
     fn build(&self, app: &mut App) {
         app.add_system(compute_layout.label(Systems::ComputeLayout));
+
+        #[cfg(feature = "reflect")]
+        app.register_type::<Container>()
+            .register_type::<Direction>()
+            .register_type::<Node>()
+            .register_type::<Pos>()
+            .register_type::<PosRect>()
+            .register_type::<Root>()
+            .register_type::<Size>()
+            .register_type::<Spacer>()
+            .register_type::<SpaceUse>();
     }
 }

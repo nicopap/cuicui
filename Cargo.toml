@@ -2,8 +2,17 @@
 name = "bevy_mod_cuicui"
 version = "0.1.0"
 edition = "2021"
+exclude = ["assets"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = ["reflect"]
+reflect = []
 
 [dependencies]
 bevy = { version = "0.9", default-features = false, features = ["bevy_render"] }
+
+[dev-dependencies]
+bevy-inspector-egui = "0.16"
+
+[dev-dependencies.bevy]
+features = ["png", "x11", "bevy_asset", "bevy_render"]
