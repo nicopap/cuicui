@@ -18,9 +18,10 @@ struct InsertPrefab<T: Prefab> {
 impl<T: Prefab + Send + Sync + 'static> Command for InsertPrefab<T> {
     fn write(self, world: &mut World) {
         let mut state: SystemState<(Commands, T::Param)> = SystemState::new(world);
-        let (mut commands, param) = state.get_mut(world);
+        let (mut commands, mut param) = state.get_mut(world);
         let e_commands = commands.entity(self.entity);
         self.prefab.spawn(e_commands, &mut param);
+        drop((commands, param));
         state.apply(world);
     }
 }

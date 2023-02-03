@@ -1,6 +1,6 @@
 use bevy::{
-    ecs::system::{EntityCommands, SystemParam, SystemParamFetch, SystemParamItem, SystemState},
-    prelude::{BuildChildren, Children, Component, Entity, Query, With, World},
+    ecs::system::{EntityCommands, SystemParamItem},
+    prelude::{BuildChildren, Children, Component, Entity, Query, With},
 };
 
 use crate::{Prefab, ReadWorldValue, UiControl};
@@ -19,9 +19,9 @@ impl<T: UiControl> ReadWorldValue for List<T> {
         T::ReadParam<'w, 's>,
     );
 
-    fn read<'w, 's>(
+    fn read(
         entity: Entity,
-        (items, children, param): &SystemParamItem<Self::ReadParam<'w, 's>>,
+        (items, children, param): &SystemParamItem<Self::ReadParam<'_, '_>>,
     ) -> Option<Self::Value> {
         items
             .iter_many(children.get(entity).ok()?)

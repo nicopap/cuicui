@@ -7,8 +7,8 @@ use bevy::{
 pub trait ReadWorldValue {
     type Value;
     type ReadParam<'w, 's>: SystemParam;
-    fn read<'w, 's>(
+    fn read(
         entity: Entity,
-        params: &SystemParamItem<Self::ReadParam<'w, 's>>,
+        params: &SystemParamItem<Self::ReadParam<'_, '_>>,
     ) -> Option<Self::Value>;
 }
