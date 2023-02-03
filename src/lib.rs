@@ -1,14 +1,13 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+pub mod containers;
+pub mod from_world_entity;
+pub mod layout;
+pub mod prefab;
+pub mod read_world_value;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+use prefab::Prefab;
+use read_world_value::ReadWorldValue;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+/// A value that has a `cuicui` representation.
+///
+/// It supports spawning a `Prefab`
+pub trait UiControl: Prefab + ReadWorldValue {}
