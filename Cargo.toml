@@ -10,6 +10,9 @@ reflect = []
 
 [dependencies]
 bevy = { version = "0.9", default-features = false, features = ["bevy_render"] }
+bevy_mod_sysfail = "1.1"
+anyhow = "1"
+thiserror = "1"
 
 [dev-dependencies]
 bevy-inspector-egui = "0.16"

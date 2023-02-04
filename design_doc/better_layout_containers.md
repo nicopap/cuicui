@@ -39,3 +39,8 @@ When do I know the parent sizes?
 - The axis in parent Stretch container direction
   => Is it true? => Only if you know parent's parent container axis size
   => how to fix? => Propagate uncertainty downard
+
+When do I **not** know the parent sizes?
+
+- The cross when child of Stretch Container
+- Both axis when child of Compact Container

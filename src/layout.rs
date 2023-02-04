@@ -31,6 +31,9 @@
 use std::fmt;
 
 use bevy::prelude::*;
+use bevy_mod_sysfail::sysfail;
+
+mod error;
 
 #[derive(Clone, Default, Copy, PartialEq)]
 #[cfg_attr(feature = "reflect", derive(Reflect, FromReflect))]
@@ -83,6 +86,53 @@ impl fmt::Display for Size {
         write!(f, "{}×{}", self.width, self.height)
     }
 }
+type Bound = Result<f32, Entity>;
+#[derive(Clone, Copy, PartialEq)]
+struct Bounds {
+    width: Bound,
+    height: Bound,
+}
+impl Bounds {
+    fn on(
+        &self,
+        direction: Direction,
+        this: Entity,
+        names: &Query<&Name>,
+    ) -> Result<f32, error::Why> {
+        match direction {
+            Direction::Vertical => self
+                .height
+                .map_err(|e| error::parent_is_stretch("height", this, e, names)),
+            Direction::Horizontal => self
+                .width
+                .map_err(|e| error::parent_is_stretch("width", this, e, names)),
+        }
+    }
+    fn undefine(&self, dir: Direction, on: Entity) -> Self {
+        match dir {
+            Direction::Horizontal => Self { width: Err(on), ..*self },
+            Direction::Vertical => Self { height: Err(on), ..*self },
+        }
+    }
+}
+impl fmt::Display for Bounds {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.width {
+            Ok(v) => write!(f, "{v}×")?,
+            Err(_) => write!(f, "?×")?,
+        }
+        match self.height {
+            Ok(v) => write!(f, "{v}"),
+            Err(_) => write!(f, "?"),
+        }
+    }
+}
+impl From<Size> for Bounds {
+    fn from(value: Size) -> Self {
+        Self { width: Ok(value.width), height: Ok(value.height) }
+    }
+}
+
 /// Position and size of a [`Node`] as computed by the layouting algo.
 ///
 /// Note that `Pos` will always be relative to the top left position of the
@@ -108,13 +158,19 @@ pub struct Container {
     pub direction: Direction,
     pub space_use: SpaceUse,
 }
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 #[cfg_attr(feature = "reflect", derive(Reflect, FromReflect))]
 pub enum Direction {
     Vertical,
     Horizontal,
 }
 impl Direction {
+    fn perp(self) -> Self {
+        match self {
+            Direction::Vertical => Direction::Horizontal,
+            Direction::Horizontal => Direction::Vertical,
+        }
+    }
     fn size_name(&self) -> &'static str {
         match self {
             Direction::Vertical => "height",
@@ -156,17 +212,17 @@ struct AtOutput {
 impl Container {
     fn layout(
         &self,
-        current: Entity,
+        this: Entity,
         children: &Children,
-        bounds: Size,
+        bounds: Bounds,
         to_update: &mut Query<&mut PosRect>,
         nodes: &Query<(Entity, (&Node, &Children))>,
         names: &Query<&Name>,
-    ) -> Size {
+    ) -> Result<Size, error::Why> {
         use SpaceUse::*;
-        let Self { direction, space_use } = *self;
+        let Self { direction: dir, space_use } = *self;
         if children.is_empty() {
-            return Size::default();
+            return Ok(Size::default());
         }
         let mut children_size = 0.0;
         let mut cross_max = 0.0_f32;
@@ -178,21 +234,25 @@ impl Container {
         // TODO: check for Spacer (or %) in Compact containers. I guess it makes
         // sense technically.
         let mut node_children_count = 0;
+        let child_bound = match space_use {
+            Stretch => bounds.undefine(dir.perp(), this),
+            Compact => bounds.undefine(dir.perp(), this).undefine(dir, this),
+        };
         for child in nodes.iter_many(children) {
-            let result = layout_at(child, direction, bounds, to_update, nodes, names);
+            let result = layout_at(child, dir, child_bound, to_update, nodes, names)?;
             children_size += result.axis;
             cross_max = cross_max.max(result.cross);
             node_children_count += 1;
         }
         match space_use {
             Stretch => {
-                let total_space_between = bounds.on(direction) - children_size;
+                let total_space_between = bounds.on(dir, this, names)? - children_size;
                 if total_space_between < 0.0 {
                     let name = names
-                        .get(current)
-                        .map_or_else(|_| format!("{current:?}"), |n| n.to_string());
+                        .get(this)
+                        .map_or_else(|_| format!("{this:?}"), |n| n.to_string());
                     let n = children.len();
-                    let dir_name = direction.size_name();
+                    let dir_name = dir.size_name();
                     panic!(
                         "Yo container {name} of size {bounds} contains more stuff than it possibly can!\n\
                          You gotta either make it larger or reduce the size of things within it.\n\
@@ -203,22 +263,22 @@ impl Container {
                 let mut iter = to_update.iter_many_mut(children);
                 let mut axis_offset = 0.0;
                 while let Some(mut space) = iter.fetch_next() {
-                    space.pos.set_axis(direction, axis_offset);
-                    let offset = (cross_max - space.size.cross(direction)) / 2.0;
-                    space.pos.set_cross(direction, offset);
-                    axis_offset += space.size.on(direction) + space_between;
+                    space.pos.set_axis(dir, axis_offset);
+                    let offset = (cross_max - space.size.cross(dir)) / 2.0;
+                    space.pos.set_cross(dir, offset);
+                    axis_offset += space.size.on(dir) + space_between;
                 }
-                Size::with(direction, bounds.on(direction), cross_max)
+                Ok(Size::with(dir, bounds.on(dir, this, names)?, cross_max))
             }
             Compact => {
                 let mut axis_offset = 0.0;
                 let mut iter = to_update.iter_many_mut(children);
                 while let Some(mut space) = iter.fetch_next() {
-                    space.pos.set_axis(direction, axis_offset);
-                    space.pos.set_cross(direction, 0.0);
-                    axis_offset += space.size.on(direction);
+                    space.pos.set_axis(dir, axis_offset);
+                    space.pos.set_cross(dir, 0.0);
+                    axis_offset += space.size.on(dir);
                 }
-                Size::with(direction, children_size, cross_max)
+                Ok(Size::with(dir, children_size, cross_max))
             }
         }
     }
@@ -231,17 +291,17 @@ impl Container {
 // - Nodes will set **their own size** with the `to_update` query.
 // - **the position of the children** will be set with `to_update`.
 fn layout_at(
-    (current, node): (Entity, (&Node, &Children)),
+    (this, node): (Entity, (&Node, &Children)),
     parent_dir: Direction,
-    bounds: Size,
+    bounds: Bounds,
     to_update: &mut Query<&mut PosRect>,
     nodes: &Query<(Entity, (&Node, &Children))>,
     names: &Query<&Name>,
-) -> AtOutput {
-    match node {
+) -> Result<AtOutput, error::Why> {
+    Ok(match node {
         (Node::Container(container), children) => {
-            let size = container.layout(current, children, bounds, to_update, nodes, names);
-            if let Ok(mut to_update) = to_update.get_mut(current) {
+            let size = container.layout(this, children, bounds, to_update, nodes, names)?;
+            if let Ok(mut to_update) = to_update.get_mut(this) {
                 to_update.size = size;
             }
             AtOutput {
@@ -250,15 +310,15 @@ fn layout_at(
             }
         }
         (Node::Spacer(spacer), _) => {
-            let axis = bounds.on(parent_dir) * spacer.parent_ratio;
+            let axis = bounds.on(parent_dir, this, names)? * spacer.parent_ratio;
             let size = Size::with(parent_dir, axis, 0.0);
-            if let Ok(mut to_update) = to_update.get_mut(current) {
+            if let Ok(mut to_update) = to_update.get_mut(this) {
                 to_update.size = size;
             }
             AtOutput { axis, cross: 0.0 }
         }
         (Node::Static(size), _) => {
-            if let Ok(mut to_update) = to_update.get_mut(current) {
+            if let Ok(mut to_update) = to_update.get_mut(this) {
                 to_update.size = *size;
             }
             AtOutput {
@@ -266,25 +326,28 @@ fn layout_at(
                 cross: size.cross(parent_dir),
             }
         }
-    }
+    })
 }
 // TODO:
 // - minimize recomputation using `Changed`
 // - better error handling (log::error!)
 // - maybe parallelize
 /// Run the layout algorithm on
+#[sysfail(log(level = "error"))]
 pub fn compute_layout(
     mut to_update: Query<&mut PosRect>,
     nodes: Query<(Entity, (&Node, &Children))>,
     names: Query<&Name>,
     roots: Query<(Entity, &Root, &Children)>,
-) {
+) -> anyhow::Result<()> {
     for (entity, Root { container, bounds }, children) in &roots {
         if let Ok(mut to_update) = to_update.get_mut(entity) {
             to_update.size = *bounds;
         }
-        container.layout(entity, children, *bounds, &mut to_update, &nodes, &names);
+        let bounds = Bounds::from(*bounds);
+        container.layout(entity, children, bounds, &mut to_update, &nodes, &names)?;
     }
+    Ok(())
 }
 /// Update transform of things that have a `PosRect` component.
 pub fn update_transforms(mut positioned: Query<(&PosRect, &mut Transform), Changed<PosRect>>) {
