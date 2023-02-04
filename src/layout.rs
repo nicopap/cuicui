@@ -65,12 +65,6 @@ impl Size {
             Direction::Horizontal => Self { height: cross, width: axis },
         }
     }
-    fn with_on(self, direction: Direction, axis: f32) -> Self {
-        match direction {
-            Direction::Vertical => Self { height: axis, ..self },
-            Direction::Horizontal => Self { width: axis, ..self },
-        }
-    }
     fn on(&self, direction: Direction) -> f32 {
         match direction {
             Direction::Vertical => self.height,
@@ -255,27 +249,15 @@ fn layout_at(
                 cross: size.cross(parent_dir),
             }
         }
-        (Node::Spacer(spacer), children) => {
+        (Node::Spacer(spacer), _) => {
             let axis = bounds.on(parent_dir) * spacer.parent_ratio;
-            let inner_bounds = bounds.with_on(parent_dir, axis);
-            let cross = if let Some(child) = nodes.iter_many(children).next() {
-                let result = layout_at(child, parent_dir, inner_bounds, to_update, nodes, names);
-                // TODO: set child position
-                result.cross
-            } else {
-                0.0
-            };
-            let size = Size::with(parent_dir, axis, cross);
+            let size = Size::with(parent_dir, axis, 0.0);
             if let Ok(mut to_update) = to_update.get_mut(current) {
                 to_update.size = size;
             }
-            AtOutput { axis, cross }
+            AtOutput { axis, cross: 0.0 }
         }
-        (Node::Static(size), children) => {
-            if let Some(child) = nodes.iter_many(children).next() {
-                let result = layout_at(child, parent_dir, *size, to_update, nodes, names);
-                // TODO: set child position
-            }
+        (Node::Static(size), _) => {
             if let Ok(mut to_update) = to_update.get_mut(current) {
                 to_update.size = *size;
             }
@@ -311,9 +293,6 @@ pub fn update_transforms(mut positioned: Query<(&PosRect, &mut Transform), Chang
         transform.translation.y = pos.pos.top;
     }
 }
-// pub fn add_layout(mut spirtes: Query<&mut Sprite, Added<Sprite>>, mut cmds: Commands) {
-//     todo!()
-// }
 
 #[derive(SystemLabel)]
 pub enum Systems {

@@ -205,6 +205,9 @@ fn setup(
         },
         cont! { ("horiz_cont3", Horizontal, Stretch),
             spacer!("spacer5", 4%),
+            // cont! { ("horiz_cont4", Horizontal, Stretch),
+            //     fix!("h4_1", 10, 14), fix!("h4_2", 12, 12), fix!("h4_3", 14, 10),
+            // }
             cont! { ("vert_cont1", Vertical, Compact),
                 fix!("v1_1",10, 21),
                 fix!("v1_2",12, 12),
