@@ -13,6 +13,4 @@ bevy = { version = "0.9", default-features = false, features = ["bevy_render"] }
 
 [dev-dependencies]
 bevy-inspector-egui = "0.16"
-
-[dev-dependencies.bevy]
-features = ["png", "x11", "bevy_asset", "bevy_render"]
+bevy = { version = "0.9", features = ["png", "x11", "bevy_asset", "bevy_render"] }

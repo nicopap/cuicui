@@ -24,11 +24,6 @@
 //!
 //! ## TODO:
 //!
-//! Currently all layout's cross-axis is aligned to the top or left.
-//! This is temporary, The intention is that all layouts are centered on the cross-axis.
-//! If you want stuff to be aligned on the cross-axis, actually just use
-//! an horizontal layout instead of vertical and vis-versa.
-//!
 //! Additionally, `Node::Spacer` and `Node::Static` can have a single
 //! `Node` child. Usually a `Node::Container`. Not sure what it means yet.
 //!
@@ -215,8 +210,7 @@ impl Container {
                 let mut axis_offset = 0.0;
                 while let Some(mut space) = iter.fetch_next() {
                     space.pos.set_axis(direction, axis_offset);
-                    // TODO: centering (should be )
-                    let offset = (bounds.cross(direction) - space.size.cross(direction)) / 2.0;
+                    let offset = (cross_max - space.size.cross(direction)) / 2.0;
                     space.pos.set_cross(direction, offset);
                     axis_offset += space.size.on(direction) + space_between;
                 }
