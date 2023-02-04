@@ -9,7 +9,7 @@ PosRect is:
 
 - Size
   - Container
-    - cross is always depends on max size of children
+    - cross always depends on max size of children
     - axis for Compact depends on total size of children
     - axis for Stretch depends on parent axis (equals)
   - Spacer
