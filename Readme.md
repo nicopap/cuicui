@@ -53,10 +53,11 @@ cuicui's layout in contrast to Flexbox is easy to fit in your head.
 In fact, I will forecefully push cuicui's layout algorithm in your head
 in two short bullet points.
 
-- A node has a size
 - A node can be a `Node::Container` and distribute its children
   along a `Direction` either by evenly spacing them (`Stretched`)
   or putting them directly one after another (`Compact`).
+- A `Container`'s size can be expressed as a static value or a fraction
+  of the size of what contains it.
 
 That's it. There are some edge cases, but cuicui will ~~yell at you~~
 tell you nicely when you hit them and tell you how to handle them properly.

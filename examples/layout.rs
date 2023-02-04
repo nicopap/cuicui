@@ -13,7 +13,7 @@ macro_rules! root {
         UiRoot {
             name: $name,
             children: vec![$( $branch, )*],
-            container: layout::Container { direction: $dir, space_use: $suse },
+            container: layout::Container::new ( $dir, $suse ),
             bounds: layout::Size { width: $width as f32, height: $height as f32 },
         }
     };
@@ -23,7 +23,7 @@ macro_rules! spacer {
         UiTree {
             name: $name,
             children: vec![$( $branch, )*],
-            node: layout::Node::Spacer(layout::Spacer { parent_ratio: $parent_ratio as f32 / 100.0 }),
+            node: layout::Node::spacer_percent($parent_ratio as f32).unwrap(),
         }
     };
 }
@@ -32,7 +32,7 @@ macro_rules! fix {
         UiTree {
             name: $name,
             children: vec![$( $branch, )*],
-            node: layout::Node::Static(layout::Size { width: $width as f32, height: $height as f32 })
+            node: layout::Node::Known(layout::Size { width: $width as f32, height: $height as f32 })
         }
     };
 }
@@ -41,7 +41,7 @@ macro_rules! cont {
         UiTree {
             name: $name,
             children: vec![$( $branch, )*],
-            node: layout::Node::Container(layout::Container { direction: $dir, space_use: $suse })
+            node: layout::Node::Container(layout::Container::new ( $dir, $suse ))
         }
     };
 }
@@ -130,7 +130,7 @@ impl UiRoot {
     fn spawn(self, SpawnArgs { mut cmds, mut inner }: SpawnArgs) {
         let Self { children, container, bounds, name } = self;
         cmds.insert((
-            layout::Root { container, bounds },
+            layout::Root::new(bounds, container.direction, container.space_use),
             inner.debug_node(),
             Name::new(name),
         ))
@@ -192,7 +192,7 @@ fn setup(
     mut assets: ResMut<Assets<ColorMaterial>>,
 ) {
     use layout::{Direction::*, SpaceUse::*};
-    let tree = root! { ("root", Vertical, Stretch, 350, 300),
+    let tree = root! { ("root", Vertical, Stretch, 300, 270),
         spacer!("spacer1", 10%),
         cont! { ("horiz_cont1", Horizontal, Stretch),
             fix!("h1_1_fix", 10, 10), fix!("h1_2_fix", 30, 10), fix!("h1_3_fix", 50, 20),
@@ -216,7 +216,7 @@ fn setup(
                 fix!("v1_5_fix",18, 12),
                 fix!("v1_6_fix",20, 20),
             },
-            cont! { ("vert_cont2", Horizontal, Compact),
+            cont! { ("horiz_inner", Horizontal, Compact),
                 fix!("v2_1_fix",10, 21),
                 fix!("v2_2_fix",12, 12),
                 fix!("v2_3_fix",14, 20),
