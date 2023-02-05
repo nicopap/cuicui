@@ -24,23 +24,23 @@
 //!
 //! ## TODO:
 //!
-//! * Replace `axis` and `cross` in [`Container`] by `width` and `height`.
-//!   This seems easier to understand
 //! * Clarifiy the rules
 //! * Integrate Change detection
 //! * Provide a typed API that prevents at compile time from building
 //!   some invalid hierarchies.
 //! * Accumulate errors instead of early exit. (doubt)
 //! * Root expressed as percent of UiCamera
+//! * Write a tool to make and export layouts.
 use std::fmt;
 
-use bevy::{prelude::*, render::view::RenderLayers};
+use bevy::prelude::*;
 use bevy_mod_sysfail::sysfail;
 
 use self::error::{parent_is_stretch, Why};
 
 mod error;
 pub mod render;
+pub mod typed;
 
 #[derive(Clone, Default, Copy, PartialEq)]
 #[cfg_attr(feature = "reflect", derive(Reflect, FromReflect))]
@@ -163,20 +163,18 @@ impl PosRect {
 pub struct Container {
     pub direction: Direction,
     pub space_use: SpaceUse,
-    axis: Spec,
-    cross: Spec,
+    width: Spec,
+    height: Spec,
 }
 impl Container {
     pub fn new(direction: Direction, space_use: SpaceUse) -> Self {
-        Self {
-            direction,
-            space_use,
-            cross: Spec::ChildDefined,
-            axis: match space_use {
-                SpaceUse::Stretch => Spec::ParentRatio(1.0),
-                SpaceUse::Compact => Spec::ChildDefined,
-            },
-        }
+        let axis = match space_use {
+            SpaceUse::Stretch => Spec::ParentRatio(1.0),
+            SpaceUse::Compact => Spec::ChildDefined,
+        };
+        let cross = Spec::ChildDefined;
+        let (width, height) = direction.real_of(axis, cross);
+        Self { direction, space_use, width, height }
     }
 }
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -190,6 +188,13 @@ impl Direction {
         match self {
             Direction::Vertical => height,
             Direction::Horizontal => width,
+        }
+    }
+    /// Returns (width, height) according to axis and cross of this direction.
+    fn real_of<T>(self, axis: T, cross: T) -> (T, T) {
+        match self {
+            Direction::Vertical => (cross, axis),
+            Direction::Horizontal => (axis, cross),
         }
     }
     fn perp(self) -> Self {
@@ -259,7 +264,9 @@ impl Container {
         names: &Query<&Name>,
     ) -> Result<Size, Why> {
         use SpaceUse::*;
-        let Self { direction: dir, space_use, axis, cross } = *self;
+        let Self { direction: dir, space_use, width, height } = *self;
+        let axis = dir.of(width, height);
+        let cross = dir.perp().of(width, height);
         if children.is_empty() {
             return Ok(Size::default());
         }
@@ -359,9 +366,12 @@ fn compute_layout(
         if let Ok(mut to_update) = to_update.get_mut(entity) {
             to_update.size = bounds;
         }
-        let axis = Spec::Fixed(direction.of(bounds.width, bounds.height));
-        let cross = Spec::Fixed(direction.of(bounds.height, bounds.width));
-        let container = Container { direction, space_use, axis, cross };
+        let container = Container {
+            direction,
+            space_use,
+            width: Spec::Fixed(bounds.width),
+            height: Spec::Fixed(bounds.height),
+        };
         let bounds = Bounds::from(bounds);
         container.layout(entity, children, bounds, &mut to_update, &nodes, &names)?;
     }
