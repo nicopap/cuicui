@@ -28,17 +28,19 @@
 //!   This seems easier to understand
 //! * Clarifiy the rules
 //! * Integrate Change detection
-//! * Provide a typed API that prevents at compile time from building invalid
-//!   hierarchies
+//! * Provide a typed API that prevents at compile time from building
+//!   some invalid hierarchies.
 //! * Accumulate errors instead of early exit. (doubt)
+//! * Root expressed as percent of UiCamera
 use std::fmt;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, render::view::RenderLayers};
 use bevy_mod_sysfail::sysfail;
 
 use self::error::{parent_is_stretch, Why};
 
 mod error;
+pub mod render;
 
 #[derive(Clone, Default, Copy, PartialEq)]
 #[cfg_attr(feature = "reflect", derive(Reflect, FromReflect))]
@@ -231,20 +233,13 @@ pub enum Spec {
 #[derive(Component)]
 #[cfg_attr(feature = "reflect", derive(Reflect, FromReflect))]
 pub struct Root {
-    container: Container,
-    bounds: Size,
+    pub direction: Direction,
+    pub space_use: SpaceUse,
+    pub bounds: Size,
 }
 impl Root {
     pub fn new(bounds: Size, direction: Direction, space_use: SpaceUse) -> Self {
-        Root {
-            bounds,
-            container: Container {
-                direction,
-                space_use,
-                axis: Spec::Fixed(bounds.on(direction)),
-                cross: Spec::Fixed(bounds.cross(direction)),
-            },
-        }
+        Root { bounds, space_use, direction }
     }
 }
 
@@ -360,11 +355,14 @@ fn compute_layout(
     names: Query<&Name>,
     roots: Query<(Entity, &Root, &Children)>,
 ) -> Result<(), Why> {
-    for (entity, Root { container, bounds }, children) in &roots {
+    for (entity, &Root { bounds, direction, space_use }, children) in &roots {
         if let Ok(mut to_update) = to_update.get_mut(entity) {
-            to_update.size = *bounds;
+            to_update.size = bounds;
         }
-        let bounds = Bounds::from(*bounds);
+        let axis = Spec::Fixed(direction.of(bounds.width, bounds.height));
+        let cross = Spec::Fixed(direction.of(bounds.height, bounds.width));
+        let container = Container { direction, space_use, axis, cross };
+        let bounds = Bounds::from(bounds);
         container.layout(entity, children, bounds, &mut to_update, &nodes, &names)?;
     }
     Ok(())

@@ -3,10 +3,12 @@
 use bevy::{
     ecs::system::EntityCommands,
     prelude::*,
-    render::{mesh::Indices, render_resource::PrimitiveTopology},
+    render::{mesh::Indices, render_resource::PrimitiveTopology, view::RenderLayers},
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
 use bevy_mod_cuicui::layout;
+
+const UI_LAYER: RenderLayers = RenderLayers::none().with(20);
 
 macro_rules! root {
     (($name:literal, $dir:expr, $suse:expr, $width:expr, $height:expr), $($branch:expr),* $(,)?) => {
@@ -78,6 +80,7 @@ fn main() {
         .add_plugin(WorldInspectorPlugin)
         .add_plugin(layout::Plug)
         .add_system(layout::update_transforms)
+        .add_system(layout::render::update_ui_camera_root)
         .add_system(stretch_boxes)
         .run();
 }
@@ -96,6 +99,7 @@ impl<'a, 'b, 'c> ExtraSpawnArgs<'a, 'b, 'c> {
                 ..default()
             },
             DebugChild,
+            UI_LAYER,
         )
     }
     fn debug_node(&mut self) -> impl Bundle {
@@ -110,16 +114,6 @@ struct SpawnArgs<'w, 's, 'a, 'b, 'c, 'd> {
     inner: ExtraSpawnArgs<'b, 'c, 'd>,
 }
 
-impl<'w, 's, 'a, 'b, 'c, 'd> SpawnArgs<'w, 's, 'a, 'b, 'c, 'd> {
-    fn new(
-        cmds: EntityCommands<'w, 's, 'a>,
-        rng: &'b mut Rng,
-        assets: &'c mut Assets<ColorMaterial>,
-        mesh: &'d Mesh2dHandle,
-    ) -> Self {
-        Self { cmds, inner: ExtraSpawnArgs { rng, assets, mesh } }
-    }
-}
 struct UiRoot {
     name: &'static str,
     children: Vec<UiTree>,
@@ -127,10 +121,14 @@ struct UiRoot {
     bounds: layout::Size,
 }
 impl UiRoot {
-    fn spawn(self, SpawnArgs { mut cmds, mut inner }: SpawnArgs) {
+    fn spawn(self, cmds: &mut Commands, mut inner: ExtraSpawnArgs) {
         let Self { children, container, bounds, name } = self;
-        cmds.insert((
-            layout::Root::new(bounds, container.direction, container.space_use),
+        cmds.spawn(layout::render::UiCameraBundle::for_layer(1, 20));
+        cmds.spawn((
+            layout::render::RootBundle {
+                node: layout::Root::new(bounds, container.direction, container.space_use),
+                layer: UI_LAYER,
+            },
             inner.debug_node(),
             Name::new(name),
         ))
@@ -236,12 +234,14 @@ fn setup(
         },
         spacer!("spacer3", 10%),
     };
-    tree.spawn(SpawnArgs::new(
-        cmds.spawn_empty(),
-        &mut Rng { seed: Rng::P0 },
-        &mut assets,
-        &meshes.add(Mesh::from(top_left_quad())).into(),
-    ));
+    tree.spawn(
+        &mut cmds,
+        ExtraSpawnArgs {
+            rng: &mut Rng { seed: Rng::P0 },
+            assets: &mut assets,
+            mesh: &meshes.add(Mesh::from(top_left_quad())).into(),
+        },
+    );
     cmds.spawn(Camera2dBundle {
         projection: OrthographicProjection { scale: 0.25, ..default() },
         transform: Transform::from_xyz(108.7, 142.0, 999.9),
