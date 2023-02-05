@@ -1,5 +1,7 @@
 # Beyv Cuicui
 
+> ❗**THIS IS A WIP, MOST FEATURES ARE NOT IMPLEMENTED YET, SEE TODO** ❗
+
 A quick and dirty UI lib for bevy built on bevy's excellent 2d primitives.
 
 ## Why?
@@ -91,6 +93,39 @@ In which case, add `CuicuiPlugin` the following way:
 ```rust
 todo!()
 ```
+
+## TODO
+
+- [ ] Widges
+  - [ ] Prefab system
+    - [X] basic composable trait that allows spawning widgets
+    - [X] composable trait to query widget value from world
+    - [ ] composable trait to save UI, state and presentation separately
+    - [ ] Less arcane traits
+  - [ ] `ActionButton`
+  - [ ] `Counter`
+  - [ ] `Menu`
+  - [ ] `Checkbox`
+  - [ ] `ProgressBar`
+  - [ ] `Cancel`
+  - [X] `List`
+  - [ ] Gallery example.
+  - [ ] Windowmaker app to create re-usable widget trees.
+- [ ] Layout
+  - [X] Basic algorithm
+  - [X] Typed constructor
+  - [X] In depth documentation explaining the algorithm
+  - [X] Meaningfull error messages when algorithm hits circular constraints
+  - [ ] Ergonomic macro to define a UI tree
+  - [ ] `ChildDefined(how_much_larger_than_child)`
+  - [ ] API cleanup
+  - [ ] Define a parametrable plugin to add smoothly the layout systems to app
+  - [ ] Integrate Change detection
+  - [ ] Accumulate errors instead of early exit.
+  - [ ] Root expressed as percent of UiCamera
+  - [ ] Write a tool to make and export layouts.
+  - [ ] Separate the algo into its own crate independent of bevy
+
 
 
 [bevy_2d_outline]: https://lib.rs/crates/bevy_simple_2d_outline
