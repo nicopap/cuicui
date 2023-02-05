@@ -24,10 +24,8 @@
 //!
 //! ## TODO:
 //!
-//! * Clarifiy the rules
+//! * `ChildDefined(how_much_larger_than_child)`
 //! * Integrate Change detection
-//! * Provide a typed API that prevents at compile time from building
-//!   some invalid hierarchies.
 //! * Accumulate errors instead of early exit. (doubt)
 //! * Root expressed as percent of UiCamera
 //! * Write a tool to make and export layouts.
