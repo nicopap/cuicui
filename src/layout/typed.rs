@@ -115,6 +115,7 @@ impl IsNotChild for Fixed {}
 /// to it using the `child` method.
 ///
 /// ```rust
+/// # use bevy_mod_cuicui::layout::typed::*;
 /// # fn main() {
 /// Container::v_stretch(Parent(1.), Parent(1.))
 ///     .child(

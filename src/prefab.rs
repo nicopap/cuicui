@@ -1,15 +1,18 @@
 use bevy::{
     ecs::system::{Command, EntityCommands, SystemParam, SystemParamItem, SystemState},
-    prelude::{Commands, Entity, World},
+    prelude::{Commands, DespawnRecursiveExt, Entity, World},
 };
 
-/// Trait that marks a struct as a Prefab
+/// A thing that describes an entity tree that can be spawned in the world.
 pub trait Prefab {
     type Param: SystemParam;
     fn spawn(&self, commands: EntityCommands, param: &mut SystemParamItem<Self::Param>);
+    fn despawn(&self, commands: EntityCommands) {
+        commands.despawn_recursive()
+    }
 }
 
-/// Command that can be inserted to Commands
+/// A [`Command`] for spawning [`Prefab`]s.
 struct InsertPrefab<T: Prefab> {
     prefab: T,
     entity: Entity,

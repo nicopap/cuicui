@@ -4,7 +4,7 @@ use bevy::{
 };
 
 /// Something spawned in the world which value can be read.
-pub trait ReadWorldValue {
+pub trait WorldValue {
     type Value;
     type ReadParam<'w, 's>: SystemParam;
     fn read(

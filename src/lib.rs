@@ -1,13 +1,10 @@
-pub mod containers;
 pub mod from_world_entity;
 pub mod layout;
 pub mod prefab;
 pub mod read_world_value;
+pub mod widge;
 
-use prefab::Prefab;
-use read_world_value::ReadWorldValue;
-
-/// A value that has a `cuicui` representation.
-///
-/// It supports spawning a `Prefab`
-pub trait UiControl: Prefab + ReadWorldValue {}
+pub use from_world_entity::ExtractPrefab;
+pub use prefab::Prefab;
+pub use read_world_value::WorldValue;
+pub use widge::Widge;
