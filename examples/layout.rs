@@ -77,7 +77,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup)
-        .add_plugin(WorldInspectorPlugin)
+        .add_plugin(WorldInspectorPlugin::default())
         .add_plugin(layout::Plug)
         .add_system(layout::update_transforms)
         .add_system(layout::render::update_ui_camera_root)

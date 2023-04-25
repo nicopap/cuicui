@@ -9,9 +9,10 @@ use bevy::{
 };
 use bevy_ui_navigation::prelude::*;
 
-use crate::{ExtractPrefab, Prefab, Widge, WorldValue};
+use crate::Widge;
 
 pub trait PodEvent: Into<u32> + From<u32> + Copy {}
+
 #[derive(Component)]
 pub struct Button {
     event: u32,
@@ -21,32 +22,26 @@ impl Button {
         Button { event: event.into() }
     }
 }
-pub struct ButtonPrefab<T: PodEvent> {
+
+pub struct ButtonWidge<T: PodEvent> {
     event: T,
 }
-impl<T: PodEvent> Prefab for ButtonPrefab<T> {
-    type Param = ();
-    fn spawn(&self, mut commands: EntityCommands, _: &mut SystemParamItem<Self::Param>) {
+impl<T: PodEvent> Widge for ButtonWidge<T> {
+    fn spawn(&self, mut commands: EntityCommands) {
         commands.insert(Button::new(self.event));
     }
-}
-impl<T: PodEvent> ExtractPrefab for ButtonPrefab<T> {
-    type ExtractParam<'w, 's> = Query<'w, 's, &'static Button>;
-    fn extract(
-        entity: Entity,
-        params: &SystemParamItem<Self::ExtractParam<'_, '_>>,
-    ) -> Option<Self> {
-        Some(ButtonPrefab { event: params.get(entity).ok()?.event.into() })
+
+    type ReadSystemParam<'w, 's> = Query<'w, 's, &'static Button>;
+    fn read_from_ecs(
+        entity: In<Entity>,
+        params: &SystemParamItem<Self::ReadSystemParam<'_, '_>>,
+    ) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        Some(ButtonWidge { event: params.get(entity.0).ok()?.event.into() })
     }
 }
-impl<T: PodEvent> WorldValue for ButtonPrefab<T> {
-    type Value = ();
-    type ReadParam<'w, 's> = ();
-    fn read(_: Entity, _: &SystemParamItem<Self::ReadParam<'_, '_>>) -> Option<Self::Value> {
-        Some(())
-    }
-}
-impl<T: PodEvent> Widge for ButtonPrefab<T> {}
 
 fn activate_button<T: Event + PodEvent>(
     actions: Query<&Button>,

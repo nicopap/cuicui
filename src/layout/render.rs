@@ -3,10 +3,7 @@
 
 use bevy::{
     prelude::*,
-    render::{
-        camera::WindowOrigin::BottomLeft,
-        view::{Layer, RenderLayers},
-    },
+    render::view::{Layer, RenderLayers},
 };
 use bevy_mod_sysfail::quick_sysfail;
 
@@ -30,15 +27,15 @@ pub struct UiCameraBundle {
     pub ui_camera: UiCamera,
 }
 impl UiCameraBundle {
-    pub fn for_layer(priority: isize, layer: Layer) -> Self {
+    pub fn for_layer(order: isize, layer: Layer) -> Self {
         UiCameraBundle {
             camera: Camera2dBundle {
                 projection: OrthographicProjection {
                     far: 1000.0,
-                    window_origin: BottomLeft,
+                    viewport_origin: Vec2::new(0.0, 0.0),
                     ..default()
                 },
-                camera: Camera { priority, ..default() },
+                camera: Camera { order, ..default() },
                 ..default()
             },
             layer: RenderLayers::none().with(layer),

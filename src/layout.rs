@@ -164,6 +164,16 @@ pub struct Container {
     width: Spec,
     height: Spec,
 }
+impl Default for Container {
+    fn default() -> Self {
+        Container {
+            direction: Direction::Horizontal,
+            space_use: SpaceUse::Stretch,
+            width: Spec::ParentRatio(1.0),
+            height: Spec::ParentRatio(1.0),
+        }
+    }
+}
 impl Container {
     pub fn new(direction: Direction, space_use: SpaceUse) -> Self {
         let axis = match space_use {
@@ -383,7 +393,7 @@ pub fn update_transforms(mut positioned: Query<(&PosRect, &mut Transform), Chang
     }
 }
 
-#[derive(SystemLabel)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, SystemSet)]
 pub enum Systems {
     ComputeLayout,
 }
@@ -391,7 +401,7 @@ pub enum Systems {
 pub struct Plug;
 impl Plugin for Plug {
     fn build(&self, app: &mut App) {
-        app.add_system(compute_layout.label(Systems::ComputeLayout));
+        app.add_system(compute_layout.in_set(Systems::ComputeLayout));
 
         #[cfg(feature = "reflect")]
         app.register_type::<Container>()

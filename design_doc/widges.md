@@ -304,6 +304,75 @@ Consider this:
     system that links several widgets together.
   - If I want to serialize it, I somehow need to describe it as data.
 
+### `Compose`
+
+This enables creating widges with mixed-in components.
+
+```rust
+widget_tree!{
+  Compose(
+    [Layout::Horizontal],
+    List(
+      Compose(
+        [Layout::Vertical],
+        List(
+          Label(Checkbox, "vsync"),
+          Label(Checkbox, "ffxa"),
+          Label(Slider(0.0, 1.0, 1.0), "master"),
+          Label(Slider(0.0, 1.0, 0.5), "music"),
+          Label(Slider(0.0, 1.0, 0.5), "effects"),
+        )
+      ),
+      Button("Start Game"),
+      CancelButton,
+    )
+}
+// TODO: a menu widget that builds a master menu and submenus.
+type Menu = Compose<List<Box<dyn Widge>>, hlist![Layout, MenuBuilder, MenuSetting]>;
+
+// Current syntax
+Menu::with_style(
+
+  Style::default()
+    .with(Layout::Horizontal)
+    .with(MenuBuilder::Root)
+    .with(MenuSetting::new().wrapping())
+)
+```
+
+Let's imagine how I would specify in KDL a widget tree.
+
+```kdl
+MainMenu layout="Horizontal" wrapping=true {
+  Menu label="Graphics" wrapping=true {
+    // Additional parameters: check_image, bg_image, width, height
+    Checkbox label="V-sync" value=true;
+    Checkbox label="FFXA" value=false;
+    CancelButton;
+  }
+  // Additional parameters: space_use, direction
+  Menu label="Audio" wrapping=true {
+    // Additional parameters: max, min, defaults to 1.0 and 0.0
+    // bg_image, handle_image, width, height
+    Slider label="master volume" value=1.0;
+    Slider label="music volume" value=0.5;
+    Slider label="effects volume" value=0.5;
+    CancelButton;
+  }
+  CancelButton label="Exit game";
+}
+```
+
+I could rely on template-kdl to go directly from definition to ECS tree.
+But it seems difficult to go the reverse way (though maybe possible).
+
+Though remains the question of how to query information from the spawned tree.
+Maybe label-based. At deserialization, we could accumulate all "widgets" that
+require a `value`, store the entity with the relevant component and expose it
+as a sort of resource to the user, so they can query it. Maybe even combine
+that with reflection so that it is possible to set fields of something based
+on those values.
+
 ### Attack plan
 
 - [ ] Define a series of logical widges, systems are classic bevy systems
