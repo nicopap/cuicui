@@ -15,6 +15,8 @@ Bevy mod cuicui has the following systems:
 - A `Widge` (widgets) system built on prefab
 - A state management system that translates a complex tree of widges into (and
   from) a more simple `struct` (or `enum`)
+- A rich text component with a styling system reflecting the larger styling
+  and presentation APIs.
 - A presentation system that allows choosing what part of the state is
   represented with which widge
 - A second, more primitive presentation system, styling, that controls individual
