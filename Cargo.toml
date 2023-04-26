@@ -18,7 +18,7 @@ picking_widges = ["bevy_mod_picking"]
 [dependencies]
 # TODO: split layouting, prefabs, rendering in different crates with
 # relevant level of bevy features
-bevy = { version = "0.10", default-features = false, features = ["bevy_render", "bevy_core_pipeline"] }
+bevy = { version = "0.10", default-features = false, features = ["bevy_render", "bevy_core_pipeline", "bevy_text"] }
 bevy-ui-navigation = { version = "0.24.0", default-features = false }
 bevy_mod_sysfail = "2"
 anyhow = "1"
