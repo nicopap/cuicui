@@ -4,11 +4,11 @@ use std::fmt;
 use bevy::prelude::*;
 use bevy::{asset::HandleId, prelude::Color as BevyColor};
 
-use super::{Context, TextMod};
+use super::{Context, Modify};
 
 /// A font name.
 pub struct Font(pub String);
-impl TextMod for Font {
+impl Modify for Font {
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()> {
         text.style.font = ctx.fonts.get_handle(HandleId::from(&self.0));
         Some(())
@@ -17,7 +17,7 @@ impl TextMod for Font {
 
 /// Size relative to global text size.
 pub struct RelSize(pub f32);
-impl TextMod for RelSize {
+impl Modify for RelSize {
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()> {
         text.style.font_size = ctx.parent_style.font_size * self.0;
         Some(())
@@ -26,7 +26,7 @@ impl TextMod for RelSize {
 
 /// Color.
 pub struct Color(pub BevyColor);
-impl TextMod for Color {
+impl Modify for Color {
     fn apply(&self, _ctx: &Context, text: &mut TextSection) -> Option<()> {
         text.style.color = self.0;
         Some(())
@@ -38,7 +38,7 @@ impl TextMod for Color {
 // background components, otherwise API seems impossible.
 /// A section text, may either be preset or extracted.
 pub struct Content(pub String);
-impl TextMod for Content {
+impl Modify for Content {
     fn apply(&self, _ctx: &Context, text: &mut TextSection) -> Option<()> {
         text.value.clear();
         text.value.push_str(&self.0);
@@ -51,19 +51,16 @@ impl<T: fmt::Display> From<T> for Content {
     }
 }
 
-pub enum Dyn<T> {
-    Set(T),
-    Ref { name: String },
+/// An [`ApplySection`] that takes it value from [`Context::bindings`].
+pub struct Dynamic {
+    pub name: String,
 }
-impl<T: TextMod> TextMod for Dyn<T> {
+impl Modify for Dynamic {
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()> {
-        match self {
-            Dyn::Ref { name } => ctx.bindings.get(name.as_str())?.apply(ctx, text),
-            Dyn::Set(value) => value.apply(ctx, text),
-        }
+        ctx.bindings.get(self.name.as_str())?.apply(ctx, text)
     }
 }
-impl TextMod for () {
+impl Modify for () {
     fn apply(&self, _: &Context, _: &mut TextSection) -> Option<()> {
         Some(())
     }

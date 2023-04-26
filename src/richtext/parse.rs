@@ -3,7 +3,7 @@ use std::{any::TypeId, num::ParseFloatError};
 
 use thiserror::Error;
 
-use super::{color, Color, Content, Dyn, Font, ModifierBox, Modifiers, RelSize, Section};
+use super::{color, Color, Content, Dynamic, Font, ModifierBox, Modifiers, RelSize, Section};
 
 /// Whether text is within braces or not.
 enum ContentType {
@@ -42,16 +42,16 @@ struct Element<'a> {
 impl<'a> Element<'a> {
     fn parse_modifier(&self) -> Result<ModifierBox> {
         Ok(match self.modifier {
-            Modifier::Font => Box::new(Dyn::Set(Font(self.value.to_owned()))),
-            Modifier::Color => Box::new(Dyn::Set(self.value.parse::<Color>()?)),
-            Modifier::RelSize => Box::new(Dyn::Set(RelSize(self.value.parse()?))),
-            Modifier::Content => Box::new(Dyn::Set(Content(self.value.to_owned()))),
+            Modifier::Font => Box::new(Font(self.value.to_owned())),
+            Modifier::Color => Box::new(self.value.parse::<Color>()?),
+            Modifier::RelSize => Box::new(RelSize(self.value.parse()?)),
+            Modifier::Content => Box::new(Content(self.value.to_owned())),
         })
     }
     fn modifier(&self) -> Result<(TypeId, ModifierBox)> {
         let type_id = self.modifier.type_id();
         let modifier = match self.flow {
-            Flow::Dynamic => Box::new(Dyn::Ref::<()> { name: self.value.to_owned() }),
+            Flow::Dynamic => Box::new(Dynamic { name: self.value.to_owned() }),
             Flow::Static => self.parse_modifier()?,
         };
         Ok((type_id, modifier))
@@ -249,26 +249,32 @@ pub(super) fn rich_text(input: &str) -> Result<Vec<Section>> {
     }
 }
 
-// FIXME: Write lot of tests
-#[cfg(test)]
+#[cfg(never)]
 mod tests {
     use super::*;
 
     #[test]
-    fn value() {
+    fn valid_dynamic_detection() {
+        todo!()
+    }
+    #[test]
+    fn valid_section() {
+        let section = |txt| section(&mut Input(txt)).unwrap();
+        let out = section(
+            "{color:blue,font:fonts/fira-sans.ttf,size:0.3,content:this is a section of text}",
+        );
+        let out = section("{color:blue,content:some content}");
+        let out = section("{color:blue,some content}");
+        let out = section("{color:white,content:some text}");
+        let out = section("{content:some text}");
+        let out = section("{color:white,some text}");
+        let out = section("some text");
+        assert_eq!(None, section(""));
         todo!();
     }
     #[test]
-    fn style_type() {
-        todo!();
-    }
-    #[test]
-    fn element() {
-        todo!();
-    }
-    #[test]
-    fn section() {
-        todo!();
+    fn invalid_section() {
+        "{color:blue}some content{/}"
     }
     #[test]
     fn rich_text() {

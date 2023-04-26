@@ -173,10 +173,61 @@ As `cuicui_richtext` evolves, this might change to encompasses more use cases.
 However, to get something out the window, something to start talking about,
 I thought it necessary to start with this very limited API.
 
+## Context
+
+`cuicui_richtext`'s `RichText` component doesn't render to screen. It only is
+a set of rules telling how to modify bevy's native `Text` component given a
+provided context.
+
+What is this context you are talking me about?
+
+Bear with me. `RichText` is a list of sections, sections — as mentioned —
+are a list of *modifiers* aka `Box<dyn Modify>` objects.
+
+`Modify` is a trait:
+
+```rust
+pub trait Modify {
+    fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()>;
+}
+```
+
+cuicui_richtext will run `apply` for each `Box<dyn Modify>` in a section.
+But what are all those arguments? Let's see:
+
+- `TextSection`: it's the bevy fundamental unit of text, you know it.
+- `Context`: some additional info.
+
+More precisely:
+
+```rust
+pub struct Context<'a, 'b> {
+    pub bindings: &'b Bindings,
+    pub parent_style: TextStyle,
+    pub fonts: &'a Assets<Font>,
+}
+```
+
+- `parent_styles`: The base style we will dervie the style of each section
+- `fonts`: Just a way to read fonts.
+- `bindings`: The interesting bit
+
+### Bindings
+
+Remember *dynamic modifiers*. Since they are not getting their value from the
+definition of the `RichText`, they must be taking it from somewhere else. Where
+you ask? The bindings! Let's take a look at its definition:
+
+```rust
+pub type Bindings = HashMap<&'static str, Box<dyn Modify>>;
+```
+
+It's just a map from names to `Modify`. `RichText`, instead of using a
+pre-defined `Modify`, will pick it from the `Bindings` and use it.
+
 ## Future work
 
-[`bevy_ui_bits`][bui_bits] has cool *embossed* text and preset size constants
-in a 
+[`bevy_ui_bits`][bui_bits] has cool *embossed* text and preset size constants.
 
 ## Previous work
 
