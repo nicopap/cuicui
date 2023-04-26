@@ -1,7 +1,14 @@
-use std::str::FromStr;
+//! Parse colors.
 
-use bevy::prelude::Color;
+use std::{
+    num::{ParseFloatError, ParseIntError},
+    str::FromStr,
+};
+
+use bevy::{prelude::Color, render::color::HexColorError};
 use thiserror::Error;
+
+type Result<T> = std::result::Result<T, Error>;
 
 // TODO: better error messages
 #[derive(Debug, Error)]
@@ -15,41 +22,63 @@ pub enum Error {
         - `#EC5EC5`: html-style hex value (requires # prefix)\n"
     )]
     BadColor(String),
+    #[error(
+        "Attempted to use `{name}` to define a color, it expects 1, 3 or 4 \
+        arguments, but {count} were given."
+    )]
+    BadArgCount { name: &'static str, count: u32 },
+    #[error("Failed to convert number in parameter color definition: {0}")]
+    BadF32(#[from] ParseFloatError),
+    #[error("Failed to convert number in parameter color definition: {0}")]
+    BadU8(#[from] ParseIntError),
+    #[error("{0}")]
+    BadHex(#[from] HexColorError),
+    #[error("color definition using {prefix} is missing a closing `)`")]
+    UnclosedArg { prefix: &'static str },
 }
 
-fn parameter(color: &str) -> Option<Color> {
-    let num = |text: &str| {
+fn parameter(color: &str) -> Option<Result<Color>> {
+    let num = |text: &str| -> Result<f32> {
         let text = text.trim();
         if text.contains('.') {
-            f32::from_str(text).ok()
+            Ok(text.parse()?)
         } else {
-            let u8 = u8::from_str(text).ok()?;
-            Some((u8 as f32) / (u8::MAX as f32))
+            let u8 = u8::from_str(text)?;
+            Ok((u8 as f32) / (u8::MAX as f32))
         }
     };
-    let check_prefix = |prefix: &'static str, get_color: fn(f32, f32, f32, f32) -> Color| {
-        let unprefixed = color.strip_prefix(prefix)?;
-        let len = unprefixed.len() - 1;
-        let args = unprefixed.get(..len)?;
-        let args = args.split(',').take(4).collect::<Vec<_>>();
+    let (prefix, get_color, color): (&'static str, fn(f32, f32, f32, f32) -> Color, &str) =
+        if let Some(color) = color.strip_prefix("rgb(") {
+            ("rgb(", Color::rgba, color)
+        } else if let Some(color) = color.strip_prefix("rgb_lin(") {
+            ("rgb_lin(", Color::rgba_linear, color)
+        } else if let Some(color) = color.strip_prefix("hsl(") {
+            ("hsl(", Color::hsla, color)
+        } else {
+            return None;
+        };
+    let run = || {
+        let len = color.len() - 1;
+        if Some(")") != color.get(len..) {
+            return Err(Error::UnclosedArg { prefix });
+        }
+        let args = &color[..len];
+        let args = args.split(',').collect::<Vec<_>>();
         let (r, g, b, a) = match *args.as_slice() {
             [r, g, b, a] => (num(r)?, num(g)?, num(b)?, num(a)?),
             [r, g, b] => (num(r)?, num(g)?, num(b)?, 1.0),
             [r] => (num(r)?, num(r)?, num(r)?, 1.0),
-            // TODO: return a meaningfull error
-            _ => return None,
+            ref v => return Err(Error::BadArgCount { name: prefix, count: v.len() as u32 }),
         };
-        Some(get_color(r, g, b, a))
+        Ok(get_color(r, g, b, a))
     };
-    check_prefix("rgb(", Color::rgba)
-        .or_else(|| check_prefix("rgb_lin(", Color::rgba_linear))
-        .or_else(|| check_prefix("hsl(", Color::hsla))
+    Some(run())
 }
-fn hex(color: &str) -> Option<Color> {
+fn hex(color: &str) -> Option<Result<Color>> {
     if !color.starts_with('#') {
         return None;
     }
-    Color::hex(&color[1..]).ok()
+    Some(Color::hex(&color[1..]).map_err(From::from))
 }
 fn named(color: &str) -> Option<Color> {
     match color {
@@ -98,13 +127,87 @@ fn named(color: &str) -> Option<Color> {
 impl FromStr for super::Color {
     type Err = Error;
 
-    fn from_str(color: &str) -> Result<Self, Self::Err> {
+    fn from_str(color: &str) -> Result<Self> {
         let err = || Error::BadColor(color.to_owned());
-        let color = color.to_lowercase();
+        let color = color.trim().to_lowercase();
         let color = named(&color)
+            .map(Ok)
             .or_else(|| hex(&color))
             .or_else(|| parameter(&color))
-            .ok_or_else(err)?;
+            .ok_or_else(err)??;
         Ok(super::Color(color))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::Color as RichColor;
+    use super::*;
+
+    #[test]
+    fn valid_named() {
+        let color = RichColor::from_str("violet").unwrap();
+        assert_eq!(color.0, Color::VIOLET);
+
+        let color = RichColor::from_str("Yellow").unwrap();
+        assert_eq!(color.0, Color::YELLOW);
+
+        let color = RichColor::from_str("RED").unwrap();
+        assert_eq!(color.0, Color::RED);
+    }
+    #[test]
+    fn invalid_named() {
+        assert!(RichColor::from_str("deep_purple").is_err());
+        assert!(RichColor::from_str("klein_blue").is_err());
+    }
+    #[test]
+    fn valid_parameters() {
+        let color = RichColor::from_str("rgb(10, 20, 30)").unwrap();
+        assert_eq!(color.0, Color::rgba_u8(10, 20, 30, 255));
+
+        let color = RichColor::from_str("rgb(1.0, 0.1, 0.5)").unwrap();
+        assert_eq!(color.0, Color::rgba(1.0, 0.1, 0.5, 1.0));
+
+        let color = RichColor::from_str("rgb_lin(1.0, 0.1, 0.5, 1.0)").unwrap();
+        assert_eq!(color.0, Color::rgba_linear(1.0, 0.1, 0.5, 1.0));
+
+        let color = RichColor::from_str("rgb(10,34,   102)").unwrap();
+        assert_eq!(color.0, Color::rgba_u8(10, 34, 102, 255));
+
+        let color = RichColor::from_str("hsl(330.0, 0.5,0.5)").unwrap();
+        assert_eq!(color.0, Color::hsla(330.0, 0.5, 0.5, 1.0));
+
+        let color = RichColor::from_str("hsl(3.141516, 0.1,0.99   ,1.0)").unwrap();
+        assert_eq!(color.0, Color::hsla(3.141516, 0.1, 0.99, 1.0));
+
+        let color = RichColor::from_str("rgb(        233       )").unwrap();
+        assert_eq!(color.0, Color::rgba_u8(233, 233, 233, 255));
+    }
+    #[test]
+    fn invalid_parameters() {
+        assert!(RichColor::from_str("rgb(1000, 3434, 2223)").is_err());
+        assert!(RichColor::from_str("rgb_lin(1.0, 0.1, 0.5, 1.0, 1.0, 1.0)").is_err());
+        assert!(RichColor::from_str("rgb_lin(1.0, 1.0)").is_err());
+        assert!(RichColor::from_str("rgb_lin(10, 34)").is_err());
+        assert!(RichColor::from_str("hsl(330.0, 0.5,0.5").is_err());
+        // FIXME
+        // assert!(RichColor::from_str("hsl(10,34    , 102)").is_err());
+    }
+    #[test]
+    fn valid_hex() {
+        let color = RichColor::from_str("#343434").unwrap();
+        assert_eq!(color.0, Color::hex("343434").unwrap());
+
+        let color = RichColor::from_str("#baddab").unwrap();
+        assert_eq!(color.0, Color::hex("baddab").unwrap());
+
+        let color = RichColor::from_str("#F00B4D").unwrap();
+        assert_eq!(color.0, Color::hex("F00B4D").unwrap());
+    }
+    #[test]
+    fn invalid_hex() {
+        assert!(RichColor::from_str("#fr3ncH").is_err());
+        assert!(RichColor::from_str("#1").is_err());
+        assert!(RichColor::from_str("#1234567890").is_err());
     }
 }

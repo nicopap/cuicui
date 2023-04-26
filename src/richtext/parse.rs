@@ -3,7 +3,7 @@ use std::{any::TypeId, num::ParseFloatError};
 
 use thiserror::Error;
 
-use super::{color, dynamic::Dyn, Color, Content, DynModifier, Font, Modifiers, RelSize, Section};
+use super::{color, Color, Content, Dyn, Font, ModifierBox, Modifiers, RelSize, Section};
 
 /// Whether text is within braces or not.
 enum ContentType {
@@ -40,7 +40,7 @@ struct Element<'a> {
     value: &'a str,
 }
 impl<'a> Element<'a> {
-    fn parse_modifier(&self) -> Result<DynModifier> {
+    fn parse_modifier(&self) -> Result<ModifierBox> {
         Ok(match self.modifier {
             Modifier::Font => Box::new(Dyn::Set(Font(self.value.to_owned()))),
             Modifier::Color => Box::new(Dyn::Set(self.value.parse::<Color>()?)),
@@ -48,7 +48,7 @@ impl<'a> Element<'a> {
             Modifier::Content => Box::new(Dyn::Set(Content(self.value.to_owned()))),
         })
     }
-    fn modifier(&self) -> Result<(TypeId, DynModifier)> {
+    fn modifier(&self) -> Result<(TypeId, ModifierBox)> {
         let type_id = self.modifier.type_id();
         let modifier = match self.flow {
             Flow::Dynamic => Box::new(Dyn::Ref::<()> { name: self.value.to_owned() }),
