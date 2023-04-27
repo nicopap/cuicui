@@ -22,6 +22,7 @@ pub type Modifiers = HashMap<TypeId, ModifyBox>;
 // it and modify it in place with new values.
 pub type Bindings = HashMap<&'static str, ModifyBox>;
 
+// TODO: probably better to `: Reflect` instead of reimplementing it myself
 /// A [`TextSection`] modifier.
 ///
 /// A [`TextSection`] may have an arbitary number of `Modify`s, modifying
@@ -40,6 +41,7 @@ pub trait Modify {
     fn debug_show(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
         Ok(())
     }
+    fn clone_dyn(&self) -> ModifyBox;
 }
 impl PartialEq for dyn Modify {
     fn eq(&self, other: &Self) -> bool {
@@ -59,6 +61,11 @@ impl fmt::Debug for dyn Modify {
 impl fmt::Debug for ModifyBox {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.debug_show(f)
+    }
+}
+impl Clone for ModifyBox {
+    fn clone(&self) -> Self {
+        self.clone_dyn()
     }
 }
 
@@ -98,7 +105,7 @@ impl RichText {
     /// Default cuicui rich text parser. Using a syntax inspired by rust's `format!` macro.
     ///
     /// See [rust doc](https://doc.rust-lang.org/stable/std/fmt/index.html).
-    pub fn parse(input: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn parse(input: &str) -> Result<Self, ParseError> {
         parse::rich_text(input)
     }
     // TODO(text): consider RichText independent from entity, might control several

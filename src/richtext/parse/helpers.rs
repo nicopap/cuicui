@@ -6,18 +6,16 @@ use thiserror::Error;
 use super::super::{color, modifiers, Content, Dynamic, Modifiers, ModifyBox, Section};
 
 #[derive(Error, Debug)]
-pub enum Error {
+pub enum Error<'a> {
     #[error("{0}")]
     ColorParse(#[from] color::Error),
     #[error("{0}")]
     FloatParse(#[from] ParseFloatError),
     #[error("Tried to use an unregistered modifier: {0}")]
-    UnknownModifier(String),
-    #[error("Not all of the input was correctly parsed, remaining was: \"{0}\"")]
-    Trailing(String),
+    UnknownModifier(&'a str),
 }
 
-pub(super) type Result<T> = std::result::Result<T, Error>;
+pub(super) type Result<'a, T> = std::result::Result<T, Error<'a>>;
 
 pub(super) enum ModifierValue<'a> {
     Dynamic(&'a str),
@@ -36,6 +34,7 @@ pub(super) fn open_section(input: &str) -> Vec<Section> {
 
     let mut modifiers = Modifiers::new();
     modifiers.insert(content_id, Box::new(Content(input.to_owned())));
+
     vec![Section { modifiers }]
 }
 pub(super) fn short_dynamic(input: Option<&str>) -> Vec<Section> {
@@ -45,6 +44,7 @@ pub(super) fn short_dynamic(input: Option<&str>) -> Vec<Section> {
 
     let mut modifiers = Modifiers::new();
     modifiers.insert(content_id, Box::new(Dynamic::new(content_value)));
+
     vec![Section { modifiers }]
 }
 pub(super) fn aggregate_elements(elements: Vec<Element>) -> Result<Vec<Section>> {
@@ -56,7 +56,7 @@ pub(super) fn aggregate_elements(elements: Vec<Element>) -> Result<Vec<Section>>
             "color" => Ok(Box::new(value.parse::<Color>()?)),
             "size" => Ok(Box::new(RelSize(value.parse()?))),
             "content" => Ok(Box::new(Content(value.to_owned()))),
-            key => Err(Error::UnknownModifier(key.to_owned())),
+            key => Err(Error::UnknownModifier(key)),
         }
     };
     let modifier_value = |key, value| -> Result<ModifyBox> {
@@ -70,18 +70,22 @@ pub(super) fn aggregate_elements(elements: Vec<Element>) -> Result<Vec<Section>>
         "content" => Ok(TypeId::of::<Content>()),
         "size" => Ok(TypeId::of::<RelSize>()),
         "color" => Ok(TypeId::of::<Color>()),
-        key => Err(Error::UnknownModifier(key.to_owned())),
+        key => Err(Error::UnknownModifier(key)),
     };
 
     let mut modifiers = Modifiers::new();
-    let mut content = None;
+    let mut content = open_section("");
     for element in elements.into_iter() {
         match element {
             Element::Modifier((key, value)) => {
                 modifiers.insert(modifier_key(key)?, modifier_value(key, value)?);
             }
-            Element::Content(sections) => content = Some(sections),
+            Element::Content(sections) => content = sections,
         }
     }
-    Ok(todo!())
+    for content in &mut content {
+        let clone_pair = |(x, y): (&TypeId, &ModifyBox)| (*x, y.clone());
+        content.modifiers.extend(modifiers.iter().map(clone_pair));
+    }
+    Ok(content)
 }

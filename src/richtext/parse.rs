@@ -8,13 +8,20 @@ use nom::{
     combinator::{map, map_res, opt, recognize},
     multi::{many0, many0_count, many1},
     sequence::{delimited, pair, preceded, separated_pair, terminated},
-    IResult,
+    Finish, IResult,
 };
+use thiserror::Error;
 
 use super::{RichText, Section};
 use helpers::{aggregate_elements, flat_vec, open_section, short_dynamic, Element, ModifierValue};
 
-pub use helpers::Error;
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error(transparent)]
+    Nom(#[from] nom::error::Error<String>),
+    #[error("Not all of the input was correctly parsed, remaining was: \"{0}\"")]
+    Trailing(String),
+}
 
 // ```
 // key = 'font' | 'content' | 'size' | 'color'
@@ -67,7 +74,7 @@ fn closed(input: &str) -> IResult<&str, Vec<Section>> {
 
     closed(input)
 }
-pub(super) fn rich_text(input: &str) -> Result<RichText, Box<dyn std::error::Error>> {
+pub(super) fn rich_text(input: &str) -> Result<RichText, Error> {
     let open_b = terminated(tag("{"), multispace0);
     let close_b = preceded(multispace0, tag("}"));
 
@@ -78,11 +85,13 @@ pub(super) fn rich_text(input: &str) -> Result<RichText, Box<dyn std::error::Err
 
     let mut rich_text = many0(section);
 
-    let (remaining, sections) = rich_text(input)?;
+    let result = rich_text(input);
+
+    let (remaining, sections) = result.map_err(|e| e.to_owned()).finish()?;
 
     if remaining.is_empty() {
         Ok(RichText { sections: flat_vec(sections) })
     } else {
-        Err(Box::new(Error::Trailing(remaining.to_owned())))
+        Err(Error::Trailing(remaining.to_owned()))
     }
 }

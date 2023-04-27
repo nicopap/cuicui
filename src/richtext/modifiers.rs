@@ -4,7 +4,7 @@ use std::fmt;
 use bevy::prelude::Color as BevyColor;
 use bevy::prelude::*;
 
-use super::{Context, Modify};
+use super::{Context, Modify, ModifyBox};
 
 macro_rules! debug_methods {
     () => {
@@ -20,10 +20,13 @@ macro_rules! debug_methods {
             use std::fmt::Debug;
             self.fmt(f)
         }
+        fn clone_dyn(&self) -> ModifyBox {
+            Box::new(self.clone())
+        }
     };
 }
 /// A font name.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Font(pub String);
 impl Modify for Font {
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()> {
@@ -35,7 +38,7 @@ impl Modify for Font {
 }
 
 /// Size relative to global text size.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct RelSize(pub f32);
 impl Modify for RelSize {
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()> {
@@ -47,7 +50,7 @@ impl Modify for RelSize {
 }
 
 /// Color.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Color(pub BevyColor);
 impl Modify for Color {
     fn apply(&self, _ctx: &Context, text: &mut TextSection) -> Option<()> {
@@ -59,7 +62,7 @@ impl Modify for Color {
 }
 
 /// A section text, may either be preset or extracted.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Content(pub String);
 impl Modify for Content {
     fn apply(&self, _ctx: &Context, text: &mut TextSection) -> Option<()> {
@@ -80,7 +83,7 @@ impl<T: fmt::Display> From<T> for Content {
 // this would involve replacing Strings with an enum String|Interned, or private
 // background components, otherwise API seems impossible.
 /// An [`Modify`] that takes it value from [`Context::bindings`].
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Dynamic {
     pub name: String,
 }
