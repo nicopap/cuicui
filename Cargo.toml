@@ -23,7 +23,7 @@ bevy-ui-navigation = { version = "0.24.0", default-features = false }
 bevy_mod_sysfail = "2"
 anyhow = "1"
 thiserror = "1"
-# nom = "7.1.3"
+nom = "7.1.3"
 
 [dependencies.bevy_mod_picking]
 version = "0.11"

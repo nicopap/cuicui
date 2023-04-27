@@ -98,9 +98,8 @@ impl RichText {
     /// Default cuicui rich text parser. Using a syntax inspired by rust's `format!` macro.
     ///
     /// See [rust doc](https://doc.rust-lang.org/stable/std/fmt/index.html).
-    pub fn parse(input: &str) -> Result<Self, ParseError> {
-        let sections = parse::rich_text(input)?;
-        Ok(RichText { sections })
+    pub fn parse(input: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        parse::rich_text(input)
     }
     // TODO(text): consider RichText independent from entity, might control several
     pub fn update(&self, to_update: &mut Text, ctx: &Context) {

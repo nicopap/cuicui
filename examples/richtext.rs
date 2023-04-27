@@ -30,7 +30,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2dBundle::default());
     commands.spawn((
         RichTextBundle::parse(
-            "{color:color$,hello\n}{color:color$,content:greeted$}{color:color$,!}",
+            "{color:$|hello\n{}!}",
             TextStyle {
                 font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                 font_size: 100.0,
@@ -57,10 +57,10 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
     commands.spawn((
         RichTextBundle::parse(
-            // To use a specific font, you need to hold a handle on it, this
-            // is why we added the `FiraMediumHolder` resource earlier,
+            // To use a specific font, you need to hold a handle on it.
+            // This is why we added the `FiraMediumHolder` resource earlier,
             // otherwise, the font doesn't show up.
-            "FPS: {font:fonts/FiraMono-Medium.ttf,color:gold,content:fps$}",
+            "FPS: {font:fonts/FiraMono-Medium.ttf,color:gold|{}}",
             TextStyle {
                 font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                 font_size: 60.0,
@@ -91,7 +91,7 @@ fn text_color_system(
         text.add_binding("color", modifiers::Color(new_color));
         if at_interval(3.0) {
             *current_guest = (*current_guest + 1) % GUESTS.len();
-            text.add_content("greeted", &GUESTS[*current_guest]);
+            text.add_content("content", &GUESTS[*current_guest]);
         }
     }
 }
@@ -103,7 +103,7 @@ fn text_update_system(
     for mut text in &mut query {
         if let Some(fps) = diagnostics.get(FrameTimeDiagnosticsPlugin::FPS) {
             if let Some(value) = fps.smoothed() {
-                text.add_content("fps", &value);
+                text.add_content("content", &value);
             }
         }
     }

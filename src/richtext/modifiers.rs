@@ -84,6 +84,11 @@ impl<T: fmt::Display> From<T> for Content {
 pub struct Dynamic {
     pub name: String,
 }
+impl Dynamic {
+    pub fn new(name: String) -> Self {
+        Self { name }
+    }
+}
 impl Modify for Dynamic {
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()> {
         // println!("Get value from binding: {:?}", self.name);
