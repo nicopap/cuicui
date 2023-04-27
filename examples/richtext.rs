@@ -30,7 +30,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2dBundle::default());
     commands.spawn((
         RichTextBundle::parse(
-            "{color:color$,hello\n}{greeted}!",
+            "{color:color$,hello\n}{color:color$,content:greeted$}{color:color$,!}",
             TextStyle {
                 font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                 font_size: 100.0,
@@ -50,8 +50,16 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         ColorText,
     ));
 
+    #[derive(Resource)]
+    struct FiraMediumHolder(Handle<Font>);
+    commands.insert_resource(FiraMediumHolder(
+        asset_server.load("fonts/FiraMono-Medium.ttf"),
+    ));
     commands.spawn((
         RichTextBundle::parse(
+            // To use a specific font, you need to hold a handle on it, this
+            // is why we added the `FiraMediumHolder` resource earlier,
+            // otherwise, the font doesn't show up.
             "FPS: {font:fonts/FiraMono-Medium.ttf,color:gold,content:fps$}",
             TextStyle {
                 font: asset_server.load("fonts/FiraSans-Bold.ttf"),

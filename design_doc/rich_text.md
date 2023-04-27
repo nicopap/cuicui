@@ -258,6 +258,9 @@ fn update_text(mut query: Query<RichTextSetter, Changed<RichTextData>>, fonts: R
 - Better API: something similar to bevy's label for the binding context, so
   that typos are caught at compile time.
 - Better API: provide a system to automatically update the bevy `Text`.
+- Provide adaptors that makes use of a (`Entity`, `ComponentId`, `ReflectPath`)
+  tuple to read directly from ECS data, instead of forcing user to update
+  themselves the text value.
 
 ## Previous work
 

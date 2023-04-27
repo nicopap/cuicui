@@ -104,7 +104,9 @@ impl RichText {
     }
     // TODO(text): consider RichText independent from entity, might control several
     pub fn update(&self, to_update: &mut Text, ctx: &Context) {
-        to_update.sections.resize_with(self.sections.len(), default);
+        to_update.sections.resize_with(self.sections.len(), || {
+            TextSection::from_style(ctx.parent_style.clone())
+        });
 
         let rich = self.sections.iter();
         let poor = to_update.sections.iter_mut();
