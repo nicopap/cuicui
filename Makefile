@@ -1,4 +1,5 @@
 check:
-	cargo clippy
+	cargo clippy --examples
 run:
-	cargo test
+	cargo run --example richtext
+	# cargo test

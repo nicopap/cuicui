@@ -3,7 +3,7 @@ use std::{any::TypeId, num::ParseFloatError};
 
 use thiserror::Error;
 
-use super::{color, Color, Content, Dynamic, Font, ModifierBox, Modifiers, RelSize, Section};
+use super::{color, Color, Content, Dynamic, Font, Modifiers, ModifyBox, RelSize, Section};
 
 /// Whether text is within braces or not.
 enum ContentType {
@@ -40,7 +40,7 @@ struct Element<'a> {
     value: &'a str,
 }
 impl<'a> Element<'a> {
-    fn parse_modifier(&self) -> Result<ModifierBox> {
+    fn parse_modifier(&self) -> Result<ModifyBox> {
         Ok(match self.modifier {
             Modifier::Font => Box::new(Font(self.value.to_owned())),
             Modifier::Color => Box::new(self.value.parse::<Color>()?),
@@ -48,7 +48,7 @@ impl<'a> Element<'a> {
             Modifier::Content => Box::new(Content(self.value.to_owned())),
         })
     }
-    fn modifier(&self) -> Result<(TypeId, ModifierBox)> {
+    fn modifier(&self) -> Result<(TypeId, ModifyBox)> {
         let type_id = self.modifier.type_id();
         let modifier = match self.flow {
             Flow::Dynamic => Box::new(Dynamic { name: self.value.to_owned() }),
@@ -99,7 +99,7 @@ fn close_section_txt<'a>(input: &mut Input<'a>) -> Result<&'a str> {
                 input.0 = &input.0[1..];
                 let section_len = full_input.len() - input.0.len();
                 // Without enclosing braces.
-                return Ok(&full_input[1..section_len - 2]);
+                return Ok(&full_input[1..section_len - 1]);
             }
             () if double_close => input.0 = &input.0[2..],
             () => input.0 = &input.0[1..],
@@ -126,8 +126,10 @@ fn section_txt<'a>(input: &mut Input<'a>) -> Result<(ContentType, &'a str)> {
     }
 }
 
+/// Parse a section value, consuming it.
+///
+/// Sections are a series of (key:values) separated by commas.
 fn value_txt<'a>(input: &mut Input<'a>) -> Result<(Flow, &'a str)> {
-    // TODO: check that indeed keyword.
     let (mut value, remaining) = input.0.split_once(',').unwrap_or((input.0, ""));
     input.0 = remaining;
     let flow = if value.ends_with('$') { Flow::Dynamic } else { Flow::Static };
@@ -249,35 +251,86 @@ pub(super) fn rich_text(input: &str) -> Result<Vec<Section>> {
     }
 }
 
-#[cfg(never)]
+#[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::richtext::{modifiers, Modifiers, Section};
+    use std::any::TypeId;
 
-    #[test]
-    fn valid_dynamic_detection() {
-        todo!()
+    use super::{section, Input};
+
+    use bevy::prelude::*;
+
+    use pretty_assertions_sorted::assert_eq_sorted;
+
+    macro_rules! section_map {
+        ( $( $modifier:ident ( $value:expr ) ),* $(,)? ) => {{
+            let mut modifiers = Modifiers::new();
+            $(
+                let id = TypeId::of::<modifiers::$modifier>();
+                let value = modifiers::$modifier( $value );
+                modifiers.insert(id, Box::new(value));
+            )*
+            Section { modifiers }
+        }}
     }
+
+    // TODO: dynamic detection
+
     #[test]
     fn valid_section() {
         let section = |txt| section(&mut Input(txt)).unwrap();
         let out = section(
             "{color:blue,font:fonts/fira-sans.ttf,size:0.3,content:this is a section of text}",
         );
-        let out = section("{color:blue,content:some content}");
-        let out = section("{color:blue,some content}");
-        let out = section("{color:white,content:some text}");
+        let expected = section_map! {
+            Color(Color::BLUE),
+            Font("fonts/fira-sans.ttf".to_owned()),
+            RelSize(0.3),
+            Content("this is a section of text".to_string()),
+        };
+        assert_eq_sorted!(out, Some(expected));
+
+        let out = section("{color: blue ,content:some content}");
+        let expected = section_map! {
+            Color(Color::BLUE),
+            Content("some content".to_string()),
+        };
+        assert_eq_sorted!(out, Some(expected));
+
+        let out = section("{color: Antique_White,some content}");
+        let expected = section_map! {
+            Color(Color::ANTIQUE_WHITE),
+            Content("some content".to_string()),
+        };
+        assert_eq_sorted!(out, Some(expected));
+
+        // TODO
+        // let out = section("{color:rgb(1.0, 0.4, 0.3),content:some text}");
+        // let expected = section_map! {
+        //     Color(Color::rgba(1.0, 0.4, 0.3, 1.0)),
+        //     Content("some text".to_string()),
+        // };
+        // assert_eq_sorted!(out, Some(expected));
+
         let out = section("{content:some text}");
-        let out = section("{color:white,some text}");
+        let expected = section_map! {
+            Content("some text".to_string()),
+        };
+        assert_eq_sorted!(out, Some(expected));
+
+        let out = section("{color:WHITE ,some text}");
+        let expected = section_map! {
+            Color(Color::WHITE),
+            Content("some text".to_string()),
+        };
+        assert_eq_sorted!(out, Some(expected));
+
         let out = section("some text");
-        assert_eq!(None, section(""));
-        todo!();
-    }
-    #[test]
-    fn invalid_section() {
-        "{color:blue}some content{/}"
-    }
-    #[test]
-    fn rich_text() {
-        todo!();
+        let expected = section_map! {
+            Content("some text".to_string()),
+        };
+        assert_eq_sorted!(out, Some(expected));
+
+        assert_eq_sorted!(None, section(""));
     }
 }

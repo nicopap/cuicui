@@ -57,7 +57,6 @@ example_text.single_mut().sections[4].value = new_text.to_string();
 ### With cuicui_richtext
 
 ```rust
-// alternatively: use the `rich_text!` macro to avoid run-time parsing!
 let instructions =
   "Controls:\n\
   WSAD  - forward/back/strafe left/right\n\
@@ -215,8 +214,8 @@ pub struct Context<'a, 'b> {
 ### Bindings
 
 Remember *dynamic modifiers*. Since they are not getting their value from the
-definition of the `RichText`, they must be taking it from somewhere else. Where
-you ask? The bindings! Let's take a look at its definition:
+definition of the `RichText`, they must be taking it from somewhere else. Where,
+you ask? The bindings! Let's take a look at their definition:
 
 ```rust
 pub type Bindings = HashMap<&'static str, Box<dyn Modify>>;
@@ -225,9 +224,40 @@ pub type Bindings = HashMap<&'static str, Box<dyn Modify>>;
 It's just a map from names to `Modify`. `RichText`, instead of using a
 pre-defined `Modify`, will pick it from the `Bindings` and use it.
 
+#### Adding bindings
+
+Currently bevy integration goes through the `RichTextData` component.
+Add some rich text with the `RichTextBundle` and modify it by querying for
+`RichTextData` and calling:
+
+- `rich_text_data.add_binding(binding_name, value)` To set a non-content binding
+- `rich_text_data.add_content(binding_name, content)` to set a content binding
+
+This is not enough to update `RichTextData`, you need to then update the bevy `Text`
+component.
+
+To do so, you can use the `RichTextSetter` world query. As follow:
+
+```rust
+fn update_text(mut query: Query<RichTextSetter, Changed<RichTextData>>, fonts: Res<Assets<Font>>) {
+    for mut text in &mut query {
+        text.update(&fonts);
+    }
+}
+```
+
+
 ## Future work
 
-[`bevy_ui_bits`][bui_bits] has cool *embossed* text and preset size constants.
+- [`bevy_ui_bits`][bui_bits] has cool *embossed* text and preset size constants.
+- It should be possible to write a macro for parsing the specification string
+  at compile time
+- Use `nom` for parsing, the recursive descent is cool but difficult to maintain
+  and justify.
+- Better API: typically you'd want `Context` to be a `Res`
+- Better API: something similar to bevy's label for the binding context, so
+  that typos are caught at compile time.
+- Better API: provide a system to automatically update the bevy `Text`.
 
 ## Previous work
 

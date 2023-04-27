@@ -3,20 +3,24 @@
 //! As with the rest of `bevy_cuicui`, you can either build one by parsing
 mod color;
 mod integrate;
-mod modifiers;
+pub mod modifiers;
 mod parse;
 
-use std::any::TypeId;
+use std::any::{Any, TypeId};
+use std::fmt;
 
 use bevy::prelude::Font as BevyFont;
 use bevy::{prelude::*, utils::HashMap};
 
+pub use integrate::{RichTextBundle, RichTextData, RichTextSetter, RichTextSetterItem};
 pub use modifiers::{Color, Content, Dynamic, Font, RelSize};
 pub use parse::Error as ParseError;
 
-pub type ModifierBox = Box<dyn Modify + Send + Sync + 'static>;
-pub type Modifiers = HashMap<TypeId, ModifierBox>;
-pub type Bindings<'a> = HashMap<&'static str, &'a dyn Modify>;
+pub type ModifyBox = Box<dyn Modify + Send + Sync + 'static>;
+pub type Modifiers = HashMap<TypeId, ModifyBox>;
+// here we want to own the `dyn Modify`, we might potentially be able to "cache"
+// it and modify it in place with new values.
+pub type Bindings = HashMap<&'static str, ModifyBox>;
 
 /// A [`TextSection`] modifier.
 ///
@@ -25,23 +29,68 @@ pub type Bindings<'a> = HashMap<&'static str, &'a dyn Modify>;
 pub trait Modify {
     // TODO: error handling (ie missing dynamic modifer binding)
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()>;
+
+    // those are workarounds to make tests in richtext/parse.rs work…
+    fn as_any(&self) -> Option<&dyn Any> {
+        None
+    }
+    fn cmp(&self, _: &dyn Modify) -> bool {
+        false
+    }
+    fn debug_show(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Ok(())
+    }
+}
+impl PartialEq for dyn Modify {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other)
+    }
+}
+impl PartialEq for ModifyBox {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(&**other)
+    }
+}
+impl fmt::Debug for dyn Modify {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.debug_show(f)
+    }
+}
+impl fmt::Debug for ModifyBox {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.debug_show(f)
+    }
 }
 
-/// The context used in [`ApplySection`].
-///
-/// TODO: more details, explain bidings.
+// TODO: more details, explain bidings.
+/// The context used in [`Modify`].
+#[derive(Clone, Copy)]
 pub struct Context<'a, 'b> {
-    pub bindings: Bindings<'b>,
-    pub parent_style: TextStyle,
-    pub fonts: &'a Assets<BevyFont>,
+    pub bindings: Option<&'b Bindings>,
+    pub parent_style: &'b TextStyle,
+    // Note: we use a `&'a dyn` here instead of a type parameter because we intend
+    // for `Context` to be a parameter for a trait object method. If `Context` had
+    // a non-lifetime type parameter, it would require that method to have a type
+    // parameter itself, but this would make it non-dispatchable: ie not available
+    // on trait object.
+    pub fonts: &'a dyn Fn(&str) -> Option<Handle<BevyFont>>,
+}
+impl<'a, 'b> Context<'a, 'b> {
+    pub fn from_style(parent_style: &'b TextStyle) -> Self {
+        Context { bindings: None, parent_style, fonts: &|_| None }
+    }
 }
 
 // TODO(text): should have change tracking (might require internal mutability)
 // to be precise and extremely limited about what we update.
+#[derive(PartialEq, Debug)]
 pub struct Section {
     modifiers: Modifiers,
 }
+#[derive(Debug)]
 pub struct RichText {
+    // TODO: this might be improved, for example by storing a binding-> section
+    // list so as to avoid iterating over all sections when updating
     pub sections: Vec<Section>,
 }
 
