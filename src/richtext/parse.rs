@@ -4,7 +4,7 @@ mod helpers;
 use thiserror::Error;
 use winnow::{
     branch::alt,
-    bytes::{one_of, take_till0},
+    bytes::{one_of, take_till0, take_till1},
     character::{alpha1, alphanumeric1, escaped},
     combinator::opt,
     error::VerboseError,
@@ -66,21 +66,26 @@ fn ident(input: &str) -> IResult<&str, &str> {
 fn balanced_text(input: &str) -> IResult<&str, &str> {
     fn scope(input: &str) -> IResult<&str, ()> {
         fn inner_scope(input: &str) -> IResult<&str, ()> {
-            let flat = escaped(take_till0("()[]{}\\"), '\\', one_of("()[]{},|\\"));
+            let flat = escaped(take_till1("()[]{}\\"), '\\', one_of("()[]{},|\\"));
             // foobar | foo()foo | foo()foo()foo ... (where foo can be "")
             separated0(flat, scope).parse_next(input)
         }
+        // TODO(perf): this is slow, need to replace with `dispatch!`
         alt((
             delimited('{', inner_scope, '}'),
             delimited('[', inner_scope, ']'),
             delimited('(', inner_scope, ')'),
         ))
+        .context("scope")
         .parse_next(input)
     }
-    let flat = escaped(take_till0("([{},|\\"), '\\', one_of("()[]{},|\\"));
+    let flat = escaped(take_till1("([{},|\\"), '\\', one_of("()[]{},|\\"));
 
     let sep = separated0::<_, _, (), _, _, _, _>;
-    sep(flat, scope).recognize().parse_next(input)
+    sep(flat, scope)
+        .recognize()
+        .context("balanced_text")
+        .parse_next(input)
 }
 fn closed_element(input: &str) -> IResult<&str, Element> {
     use ModifierValue as Mod;
@@ -92,8 +97,9 @@ fn closed_element(input: &str) -> IResult<&str, Element> {
         preceded('$', opt(ident)).map(Mod::dyn_opt),
         balanced_text.map(Mod::statik),
     ));
-    separated_pair(key, ':', metadata)
+    separated_pair(key, ':', metadata.context("metadata"))
         .map(Element::modifier)
+        .context("closed_element")
         .parse_next(input)
 }
 fn bare_content(input: &str) -> IResult<&str, Vec<Section>> {
@@ -103,7 +109,10 @@ fn bare_content(input: &str) -> IResult<&str, Vec<Section>> {
     let sub_section = alt((delimited('{', closed, '}'), section_text));
 
     // TODO(perf): flat_vec: 5slow10me
-    many0(sub_section).map(flat_vec).parse_next(input)
+    many0(sub_section)
+        .map(flat_vec)
+        .context("bare_content")
+        .parse_next(input)
 }
 fn closed(input: &str) -> IResult<&str, Vec<Section>> {
     let full_list = (
@@ -112,10 +121,12 @@ fn closed(input: &str) -> IResult<&str, Vec<Section>> {
     );
     let closed = alt((
         // TODO(err): actually capture error instead of eating it in winnow
-        full_list.map(|t| elements_and_content(t).unwrap()),
+        full_list
+            .map(|t| elements_and_content(t).unwrap())
+            .context("full_list"),
         opt(ident).map(short_dynamic),
     ));
-    delimited('{', closed, '}').parse_next(input)
+    delimited('{', closed.context("closed"), '}').parse_next(input)
 }
 pub(super) fn rich_text(input: &str) -> Result<RichText, Error> {
     // escaped(take_till0("([{,|\\"), '\\', one_of("()[]{},|\\"));
@@ -168,23 +179,34 @@ mod tests {
         String::from(input)
     }
     fn parse_fn<'a, T>(
-        mut parser: impl Parser<&'a str, T, VerboseError<&'a str>>,
+        parser: impl Parser<&'a str, T, VerboseError<&'a str>>,
+        input: &'a str,
+    ) -> Result<T, String> {
+        let mut parser = winnow::trace::trace(format!("TRACE_ROOT \"{input}\""), parser);
+        parser.parse(input).map_err(|err| {
+            println!("{err}");
+            err.to_string()
+        })
+    }
+
+    fn parse_bad<'a, T>(
+        parser: impl Parser<&'a str, T, VerboseError<&'a str>>,
         input: &'a str,
     ) -> Result<&'a str, String> {
-        parser
-            .parse_next(input)
-            .map_err(|t| {
-                println!("{t}");
-                t.to_string()
-            })
-            .map(|t| t.0)
+        let mut parser = winnow::trace::trace(format!("TRACE_ROOT \"{input}\""), parser);
+        parser.parse_next(input).map(|t| t.0).map_err(|err| {
+            println!("{err}");
+            err.to_string()
+        })
     }
 
     #[test]
     fn balanced_text_complete() {
         let parse = |input| parse_fn(balanced_text, input);
         let complete = [
+            r#"foo \| bar"#,
             "",
+            "foo bar",
             "foo (bar) baz",
             "foo (,) baz",
             "foo (bar) (baz) zab",
@@ -195,8 +217,7 @@ mod tests {
             "(foo () baz) bar",
             "(foo ()() baz) bar",
             "()",
-            "foo bar",
-            r#"foo \| bar"#,
+            r#"food ( \| ) blar"#,
             "foo [] bar",
             "foo ({},[]) bar",
             r#"foo \, bar"#,
@@ -205,12 +226,13 @@ mod tests {
             r#"(foo \{ |)"#,
         ];
         for input in &complete {
-            assert_eq_sorted!(parse(input), Ok(""));
+            let output = parse(input);
+            assert!(output.is_ok(), "{:?}", output);
         }
     }
     #[test]
     fn balanced_text_incomplete() {
-        let parse = |input| parse_fn(balanced_text, input);
+        let parse = |input| parse_bad(balanced_text, input);
         let incomplete = [
             ("foo , bar", ", bar"),
             (",", ","),
@@ -240,16 +262,17 @@ mod tests {
             "size: 6.28318530",
         ];
         for input in &complete {
-            assert_eq_sorted!(parse(input), Ok(""));
+            let output = parse(input);
+            assert!(output.is_ok(), "{:?}", output);
         }
     }
     #[test]
     fn closed_element_incomplete() {
-        let parse = |input| parse_fn(closed_element, input);
+        let parse = |input| parse_bad(closed_element, input);
         // TODO(test): error on "", "mahagony: expensive", "kouglov", "darth Mouse:"
         let incomplete = [
-            ("color : green, fancy", ", fancy"),
-            ("content : foo | fancy", "| fancy"),
+            ("color:green, fancy", ", fancy"),
+            ("content: foo | fancy", "| fancy"),
         ];
         for (input, remaining) in &incomplete {
             assert_eq_sorted!(parse(input), Ok(*remaining));
@@ -270,12 +293,13 @@ mod tests {
             "{color:orange |lorem ipsum}",
         ];
         for input in &complete {
-            assert_eq_sorted!(parse(input), Ok(""));
+            let output = parse(input);
+            assert!(output.is_ok(), "{:?}", output);
         }
     }
     #[test]
     fn closed_incomplete() {
-        let parse = |input| parse_fn(closed, input);
+        let _parse = |input| parse_bad(closed, input);
     }
 
     // ---------------------------------

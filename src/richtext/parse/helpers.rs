@@ -39,7 +39,7 @@ impl From<Sections> for RichText {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) enum ModifierValue<'a> {
     Dynamic(Cow<'a, str>),
     Static(Cow<'a, str>),
@@ -56,6 +56,7 @@ impl<'a> ModifierValue<'a> {
         Self::Static(input.into())
     }
 }
+#[derive(Debug)]
 pub(super) struct Element<'a> {
     pub(super) key: &'a str,
     pub(super) value: ModifierValue<'a>,
