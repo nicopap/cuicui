@@ -1,5 +1,5 @@
-use std::any::TypeId;
 use std::num::ParseFloatError;
+use std::{any::TypeId, borrow::Cow};
 
 use thiserror::Error;
 
@@ -17,9 +17,11 @@ pub enum Error<'a> {
 
 pub(super) type Result<'a, T> = std::result::Result<T, Error<'a>>;
 
+#[derive(Clone)]
 pub(super) enum ModifierValue<'a> {
-    Dynamic(&'a str),
-    Static(&'a str),
+    Dynamic(Cow<'a, str>),
+    Static(Cow<'a, str>),
+    DynamicImplicit,
 }
 pub(super) enum Element<'a> {
     Modifier((&'a str, ModifierValue<'a>)),
@@ -61,8 +63,9 @@ pub(super) fn aggregate_elements(elements: Vec<Element>) -> Result<Vec<Section>>
     };
     let modifier_value = |key, value| -> Result<ModifyBox> {
         match value {
-            ModifierValue::Dynamic(name) => Ok(Box::new(Dynamic::new(name.to_owned()))),
-            ModifierValue::Static(value) => static_modifier(key, value),
+            ModifierValue::Dynamic(name) => Ok(Box::new(Dynamic::new(name.to_string()))),
+            ModifierValue::Static(value) => static_modifier(key, value.as_ref()),
+            ModifierValue::DynamicImplicit => Ok(Box::new(Dynamic::new("implicit".to_owned()))),
         }
     };
     let modifier_key = |key| match key {
