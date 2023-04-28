@@ -1,28 +1,30 @@
 //! Parse rich text according to spec
 mod helpers;
 
-use nom::{
-    branch::alt,
-    bytes::complete::{escaped, is_not, tag},
-    character::complete::{alpha1, alphanumeric1, multispace0, one_of},
-    combinator::{map, map_res, opt, recognize, value},
-    error::VerboseError,
-    multi::{many0, many0_count, separated_list0},
-    sequence::{delimited, pair, preceded, separated_pair, terminated},
-    Finish,
-};
 use thiserror::Error;
+use winnow::{
+    branch::alt,
+    bytes::{one_of, take_till0},
+    character::{alpha1, alphanumeric1, escaped},
+    combinator::opt,
+    error::VerboseError,
+    multi::{many0, separated0, separated1},
+    sequence::{delimited, preceded, separated_pair},
+    Parser,
+};
 
 use super::{RichText, Section};
-use helpers::{aggregate_elements, flat_vec, open_section, short_dynamic, Element, ModifierValue};
+use helpers::{
+    elements_and_content, flat_vec, open_section, short_dynamic, Element, ModifierValue, Sections,
+};
 
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
-    Nom(#[from] VerboseError<String>),
+    Winnow(#[from] VerboseError<String>),
     #[error(transparent)]
-    NomBad(#[from] nom::error::Error<String>),
-    #[error("Not all of the input was correctly parsed, remaining was: \"{0}\"")]
+    WinnowBad(#[from] winnow::error::Error<String>),
+    #[error("trailing content: {0}")]
     Trailing(String),
 }
 impl From<VerboseError<&'_ str>> for Error {
@@ -32,100 +34,100 @@ impl From<VerboseError<&'_ str>> for Error {
             .into_iter()
             .map(|(m, k)| (m.to_owned(), k))
             .collect();
-        Self::Nom(VerboseError { errors })
+        Self::Winnow(VerboseError { errors })
     }
 }
 
-type IResult<'a, I, O> = nom::IResult<I, O, VerboseError<&'a str>>;
+type IResult<'a, I, O> = winnow::IResult<I, O, VerboseError<&'a str>>;
 
 // ```
+// <ident>: "identifier respecting rust's identifier rules"
+// <text∌FOO>: "text that doesn't contain FOO, unless prefixed by backslash `\`"
+// <balanced_text∌FOO>: "Same as <text> but, has balanced brackets and can
+//                       contain unescaped FOO within brackets"
+// closed_element = key ':' metadata
 // key = 'font' | 'content' | 'size' | 'color'
-// sub_section = '{' closed '}' | <text∉{}>
+// sub_section = '{' closed '}' | <text∌{}>
 // bare_content = (sub_section)+
-// metadata = '$' <ident> | <balanced_text∉,}>
-// closed_element = key ':' metadata | '|' bare_content
-// closed = '' | <ident> | (closed_element)+
-// section = '{' closed '}' | <text∉{>
+// metadata = '$' <ident> | <balanced_text∌,}|>
+// closed = <ident> | (closed_element),* ('|' bare_content)?
+// section = '{' closed '}' | <text∌{>
 // rich_text = (section)*
 // ```
 //
 // How to read the following code:
 // Look at the variable names for match with the grammar, they are defined in the same order.
-// fn text(exclude: &str, input: &str) -> IResult<&str, &str> {}
-fn scope(input: &str) -> IResult<&str, &str> {
-    let escaped = || escaped(is_not("()[]{}\\"), '\\', one_of("()[]{},|\\"));
-
-    let scope = || separated_list0(scope, opt(escaped()));
-    recognize(alt((
-        delimited(tag("{"), scope(), tag("}")),
-        delimited(tag("["), scope(), tag("]")),
-        delimited(tag("("), scope(), tag(")")),
-    )))(input)
+fn ident(input: &str) -> IResult<&str, &str> {
+    let many = many0::<_, _, (), _, _>;
+    (alt((alpha1, "_")), many(alt((alphanumeric1, "_"))))
+        .recognize()
+        .parse_next(input)
 }
 fn balanced_text(input: &str) -> IResult<&str, &str> {
-    let escape = |inner| escaped(inner, '\\', one_of("()[]{},|\\"));
+    fn scope(input: &str) -> IResult<&str, ()> {
+        fn inner_scope(input: &str) -> IResult<&str, ()> {
+            let flat = escaped(take_till0("()[]{}\\"), '\\', one_of("()[]{},|\\"));
+            // foobar | foo()foo | foo()foo()foo ... (where foo can be "")
+            separated0(flat, scope).parse_next(input)
+        }
+        alt((
+            delimited('{', inner_scope, '}'),
+            delimited('[', inner_scope, ']'),
+            delimited('(', inner_scope, ')'),
+        ))
+        .parse_next(input)
+    }
+    let flat = escaped(take_till0("([{},|\\"), '\\', one_of("()[]{},|\\"));
 
-    let outer = escape(is_not("([{,|\\"));
-
-    recognize(separated_list0(scope, opt(outer)))(input)
+    let sep = separated0::<_, _, (), _, _, _, _>;
+    sep(flat, scope).recognize().parse_next(input)
 }
-fn ident(input: &str) -> IResult<&str, &str> {
-    recognize(pair(
-        alt((alpha1, tag("_"))),
-        many0_count(alt((alphanumeric1, tag("_")))),
-    ))(input)
-}
-fn closed(input: &str) -> IResult<&str, Vec<Section>> {
+fn closed_element(input: &str) -> IResult<&str, Element> {
     use ModifierValue as Mod;
 
-    let colon = terminated(tag(":"), multispace0);
-    let bar = delimited(multispace0, tag("|"), multispace0);
-    let open_b = terminated(tag("{"), multispace0);
-    let close_b = preceded(multispace0, tag("}"));
-
-    let text = |exclude| escaped(is_not(exclude), '\\', one_of("{},\\"));
-
-    // TODO: dynamic tags
-    let key = alt((tag("font"), tag("content"), tag("size"), tag("color")));
-
-    let section_text = map(text("{}\\"), open_section);
-    let sub_section = alt((delimited(open_b, closed, close_b), section_text));
-
-    // TODO: performance
-    let bare_content = map(many0(sub_section), flat_vec);
+    // TODO(feat): dynamic tags
+    let key = alt(("font", "content", "size", "color"));
 
     let metadata = alt((
-        map(preceded(tag("$"), ident), |t| Mod::Dynamic(t.into())),
-        value(Mod::DynamicImplicit, tag("$")),
-        map(balanced_text, |t: &str| Mod::Static(t.into())),
+        preceded('$', opt(ident)).map(Mod::dyn_opt),
+        balanced_text.map(Mod::statik),
     ));
-    let closed_element = alt((
-        map(separated_pair(key, colon, metadata), Element::Modifier),
-        map(preceded(bar, bare_content), Element::Content),
+    separated_pair(key, ':', metadata)
+        .map(Element::modifier)
+        .parse_next(input)
+}
+fn bare_content(input: &str) -> IResult<&str, Vec<Section>> {
+    let text = |exclude| escaped(opt(take_till0(exclude)), '\\', one_of("{},\\"));
+
+    let section_text = text("{}\\").map(open_section);
+    let sub_section = alt((delimited('{', closed, '}'), section_text));
+
+    // TODO(perf): flat_vec: 5slow10me
+    many0(sub_section).map(flat_vec).parse_next(input)
+}
+fn closed(input: &str) -> IResult<&str, Vec<Section>> {
+    let full_list = (
+        separated1(closed_element, ','),
+        opt(preceded('|', bare_content)),
+    );
+    let closed = alt((
+        // TODO(err): actually capture error instead of eating it in winnow
+        full_list.map(|t| elements_and_content(t).unwrap()),
+        opt(ident).map(short_dynamic),
     ));
-    let all_elements = map_res(many0(closed_element), aggregate_elements);
-
-    let mut closed = alt((map(opt(ident), short_dynamic), all_elements));
-
-    closed(input)
+    delimited('{', closed, '}').parse_next(input)
 }
 pub(super) fn rich_text(input: &str) -> Result<RichText, Error> {
-    let open_b = terminated(tag("{"), multispace0);
-    let close_b = preceded(multispace0, tag("}"));
+    // escaped(take_till0("([{,|\\"), '\\', one_of("()[]{},|\\"));
+    let text = escaped(take_till0("{\\"), '\\', one_of("{},\\"));
 
-    let text = |exclude| escaped(is_not(exclude), '\\', one_of("{},\\"));
+    let section = alt((closed, text.map(open_section)));
 
-    let section_text = map(text("{\\"), open_section);
-    let section = alt((delimited(open_b, closed, close_b), section_text));
+    // TODO(perf): use fold_many0 instead to accumulat in single vec
+    let many = many0::<_, _, Sections, _, _>;
+    let mut rich_text = many(section).map(RichText::from);
 
-    let mut rich_text = many0(section);
-
-    let (remaining, sections) = rich_text(input).finish()?;
-    if remaining.is_empty() {
-        Ok(RichText { sections: flat_vec(sections) })
-    } else {
-        Err(Error::Trailing(remaining.to_owned()))
-    }
+    Ok(rich_text.parse(input)?)
 }
 
 #[cfg(test)]
@@ -134,6 +136,7 @@ mod tests {
 
     use bevy::prelude::Color as Col;
     use pretty_assertions_sorted::assert_eq_sorted;
+    use winnow::Parser;
 
     use super::super::{modifiers, Modifiers};
     use super::*;
@@ -164,10 +167,22 @@ mod tests {
     fn s(input: &str) -> String {
         String::from(input)
     }
+    fn parse_fn<'a, T>(
+        mut parser: impl Parser<&'a str, T, VerboseError<&'a str>>,
+        input: &'a str,
+    ) -> Result<&'a str, String> {
+        parser
+            .parse_next(input)
+            .map_err(|t| {
+                println!("{t}");
+                t.to_string()
+            })
+            .map(|t| t.0)
+    }
 
     #[test]
-    fn balanced_text_valid() {
-        let parse = |input| balanced_text(input).finish().unwrap().0;
+    fn balanced_text_complete() {
+        let parse = |input| parse_fn(balanced_text, input);
         let complete = [
             "",
             "foo (bar) baz",
@@ -190,16 +205,16 @@ mod tests {
             r#"(foo \{ |)"#,
         ];
         for input in &complete {
-            assert_eq_sorted!(parse(input), "");
+            assert_eq_sorted!(parse(input), Ok(""));
         }
     }
     #[test]
-    fn balanced_text_invalid() {
-        let parse = |input| balanced_text(input).finish().unwrap().0;
+    fn balanced_text_incomplete() {
+        let parse = |input| parse_fn(balanced_text, input);
         let incomplete = [
             ("foo , bar", ", bar"),
             (",", ","),
-            // ("(", ""),
+            // ('(', ""),
             // ("foo ( bar", ""),
             ("foo | bar", "| bar"),
             (r#"foo \, , bar"#, ", bar"),
@@ -207,8 +222,60 @@ mod tests {
             (r#"foo \( , \) bar"#, r#", \) bar"#),
         ];
         for (input, remaining) in &incomplete {
-            assert_eq_sorted!(parse(input), *remaining);
+            assert_eq_sorted!(parse(input), Ok(*remaining));
         }
+    }
+
+    #[test]
+    fn closed_element_complete() {
+        let parse = |input| parse_fn(closed_element, input);
+        let complete = [
+            "color:red",
+            "color:$foobar",
+            "color:$",
+            r#"content:   foo\,bar"#,
+            "color: rgb(1,3,4)",
+            "color:PiNk",
+            "font: foo.ttf",
+            "size: 6.28318530",
+        ];
+        for input in &complete {
+            assert_eq_sorted!(parse(input), Ok(""));
+        }
+    }
+    #[test]
+    fn closed_element_incomplete() {
+        let parse = |input| parse_fn(closed_element, input);
+        // TODO(test): error on "", "mahagony: expensive", "kouglov", "darth Mouse:"
+        let incomplete = [
+            ("color : green, fancy", ", fancy"),
+            ("content : foo | fancy", "| fancy"),
+        ];
+        for (input, remaining) in &incomplete {
+            assert_eq_sorted!(parse(input), Ok(*remaining));
+        }
+    }
+    #[test]
+    fn closed_complete() {
+        let parse = |input| parse_fn(closed, input);
+        let complete = [
+            "{color: blue}",
+            "{}",
+            "{some_dynamic_content}",
+            "{color: $fnoo}",
+            "{color: $}",
+            "{color:$}",
+            "{color: purple, font: blar}",
+            "{color: cyan, font: bar | dolore abdicum}",
+            "{color:orange |lorem ipsum}",
+        ];
+        for input in &complete {
+            assert_eq_sorted!(parse(input), Ok(""));
+        }
+    }
+    #[test]
+    fn closed_incomplete() {
+        let parse = |input| parse_fn(closed, input);
     }
 
     // ---------------------------------
@@ -237,9 +304,12 @@ mod tests {
     }
     #[test]
     fn closed_content() {
-        let input = "{|This is also just some non-dynamic text, commas need not be escaped}";
-        let expected =
-            sections!["This is also just some non-dynamic text, commas need not be escaped"];
+        let input =
+            "{color:white|This is also just some non-dynamic text, commas need not be escaped}";
+        let expected = sections![{
+            Color: Col::WHITE,
+            Content: s("This is also just some non-dynamic text, commas need not be escaped"),
+        }];
         assert_eq_sorted!(parse(input), Ok(expected));
     }
     #[test]
@@ -258,7 +328,7 @@ mod tests {
     fn outer_dynamic_content_implicit() {
         let input = "{}";
         let expected=
-                // TODO: this needs to be TypeId.of(Content)
+                // TODO(feat): this needs to be TypeId.of(Content)
                 sections![{(fn Content) Dynamic::new : s("content")}];
         assert_eq_sorted!(parse(input), Ok(expected));
     }
@@ -267,7 +337,7 @@ mod tests {
         let input = "An empty {} is equivalent to {name}, but referred by typeid instead of name";
         let expected = sections![
             "An empty ",
-            // TODO: this needs to be TypeId.of(Content)
+            // TODO(feat): this needs to be TypeId.of(Content)
             {(fn Content) Dynamic::new : s("content")},
             " is equivalent to ",
             {(fn Content) Dynamic::new : s("name")},
@@ -358,7 +428,7 @@ mod tests {
         let input = "{color: $ |If the identifier of a dynamic metadata value is elided, \
                 then the typeid of the rust type is used}";
         let expected = sections![{
-            // TODO: this needs to be TypeId.of(Color)
+            // TODO(feat): this needs to be TypeId.of(Color)
             (fn Color) Dynamic::new: s("color"),
             Content: s(
                 "If the identifier of a dynamic metadata value is elided, \
@@ -372,7 +442,7 @@ mod tests {
         let input = "can also use a single elided content if you want: {content:$}";
         let expected = sections![
             "can also use a single elided content if you want: ",
-            // TODO: this needs to be TypeId.of(Content)
+            // TODO(feat): this needs to be TypeId.of(Content)
             {(fn Content) Dynamic::new: s("content")},
         ];
         assert_eq_sorted!(parse(input), Ok(expected));
@@ -380,17 +450,17 @@ mod tests {
     #[test]
     fn all_dynamic_content_declarations() {
         let input =
-            "{content:$ident} is equivalent to {ident} also {| {ident} } and {  ident  } and {|{ident}}.";
+            "{content:$ident} is equivalent to {ident} also {color:white| {ident} } and {  ident  } and {color:white|{ident}}.";
         let expected = sections![
             {(fn Content) Dynamic::new: s("ident")},
             " is equivalent to ",
             {(fn Content) Dynamic::new: s("ident")},
             " also ",
-            {(fn Content) Dynamic::new: s("ident")},
+            {Color: Col::WHITE, (fn Content) Dynamic::new: s("ident")},
             " and ",
             {(fn Content) Dynamic::new: s("ident")},
             " and ",
-            {(fn Content) Dynamic::new: s("ident")},
+            {Color: Col::WHITE, (fn Content) Dynamic::new: s("ident")},
             ".",
         ];
         assert_eq_sorted!(parse(input), Ok(expected));
