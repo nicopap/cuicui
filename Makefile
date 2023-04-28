@@ -7,6 +7,7 @@ run:
 	cargo test --features winnow/debug richtext::parse::tests::balanced_text_incomplete
 	cargo test --features winnow/debug richtext::parse::tests::closed_element_complete
 	cargo test --features winnow/debug richtext::parse::tests::closed_element_incomplete
+	cargo test --features winnow/debug richtext::parse::tests::bare_content_complete
 	cargo test --features winnow/debug richtext::parse::tests::closed_complete
 	cargo test --features winnow/debug richtext::parse::tests::closed_incomplete
 	cargo test --features winnow/debug richtext::parse::tests::single_dynamic_shorthand

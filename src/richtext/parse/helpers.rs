@@ -2,7 +2,11 @@ use std::num::ParseFloatError;
 use std::{any::TypeId, borrow::Cow};
 
 use thiserror::Error;
-use winnow::stream::Accumulate;
+use winnow::character::multispace0;
+use winnow::error::ParseError;
+use winnow::sequence::delimited;
+use winnow::stream::{Accumulate, AsChar, Stream, StreamIsPartial};
+use winnow::Parser;
 
 use super::super::{color, modifiers, Content, Dynamic, Modifiers, ModifyBox, RichText, Section};
 
@@ -23,6 +27,7 @@ pub enum Error<'a> {
 
 pub(super) type Result<'a, T> = std::result::Result<T, Error<'a>>;
 
+#[derive(Debug)]
 pub(super) struct Sections(Vec<Section>);
 impl Accumulate<Vec<Section>> for Sections {
     fn initial(capacity: Option<usize>) -> Self {
@@ -67,9 +72,6 @@ impl<'a> Element<'a> {
     }
 }
 
-pub(super) fn flat_vec<T>(vs: Vec<Vec<T>>) -> Vec<T> {
-    vs.into_iter().flatten().collect()
-}
 pub(super) fn open_section(input: &str) -> Vec<Section> {
     let content_id = TypeId::of::<Content>();
 
@@ -89,7 +91,7 @@ pub(super) fn short_dynamic(input: Option<&str>) -> Vec<Section> {
     vec![Section { modifiers }]
 }
 pub(super) fn elements_and_content(
-    (elements, content): (Vec<Element>, Option<Vec<Section>>),
+    (elements, content): (Vec<Element>, Option<Sections>),
 ) -> Result<Vec<Section>> {
     use modifiers::{Color, Font, RelSize};
 
@@ -130,8 +132,18 @@ pub(super) fn elements_and_content(
     }
     if modifiers.contains_key(&TypeId::of::<Content>()) && content.is_some() {
         return Err(Error::TwoContents);
-    } else if let Some(content) = content {
+    } else if let Some(Sections(content)) = content {
         sections = content;
     }
     Ok(sections)
+}
+
+pub(super) fn ws<I, O, E>(inner: impl Parser<I, O, E>) -> impl Parser<I, O, E>
+where
+    <I as Stream>::Token: AsChar,
+    <I as Stream>::Token: Copy,
+    I: StreamIsPartial + Stream,
+    E: ParseError<I>,
+{
+    delimited(multispace0, inner, multispace0)
 }

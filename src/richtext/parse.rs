@@ -3,19 +3,14 @@ mod helpers;
 
 use thiserror::Error;
 use winnow::{
-    branch::alt,
-    bytes::{one_of, take_till0, take_till1},
-    character::{alpha1, alphanumeric1, escaped},
-    combinator::opt,
-    error::VerboseError,
-    multi::{many0, separated0, separated1},
-    sequence::{delimited, preceded, separated_pair},
-    Parser,
+    branch::alt, bytes::one_of, bytes::take_till1, character::alpha1, character::alphanumeric1,
+    character::escaped, combinator::opt, error::VerboseError, multi::many0, multi::separated1,
+    sequence::delimited, sequence::preceded, sequence::separated_pair, Parser,
 };
 
 use super::{RichText, Section};
 use helpers::{
-    elements_and_content, flat_vec, open_section, short_dynamic, Element, ModifierValue, Sections,
+    elements_and_content, open_section, short_dynamic, ws, Element, ModifierValue, Sections,
 };
 
 #[derive(Error, Debug)]
@@ -60,6 +55,7 @@ type IResult<'a, I, O> = winnow::IResult<I, O, VerboseError<&'a str>>;
 fn ident(input: &str) -> IResult<&str, &str> {
     let many = many0::<_, _, (), _, _>;
     (alt((alpha1, "_")), many(alt((alphanumeric1, "_"))))
+        .context("ident")
         .recognize()
         .parse_next(input)
 }
@@ -68,20 +64,20 @@ fn balanced_text(input: &str) -> IResult<&str, &str> {
         fn inner_scope(input: &str) -> IResult<&str, ()> {
             let flat = escaped(take_till1("()[]{}\\"), '\\', one_of("()[]{},|\\"));
             // foobar | foo()foo | foo()foo()foo ... (where foo can be "")
-            separated0(flat, scope).parse_next(input)
+            separated1(flat, scope).parse_next(input)
         }
         // TODO(perf): this is slow, need to replace with `dispatch!`
         alt((
-            delimited('{', inner_scope, '}'),
-            delimited('[', inner_scope, ']'),
-            delimited('(', inner_scope, ')'),
+            delimited('{', ws(inner_scope), '}'),
+            delimited('[', ws(inner_scope), ']'),
+            delimited('(', ws(inner_scope), ')'),
         ))
         .context("scope")
         .parse_next(input)
     }
     let flat = escaped(take_till1("([{},|\\"), '\\', one_of("()[]{},|\\"));
 
-    let sep = separated0::<_, _, (), _, _, _, _>;
+    let sep = separated1::<_, _, (), _, _, _, _>;
     sep(flat, scope)
         .recognize()
         .context("balanced_text")
@@ -91,33 +87,30 @@ fn closed_element(input: &str) -> IResult<&str, Element> {
     use ModifierValue as Mod;
 
     // TODO(feat): dynamic tags
-    let key = alt(("font", "content", "size", "color"));
+    let key = ident;
 
     let metadata = alt((
         preceded('$', opt(ident)).map(Mod::dyn_opt),
         balanced_text.map(Mod::statik),
     ));
-    separated_pair(key, ':', metadata.context("metadata"))
+    separated_pair(key, ws(':'), metadata.context("metadata"))
         .map(Element::modifier)
         .context("closed_element")
         .parse_next(input)
 }
-fn bare_content(input: &str) -> IResult<&str, Vec<Section>> {
-    let text = |exclude| escaped(opt(take_till0(exclude)), '\\', one_of("{},\\"));
+fn bare_content(input: &str) -> IResult<&str, Sections> {
+    let text = escaped(take_till1("{}\\"), '\\', one_of("{},\\"));
 
-    let section_text = text("{}\\").map(open_section);
-    let sub_section = alt((delimited('{', closed, '}'), section_text));
-
-    // TODO(perf): flat_vec: 5slow10me
-    many0(sub_section)
-        .map(flat_vec)
-        .context("bare_content")
-        .parse_next(input)
+    let sub_section = alt((
+        delimited('{', ws(closed), '}').context("section_closed"),
+        text.map(open_section).context("section_open"),
+    ));
+    many0(sub_section).context("bare_content").parse_next(input)
 }
 fn closed(input: &str) -> IResult<&str, Vec<Section>> {
     let full_list = (
-        separated1(closed_element, ','),
-        opt(preceded('|', bare_content)),
+        separated1(closed_element, ws(',')),
+        opt(preceded(ws('|'), bare_content)),
     );
     let closed = alt((
         // TODO(err): actually capture error instead of eating it in winnow
@@ -126,11 +119,10 @@ fn closed(input: &str) -> IResult<&str, Vec<Section>> {
             .context("full_list"),
         opt(ident).map(short_dynamic),
     ));
-    delimited('{', closed.context("closed"), '}').parse_next(input)
+    delimited('{', ws(closed).context("closed"), '}').parse_next(input)
 }
 pub(super) fn rich_text(input: &str) -> Result<RichText, Error> {
-    // escaped(take_till0("([{,|\\"), '\\', one_of("()[]{},|\\"));
-    let text = escaped(take_till0("{\\"), '\\', one_of("{},\\"));
+    let text = escaped(take_till1("{\\"), '\\', one_of("{},\\"));
 
     let section = alt((closed, text.map(open_section)));
 
@@ -198,6 +190,26 @@ mod tests {
             println!("{err}");
             err.to_string()
         })
+    }
+    #[test]
+    fn bare_content_complete() {
+        let parse = |input| parse_fn(bare_content, input);
+        let complete = [
+            "foo",
+            r#"foo\}bar"#,
+            "foo{}",
+            "foo{}baz",
+            "{}baz",
+            "{}foo{}",
+            "{}{}",
+            "foo{content:test}bar",
+            "foo{color:blue |green}bar",
+            "foo{color:blue |hi{hello_world}hi}bar",
+        ];
+        for input in &complete {
+            let output = parse(input);
+            assert!(output.is_ok(), "{:?}", output);
+        }
     }
 
     #[test]
@@ -285,8 +297,9 @@ mod tests {
             "{color: blue}",
             "{}",
             "{some_dynamic_content}",
+            "{  color: blue  }",
             "{color: $fnoo}",
-            "{color: $}",
+            "{color  : $}",
             "{color:$}",
             "{color: purple, font: blar}",
             "{color: cyan, font: bar | dolore abdicum}",
