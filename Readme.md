@@ -136,6 +136,23 @@ todo!()
   - [ ] Root expressed as percent of UiCamera
   - [ ] Write a tool to make and export layouts.
   - [ ] Separate the algo into its own crate independent of bevy
+- [ ] Rich text
+  - [X] Define and verify a grammar for defining rich text through a string
+        like rust's format macro.
+  - [X] Control by name the content of sections
+  - [X] Control styling of sections through modifiers
+  - [X] Control by name the modifiers at runtime
+  - [X] Allow nesting of sections, so that outer modifiers affect inner sections.
+  - [ ] Check that nesting doesn't overwrite parent modifiers.
+  - [X] Control a bevy `Text` by manipulating `RichTextData`
+  - [ ] Provide systems to automatically update `Text` based on `RichTextData`
+  - [ ] Provide systems accepting (Entity, Component, ReflectPath) tuple to
+        automatically pick data from ECS and update `RichTextData`
+  - [ ] Limit amount of updating by implementing a finer-grained change
+        detection system in `RichTextData`
+  - [ ] (unsure) generalize this to widges, to create a prefab system
+  - [ ] (unsure) Allow compile-time verification of rich text spec through a
+        proc macro
 
 
 
