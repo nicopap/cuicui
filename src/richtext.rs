@@ -90,7 +90,7 @@ impl<'a, 'b> Context<'a, 'b> {
 
 // TODO(text): should have change tracking (might require internal mutability)
 // to be precise and extremely limited about what we update.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Default)]
 pub struct Section {
     modifiers: Modifiers,
 }

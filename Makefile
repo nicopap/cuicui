@@ -6,7 +6,7 @@ run:
 	# cargo test
 	cargo test richtext::parse::tests::balanced_text_complete
 	cargo test richtext::parse::tests::closed_element_complete
-	cargo test richtext::parse::tests::closed_complete
+	cargo test --features winnow/debug richtext::parse::tests::closed_complete
 	cargo test richtext::parse::tests::bare_content_complete
 	cargo test richtext::parse::tests::balanced_text_incomplete
 	cargo test richtext::parse::tests::closed_element_incomplete
@@ -14,7 +14,9 @@ run:
 	cargo test richtext::parse::tests::single_dynamic_shorthand
 	cargo test richtext::parse::tests::plain_text
 	cargo test richtext::parse::tests::closed_content
-	cargo test richtext::parse::tests::closed_explicit_content_escape_comma
+	cargo test --features winnow/debug richtext::parse::tests::single_no_escape_closed_content
+	cargo test --features winnow/debug richtext::parse::tests::single_closed_content
+	cargo test --features winnow/debug richtext::parse::tests::closed_explicit_content_escape_comma
 	cargo test richtext::parse::tests::outer_dynamic_shorthand
 	cargo test richtext::parse::tests::outer_dynamic_content_implicit
 	cargo test richtext::parse::tests::dynamic_content_implicit

@@ -35,18 +35,23 @@ type IResult<'a, I, O> = winnow::IResult<I, O, VerboseError<&'a str>>;
 
 // ```
 // <ident>: "identifier respecting rust's identifier rules"
-// <text∌FOO>: "text that doesn't contain FOO, unless prefixed by backslash `\`"
-// <balanced_text∌FOO>: "Same as <text> but, has balanced brackets and can
-//                       contain unescaped FOO within brackets"
+// <text∌FOO>: "text that doesn't contain FOO, unless prefixed by backslash `\`
+//              may be empty"
+// scope = '{' inner '}' | '(' inner ')' | '[' inner ']'
+// semi_exposed = <text∌()[]{}>
+// inner = semi_exposed [scope semi_exposed]*
+// exposed = <text∌([{},|>
+// balanced_text = exposed [scope exposed]*
+//
 // key = <ident>
 // open_subsection = <text∌{}>
 // open_section = <text∌{>
 // closed_element = key ':' metadata
-// bare_content = ([open_subsection]? close_section)* [open_subsection]?
+// bare_content = open_subsection [close_section open_subsection]*
 // close_section = '{' closed '}'
-// closed = <ident> | (closed_element),* ['|' bare_content]?
-// metadata = '$' <ident> | <balanced_text∌,}|>
-// rich_text = ([open_section]? close_section)* [open_section]?
+// closed = <ident> | [closed_element],* ['|' bare_content]?
+// metadata = '$' <ident> | balanced_text
+// rich_text = open_section [close_section open_section]*
 // ```
 //
 // How to read the following code:
@@ -55,74 +60,83 @@ fn ident(input: &str) -> IResult<&str, &str> {
     let many = many0::<_, _, (), _, _>;
     (alt((alpha1, "_")), many(alt((alphanumeric1, "_"))))
         .recognize()
+        .context("ident")
         .parse_next(input)
 }
 fn balanced_text(input: &str) -> IResult<&str, &str> {
-    fn scope(input: &str) -> IResult<&str, ()> {
-        fn inner_scope(input: &str) -> IResult<&str, ()> {
-            let flat = escaped(take_till1("()[]{}\\"), '\\', one_of("()[]{},|\\"));
-            // foobar | foo()foo | foo()foo()foo ... (where foo can be "")
-            separated1(flat, scope).parse_next(input)
-        }
+    fn scope(input: &str) -> IResult<&str, &str> {
+        let semi_exposed = || escaped(take_till1("()[]{}\\"), '\\', one_of("()[]{}|,\\"));
+        let many = many0::<_, _, (), _, _>;
+        let inner = || (semi_exposed(), many((scope, semi_exposed())));
         // TODO(perf): this is slow, need to replace with `dispatch!`
         alt((
-            delimited('{', ws(inner_scope), '}'),
-            delimited('[', ws(inner_scope), ']'),
-            delimited('(', ws(inner_scope), ')'),
+            delimited('{', inner(), '}'),
+            delimited('[', inner(), ']'),
+            delimited('(', inner(), ')'),
         ))
         .context("scope")
+        .recognize()
         .parse_next(input)
     }
-    let flat = escaped(take_till1("([{},|\\"), '\\', one_of("()[]{},|\\"));
+    let exposed = || escaped(take_till1("([{},|\\"), '\\', one_of("([{},|\\"));
 
-    let separated = separated1::<_, _, (), _, _, _, _>;
-    separated(flat, scope).recognize().parse_next(input)
+    let many = many0::<_, _, (), _, _>;
+    (exposed(), many((scope, exposed())))
+        .context("balanced_text")
+        .recognize()
+        .parse_next(input)
 }
-fn open_subsection(input: &str) -> IResult<&str, Section> {
-    let full = escaped(take_till1("{}\\"), '\\', one_of("{}\\"));
-    full.map(Section::from).parse_next(input)
+fn open_subsection(input: &str) -> IResult<&str, Option<Section>> {
+    escaped(take_till1("{}\\"), '\\', one_of("{}\\"))
+        .context("open_subsection")
+        .map(Section::opt_from)
+        .parse_next(input)
 }
-fn open_section(input: &str) -> IResult<&str, Section> {
-    let full = escaped(take_till1("{\\"), '\\', one_of("{\\"));
-    full.map(Section::from).parse_next(input)
+fn open_section(input: &str) -> IResult<&str, Option<Section>> {
+    escaped(take_till1("{\\"), '\\', one_of("{\\"))
+        .context("open_section")
+        .map(Section::opt_from)
+        .parse_next(input)
 }
 fn closed_element(input: &str) -> IResult<&str, Element> {
     use ModifierValue as Mod;
 
     // TODO(feat): dynamic tags
-    let key = ident;
+    let key = ident.context("key");
 
     let metadata = alt((
-        preceded('$', opt(ident)).map(Mod::dyn_opt),
+        preceded('$', opt(ident)).context("$meta").map(Mod::dyn_opt),
         balanced_text.map(Mod::statik),
     ));
     separated_pair(key, ws(':'), metadata.context("metadata"))
-        .map(Element::modifier)
         .context("closed_element")
+        .map(Element::modifier)
         .parse_next(input)
 }
 fn bare_content(input: &str) -> IResult<&str, Sections> {
     let open = open_subsection;
-    (many0((opt(open), close_section)), opt(open))
+    (open, many0((close_section, open)))
+        .context("bare_content")
         .map(Sections::tail)
         .parse_next(input)
 }
 fn close_section(input: &str) -> IResult<&str, Vec<Section>> {
     let full_list = (
-        separated1(closed_element, ws(',')),
-        opt(preceded(ws('|'), bare_content)),
+        separated1(closed_element, ws(',').context("comma")),
+        opt(preceded(ws('|').context("bar"), bare_content)),
     );
     let closed = alt((
         // TODO(err): actually capture error instead of eating it in winnow
-        full_list
-            .map(|t| elements_and_content(t).unwrap())
-            .context("full_list"),
+        full_list.map(|t| elements_and_content(t).unwrap()),
         opt(ident).map(short_dynamic),
     ));
-    delimited('{', ws(closed).context("closed"), '}').parse_next(input)
+    delimited('{', ws(closed.context("closed")), '}')
+        .context("close_section")
+        .parse_next(input)
 }
 fn rich_text_inner(input: &str) -> IResult<&str, Sections> {
-    (many0((opt(open_section), close_section)), opt(open_section))
+    (open_section, many0((close_section, open_section)))
+        .context("rich_text")
         .map(Sections::tail)
         .parse_next(input)
 }
@@ -334,6 +348,15 @@ mod tests {
             {(fn Content) Dynamic::new : s("dynamic_content")},
             " that can be replaced at runtime",
         ];
+        assert_eq_sorted!(Ok(expected), parse(input));
+    }
+    #[test]
+    fn single_no_escape_closed_content() {
+        let input = "{color:white|This just has a single metadata}";
+        let expected = sections![{
+            Color: Col::WHITE,
+            Content: s("This just has a single metadata"),
+        }];
         assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]

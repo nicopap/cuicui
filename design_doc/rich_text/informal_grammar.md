@@ -2,18 +2,23 @@
 
 ```
 <ident>: "identifier respecting rust's identifier rules"
-<text∌FOO>: "text that doesn't contain FOO, unless prefixed by backslash `\`"
-<balanced_text∌FOO>: "Same as <text> but, has balanced brackets and can
-                      contain unescaped FOO within brackets"
+<text∌FOO>: "text that doesn't contain FOO, unless prefixed by backslash `\`
+             may be empty"
+scope = '{' inner '}' | '(' inner ')' | '[' inner ']'
+semi_exposed = <text∌()[]{}>
+inner = semi_exposed [scope semi_exposed]*
+exposed = <text∌([{},|>
+balanced_text = exposed [scope exposed]*
+
 key = <ident>
 open_subsection = <text∌{}>
 open_section = <text∌{>
 closed_element = key ':' metadata
-bare_content = ([open_subsection]? close_section)* [open_subsection]?
+bare_content = open_subsection [close_section open_subsection]*
 close_section = '{' closed '}'
-closed = <ident> | (closed_element),* ['|' bare_content]?
-metadata = '$' <ident> | <balanced_text∌,}|>
-rich_text = ([open_section]? close_section)* [open_section]?
+closed = <ident> | [closed_element],* ['|' bare_content]?
+metadata = '$' <ident> | balanced_text
+rich_text = open_section [close_section open_section]*
 ```
 
 Rich text is composed of N sections.

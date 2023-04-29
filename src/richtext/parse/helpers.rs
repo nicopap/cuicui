@@ -30,9 +30,11 @@ pub(super) type Result<'a, T> = std::result::Result<T, Error<'a>>;
 #[derive(Debug)]
 pub(super) struct Sections(pub(super) Vec<Section>);
 impl Sections {
-    pub(super) fn tail((mut heads, tail): (Self, Option<Section>)) -> Self {
-        heads.0.extend(tail);
-        heads
+    pub(super) fn tail((head, mut tail): (Option<Section>, Self)) -> Self {
+        if let Some(head) = head {
+            tail.0.insert(0, head);
+        }
+        tail
     }
 }
 impl Accumulate<Vec<Section>> for Sections {
@@ -43,13 +45,13 @@ impl Accumulate<Vec<Section>> for Sections {
         self.0.extend(acc)
     }
 }
-impl Accumulate<(Option<Section>, Vec<Section>)> for Sections {
+impl Accumulate<(Vec<Section>, Option<Section>)> for Sections {
     fn initial(capacity: Option<usize>) -> Self {
         Self(Vec::with_capacity(capacity.unwrap_or(0) * 2))
     }
-    fn accumulate(&mut self, (opt_open, closed): (Option<Section>, Vec<Section>)) {
-        self.0.extend(opt_open);
+    fn accumulate(&mut self, (closed, opt_open): (Vec<Section>, Option<Section>)) {
         self.0.extend(closed);
+        self.0.extend(opt_open);
     }
 }
 impl From<Sections> for RichText {
@@ -85,15 +87,17 @@ impl<'a> Element<'a> {
         Element { key, value }
     }
 }
-
-impl From<&'_ str> for Section {
-    fn from(input: &'_ str) -> Self {
+impl Section {
+    pub(super) fn opt_from(input: &str) -> Option<Self> {
+        if input.is_empty() {
+            return None;
+        }
         let content_id = TypeId::of::<Content>();
 
         let mut modifiers = Modifiers::new();
         modifiers.insert(content_id, Box::new(Content(input.to_owned())));
 
-        Section { modifiers }
+        Some(Section { modifiers })
     }
 }
 pub(super) fn short_dynamic(input: Option<&str>) -> Vec<Section> {
@@ -138,18 +142,20 @@ pub(super) fn elements_and_content(
     };
 
     let mut modifiers = Modifiers::new();
-    let mut sections = vec![Section::from("")];
+    // TODO(clean): This might be error prone, why do we initialize `sections`
+    // first, then add content? Does the default `section` mean anything?
+    let mut sections = vec![Section::default()];
     for Element { key, value } in elements.into_iter() {
         modifiers.insert(modifier_key(key)?, modifier_value(key, value)?);
-    }
-    for section in &mut sections {
-        let clone_pair = |(x, y): (&TypeId, &ModifyBox)| (*x, y.clone());
-        section.modifiers.extend(modifiers.iter().map(clone_pair));
     }
     if modifiers.contains_key(&TypeId::of::<Content>()) && content.is_some() {
         return Err(Error::TwoContents);
     } else if let Some(Sections(content)) = content {
         sections = content;
+    }
+    for section in &mut sections {
+        let clone_pair = |(x, y): (&TypeId, &ModifyBox)| (*x, y.clone());
+        section.modifiers.extend(modifiers.iter().map(clone_pair));
     }
     Ok(sections)
 }
