@@ -28,14 +28,28 @@ pub enum Error<'a> {
 pub(super) type Result<'a, T> = std::result::Result<T, Error<'a>>;
 
 #[derive(Debug)]
-pub(super) struct Sections(Vec<Section>);
+pub(super) struct Sections(pub(super) Vec<Section>);
+impl Sections {
+    pub(super) fn tail((mut heads, tail): (Self, Option<Section>)) -> Self {
+        heads.0.extend(tail);
+        heads
+    }
+}
 impl Accumulate<Vec<Section>> for Sections {
     fn initial(capacity: Option<usize>) -> Self {
         Self(Vec::with_capacity(capacity.unwrap_or(0)))
     }
-
     fn accumulate(&mut self, acc: Vec<Section>) {
         self.0.extend(acc)
+    }
+}
+impl Accumulate<(Option<Section>, Vec<Section>)> for Sections {
+    fn initial(capacity: Option<usize>) -> Self {
+        Self(Vec::with_capacity(capacity.unwrap_or(0) * 2))
+    }
+    fn accumulate(&mut self, (opt_open, closed): (Option<Section>, Vec<Section>)) {
+        self.0.extend(opt_open);
+        self.0.extend(closed);
     }
 }
 impl From<Sections> for RichText {
@@ -72,13 +86,15 @@ impl<'a> Element<'a> {
     }
 }
 
-pub(super) fn open_section(input: &str) -> Vec<Section> {
-    let content_id = TypeId::of::<Content>();
+impl From<&'_ str> for Section {
+    fn from(input: &'_ str) -> Self {
+        let content_id = TypeId::of::<Content>();
 
-    let mut modifiers = Modifiers::new();
-    modifiers.insert(content_id, Box::new(Content(input.to_owned())));
+        let mut modifiers = Modifiers::new();
+        modifiers.insert(content_id, Box::new(Content(input.to_owned())));
 
-    vec![Section { modifiers }]
+        Section { modifiers }
+    }
 }
 pub(super) fn short_dynamic(input: Option<&str>) -> Vec<Section> {
     // TODO: use typeid as Dynamic::new arg if None
@@ -122,7 +138,7 @@ pub(super) fn elements_and_content(
     };
 
     let mut modifiers = Modifiers::new();
-    let mut sections = open_section("");
+    let mut sections = vec![Section::from("")];
     for Element { key, value } in elements.into_iter() {
         modifiers.insert(modifier_key(key)?, modifier_value(key, value)?);
     }

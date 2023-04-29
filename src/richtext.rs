@@ -106,7 +106,7 @@ impl RichText {
     ///
     /// See [rust doc](https://doc.rust-lang.org/stable/std/fmt/index.html).
     pub fn parse(input: &str) -> Result<Self, ParseError> {
-        parse::rich_text(input)
+        Ok(parse::rich_text(input)?)
     }
     // TODO(text): consider RichText independent from entity, might control several
     pub fn update(&self, to_update: &mut Text, ctx: &Context) {

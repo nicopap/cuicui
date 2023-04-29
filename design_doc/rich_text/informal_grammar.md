@@ -5,22 +5,23 @@
 <text∌FOO>: "text that doesn't contain FOO, unless prefixed by backslash `\`"
 <balanced_text∌FOO>: "Same as <text> but, has balanced brackets and can
                       contain unescaped FOO within brackets"
+key = <ident>
+open_subsection = <text∌{}>
+open_section = <text∌{>
 closed_element = key ':' metadata
-key = 'font' | 'content' | 'size' | 'color'
-sub_section = '{' closed '}' | <text∌{}>
-bare_content = (sub_section)+
+bare_content = ([open_subsection]? close_section)* [open_subsection]?
+close_section = '{' closed '}'
+closed = <ident> | (closed_element),* ['|' bare_content]?
 metadata = '$' <ident> | <balanced_text∌,}|>
-closed = <ident> | (closed_element),* ('|' bare_content)?
-section = '{' closed '}' | <text∌{>
-rich_text = (section)*
+rich_text = ([open_section]? close_section)* [open_section]?
 ```
 
 Rich text is composed of N sections.
-Sections are a collection of metadatas.
+Sections are a collection of metadatas plus some content.
 Metadatas are values associated with some `key`.
-With no specified `key`, if the section is just an identifer between braces
-(`{like_this}`) then it is *dynamic* `content`.
-If the metadata text is a `$` followed by an identifer, then it is *dynamic*.
+If the section is just an identifer between braces (`{like_this}`) 
+hen it is *dynamic* `content`.
+If the metadata value is a `$` followed by an identifer, then it is *dynamic*.
 *Dynamic* metadata can be set and updated at runtime by the user.
 
 A section may end by a `|` followed by text. This represents the text content
@@ -28,7 +29,7 @@ of the section.
 
 This text may contain sub-sections, sub-sections may contain other sub-sections.
 A subsection is defined similarly to a sections,
-but cannot contain the same metadata as the section that contains it.
+but cannot contain the same metadata as the section that contains it, recursively.
 
 `balanced_text` have balanced `[]`, `{}` and `()`, to opt-out of balance
 checking for those delimiter, escape them with `\\`.
@@ -82,5 +83,4 @@ All the following strings should result in an error:
 
 ```
 {some, text, with comma}
-{Intelligence: very bad}
 ```

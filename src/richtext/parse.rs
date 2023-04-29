@@ -9,9 +9,7 @@ use winnow::{
 };
 
 use super::{RichText, Section};
-use helpers::{
-    elements_and_content, open_section, short_dynamic, ws, Element, ModifierValue, Sections,
-};
+use helpers::{elements_and_content, short_dynamic, ws, Element, ModifierValue, Sections};
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -40,14 +38,15 @@ type IResult<'a, I, O> = winnow::IResult<I, O, VerboseError<&'a str>>;
 // <text∌FOO>: "text that doesn't contain FOO, unless prefixed by backslash `\`"
 // <balanced_text∌FOO>: "Same as <text> but, has balanced brackets and can
 //                       contain unescaped FOO within brackets"
+// key = <ident>
+// open_subsection = <text∌{}>
+// open_section = <text∌{>
 // closed_element = key ':' metadata
-// key = 'font' | 'content' | 'size' | 'color'
-// sub_section = '{' closed '}' | <text∌{}>
-// bare_content = (sub_section)+
+// bare_content = ([open_subsection]? close_section)* [open_subsection]?
+// close_section = '{' closed '}'
+// closed = <ident> | (closed_element),* ['|' bare_content]?
 // metadata = '$' <ident> | <balanced_text∌,}|>
-// closed = <ident> | (closed_element),* ('|' bare_content)?
-// section = '{' closed '}' | <text∌{>
-// rich_text = (section)*
+// rich_text = ([open_section]? close_section)* [open_section]?
 // ```
 //
 // How to read the following code:
@@ -55,7 +54,6 @@ type IResult<'a, I, O> = winnow::IResult<I, O, VerboseError<&'a str>>;
 fn ident(input: &str) -> IResult<&str, &str> {
     let many = many0::<_, _, (), _, _>;
     (alt((alpha1, "_")), many(alt((alphanumeric1, "_"))))
-        .context("ident")
         .recognize()
         .parse_next(input)
 }
@@ -77,11 +75,16 @@ fn balanced_text(input: &str) -> IResult<&str, &str> {
     }
     let flat = escaped(take_till1("([{},|\\"), '\\', one_of("()[]{},|\\"));
 
-    let sep = separated1::<_, _, (), _, _, _, _>;
-    sep(flat, scope)
-        .recognize()
-        .context("balanced_text")
-        .parse_next(input)
+    let separated = separated1::<_, _, (), _, _, _, _>;
+    separated(flat, scope).recognize().parse_next(input)
+}
+fn open_subsection(input: &str) -> IResult<&str, Section> {
+    let full = escaped(take_till1("{}\\"), '\\', one_of("{}\\"));
+    full.map(Section::from).parse_next(input)
+}
+fn open_section(input: &str) -> IResult<&str, Section> {
+    let full = escaped(take_till1("{\\"), '\\', one_of("{\\"));
+    full.map(Section::from).parse_next(input)
 }
 fn closed_element(input: &str) -> IResult<&str, Element> {
     use ModifierValue as Mod;
@@ -99,15 +102,12 @@ fn closed_element(input: &str) -> IResult<&str, Element> {
         .parse_next(input)
 }
 fn bare_content(input: &str) -> IResult<&str, Sections> {
-    let text = escaped(take_till1("{}\\"), '\\', one_of("{},\\"));
-
-    let sub_section = alt((
-        delimited('{', ws(closed), '}').context("section_closed"),
-        text.map(open_section).context("section_open"),
-    ));
-    many0(sub_section).context("bare_content").parse_next(input)
+    let open = open_subsection;
+    (many0((opt(open), close_section)), opt(open))
+        .map(Sections::tail)
+        .parse_next(input)
 }
-fn closed(input: &str) -> IResult<&str, Vec<Section>> {
+fn close_section(input: &str) -> IResult<&str, Vec<Section>> {
     let full_list = (
         separated1(closed_element, ws(',')),
         opt(preceded(ws('|'), bare_content)),
@@ -121,24 +121,23 @@ fn closed(input: &str) -> IResult<&str, Vec<Section>> {
     ));
     delimited('{', ws(closed).context("closed"), '}').parse_next(input)
 }
-pub(super) fn rich_text(input: &str) -> Result<RichText, Error> {
-    let text = escaped(take_till1("{\\"), '\\', one_of("{},\\"));
-
-    let section = alt((closed, text.map(open_section)));
-
-    // TODO(perf): use fold_many0 instead to accumulat in single vec
-    let many = many0::<_, _, Sections, _, _>;
-    let mut rich_text = many(section).map(RichText::from);
-
-    Ok(rich_text.parse(input)?)
+fn rich_text_inner(input: &str) -> IResult<&str, Sections> {
+    (many0((opt(open_section), close_section)), opt(open_section))
+        .map(Sections::tail)
+        .parse_next(input)
+}
+pub(super) fn rich_text(input: &str) -> Result<RichText, VerboseError<&str>> {
+    rich_text_inner.map(RichText::from).parse(input)
 }
 
 #[cfg(test)]
 mod tests {
     use std::any::TypeId;
+    use std::fmt;
 
     use bevy::prelude::Color as Col;
     use pretty_assertions_sorted::assert_eq_sorted;
+    use winnow::error::ParseError;
     use winnow::Parser;
 
     use super::super::{modifiers, Modifiers};
@@ -170,8 +169,8 @@ mod tests {
     fn s(input: &str) -> String {
         String::from(input)
     }
-    fn parse_fn<'a, T>(
-        parser: impl Parser<&'a str, T, VerboseError<&'a str>>,
+    fn parse_fn<'a, T, E: fmt::Display + fmt::Debug + ParseError<&'a str>>(
+        parser: impl Parser<&'a str, T, E>,
         input: &'a str,
     ) -> Result<T, String> {
         let mut parser = winnow::trace::trace(format!("TRACE_ROOT \"{input}\""), parser);
@@ -181,8 +180,8 @@ mod tests {
         })
     }
 
-    fn parse_bad<'a, T>(
-        parser: impl Parser<&'a str, T, VerboseError<&'a str>>,
+    fn parse_bad<'a, T, E: fmt::Display + fmt::Debug>(
+        parser: impl Parser<&'a str, T, E>,
         input: &'a str,
     ) -> Result<&'a str, String> {
         let mut parser = winnow::trace::trace(format!("TRACE_ROOT \"{input}\""), parser);
@@ -292,7 +291,7 @@ mod tests {
     }
     #[test]
     fn closed_complete() {
-        let parse = |input| parse_fn(closed, input);
+        let parse = |input| parse_fn(close_section, input);
         let complete = [
             "{color: blue}",
             "{}",
@@ -312,22 +311,20 @@ mod tests {
     }
     #[test]
     fn closed_incomplete() {
-        let _parse = |input| parse_bad(closed, input);
+        let _parse = |input| parse_bad(close_section, input);
     }
 
     // ---------------------------------
     //        test rich_text parsing
     // ---------------------------------
     fn parse(input: &str) -> Result<Vec<Section>, String> {
-        rich_text(input)
-            .map(|t| t.sections)
-            .map_err(|s| s.to_string())
+        parse_fn(rich_text_inner, input).map(|rt| rt.0)
     }
     #[test]
     fn plain_text() {
         let input = "This is some text, it is just a single content section";
         let expected = sections!["This is some text, it is just a single content section"];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn single_dynamic_shorthand() {
@@ -337,29 +334,29 @@ mod tests {
             {(fn Content) Dynamic::new : s("dynamic_content")},
             " that can be replaced at runtime",
         ];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
-    fn closed_content() {
+    fn single_closed_content() {
         let input =
             "{color:white|This is also just some non-dynamic text, commas need not be escaped}";
         let expected = sections![{
             Color: Col::WHITE,
             Content: s("This is also just some non-dynamic text, commas need not be escaped"),
         }];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn closed_explicit_content_escape_comma() {
         let input = r#"{content: This may also work\, but commas need to be escaped}"#;
         let expected = sections!["This may also work, but commas need to be escaped"];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn outer_dynamic_shorthand() {
         let input = "{dynamic_content}";
         let expected = sections![{(fn Content) Dynamic::new : s("dynamic_content")}];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn outer_dynamic_content_implicit() {
@@ -367,7 +364,7 @@ mod tests {
         let expected=
                 // TODO(feat): this needs to be TypeId.of(Content)
                 sections![{(fn Content) Dynamic::new : s("content")}];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn dynamic_content_implicit() {
@@ -380,7 +377,7 @@ mod tests {
             {(fn Content) Dynamic::new : s("name")},
             ", but referred by typeid instead of name"
         ];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn outer_color_mod() {
@@ -388,7 +385,7 @@ mod tests {
         let expected = sections![
             {Color: Col::BLUE, Content: s("This text is blue")},
         ];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn nested_dynamic_shorthand() {
@@ -397,7 +394,7 @@ mod tests {
             Color: Col::BLUE,
             (fn Content) Dynamic::new: s("dynamic_blue_content"),
         }];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn deep_nesting() {
@@ -411,7 +408,7 @@ mod tests {
             { Color: Col::BLUE, Content: s(", not anymore ") },
             { Color: Col::BLUE, Font: s("i"), Content: s("yet again") },
         ];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn multiple_mods() {
@@ -424,7 +421,7 @@ mod tests {
             ". ",
             { Color: Col::PINK, Content: s("And pink, why not?") },
         ];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn fancy_color_multiple_mods() {
@@ -434,13 +431,13 @@ mod tests {
             { Color: Col::rgb_u8(12,34,50), Font: s("bold.ttf"), Content: s("metadata values") },
             " can contain commas within parenthesis or square brackets",
         ];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn escape_curlies_outer() {
         let input = r#"You can escape \{ curly brackets \}."#;
         let expected = sections!["You can escape { curly brackets }."];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn escape_curlies_inner() {
@@ -449,7 +446,7 @@ mod tests {
             Color: Col::PINK,
             Content: s("even inside { a closed section }"),
         }];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn named_dynamic_mod() {
@@ -458,7 +455,7 @@ mod tests {
             (fn Color) Dynamic::new: s("relevant_color"),
             Content: s("Not only content can be dynamic, also value of other metadata"),
         }];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn implicit_dynamic_mod() {
@@ -472,7 +469,7 @@ mod tests {
                 then the typeid of the rust type is used"
             ),
         }];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn implicit_dynamic_content_mod() {
@@ -482,7 +479,7 @@ mod tests {
             // TODO(feat): this needs to be TypeId.of(Content)
             {(fn Content) Dynamic::new: s("content")},
         ];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn all_dynamic_content_declarations() {
@@ -500,7 +497,7 @@ mod tests {
             {Color: Col::WHITE, (fn Content) Dynamic::new: s("ident")},
             ".",
         ];
-        assert_eq_sorted!(parse(input), Ok(expected));
+        assert_eq_sorted!(Ok(expected), parse(input));
     }
     // ---------------------------------
 }
