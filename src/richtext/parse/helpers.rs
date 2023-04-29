@@ -2,8 +2,8 @@ use std::{any::TypeId, borrow::Cow, num::ParseFloatError};
 
 use thiserror::Error;
 use winnow::{
-    ascii::multispace0, error::ParseError, sequence::delimited, stream::Accumulate, stream::AsChar,
-    stream::Stream, stream::StreamIsPartial, Parser,
+    ascii::multispace0, combinator::delimited, error::ParseError, stream::Accumulate,
+    stream::AsChar, stream::Stream, stream::StreamIsPartial, Parser,
 };
 
 use super::super::{color, modifiers, Content, Dynamic, Modifiers, ModifyBox, RichText, Section};

@@ -76,43 +76,52 @@ commands.spawn(RichText::parse(instructions, style).unwrap());
 // ...
 
 let light_type =  if point_light { "PointLight" } else { "DirectionalLight" };
-update_richtext!(example_text, light_type);
+set_richtext_content!(example_text, light_type);
 // without macro:
-example_text.update(hash_map!{"light_type": light_type});
+example_text.set_content("light_type", light_type);
 ```
 
 ## Rich text
 
+```
+This line {color: blue |contains} multiple {size: 3.0, font: bold.ttf |sections}
+```
+
+Rich text is a bevy plugin to simplify text management in bevy. It can be thought
+as 3 modules:
+
+1. A parser that reads a format string and translates it into
+2. A `RichText` specification, a series of sections of text with modifiers 
+3. A bevy plugin that reads that specification, and with additional context information
+   manipulates a bevy `Text`.
+
+### Jargon
+
 A `RichText` is a series of `Section`s. Sections are specified between
 curly brackets, and contain:
+
+- _format string_: The string we parse to create a `RichText`
+- _specified_: Stuff that is defined within the _format string_.
+- Rust types are `MonospacedCamelCase`.
+- Element of texts found in the format string, or specifying text found
+  in the format string are _`monospaced_italic`_.
+- _modifiers_: See section [#modifiers].
+- _dynamic modifiers_: See section [#dynamic-modifiers].
+- _Bindings_: the names by which _dynamic modifiers_ are referred to.
+- _Type bindings_: are _dynamic modifiers_ without an explicit name, they can
+  only be referred to by the type of the modifier.
+
+### Section
+
+A `RichText` is split in multiple _sections_, each section contains text and
+additional information relative to this text.
 
 1. Multiple _`key`_ : _`value`_ pairs, specifying _modifiers_.
 2. A single text segment, specified after a _`|`_.
 
-- The string we parse to create a `RichText` is called the _format string_
-- Stuff that is defined within the _format string_ is _specified_.
-- Rust types are `MonospacedCamelCase`.
-- Element of texts found in the format string, or specifying text found
-  in the format string are _`monospaced_italic`_.
-- _Bindings_ are the names by which _dynamic modifiers_ are referred to.
-- _Type bindings_ are _dynamic modifiers_ without an explicit name, they can
-  only be referred to by the type of the modifier.
-
 ### Modifiers
 
 Modifiers affect the style of the text for a given section.
-
-`Modifier` is a rust trait, sections store a `HashMap<TypeId, Box<dyn Modifier>>`,
-meaning that each section can have multiple types of modifiers, but at most one of each.
-
-Since it is a public trait, users may add their own `Modifier` type.
-Since rich text relies on runtime reflection,
-you must register your custom modifiers to be able to use them.
-
-`Modifier` has the methods `name` and `parse`.
-In the section's modifiers segment the _`key`_ matches the `Modifier::name`
-of a registered modifier. The _`value`_ is passed to `parse`,
-which returns a `Box<dyn Modifier>` of itself.
 
 The default modifiers are:
 
@@ -129,12 +138,19 @@ The default modifiers are:
 
 ```
 Some text {font:bold.ttf|that is bold} and not anymore
-{size:3|The next line spells "rainbow" in all the colors of the rainbow}
+{size:0.5|The next line spells "rainbow" in all the colors of the rainbow}
 {color:red|r}{color:orange|a}{color:yellow|i}{color:green|n}{color:blue|b}{color:indigo|o}{color:violet|w}
-{color: rgb(10,34, 10) | Colors can be}{color: rgb(0.5,0.9,0.1)| specified in many}{color: hsl(98.0, 0.9, 0.9)|different ways}
+{color: rgb(10,75, 10) | Colors can be} {color: #ab12fa|specified in many} {color: hsl(98.0, 0.9, 0.3)|different ways}
 ```
 
-TODO: html version
+Should give:
+
+<blockquote>
+<p>Some text <b>that is bold</b> and not anymore</p>
+<p style="font-size:50%">The next line spells "rainbow" in all the colors of the rainbow</p>
+<p><a style="color:red">r</a><a style="color:orange">a</a><a style="color:yellow">i</a><a style="color:green">n</a><a style="color:blue">b</a><a style="color:indigo">o</a><a style="color:violet">w</a></p>
+<p><a style="color:rgb(10,75,10)">Colors can be</a> <a style="color:#ab12fa">specified in many</a> <a style="color:hsl(98deg,90%,30%)">different ways</a></p>
+</blockquote>
 
 ### Dynamic modifiers
 
@@ -150,11 +166,9 @@ Illustration: "{color:$|This color is runtime-updated}"
 ```
 
 ```rust
-rich_text.add_binding(modifiers::Color(new_color));
+let new_color: Color;
+rich_text.set_short(new_color);
 ```
-
-TODO(design): can't have the same function with different arrity, not sure how
-to represent it yet.
 
 You can also use _`$identifier`_ to give a name to your modifier,
 so you can refer to it later.
@@ -164,8 +178,8 @@ Illustration: "{color:$color1|This color}{color:$color2|is runtime-updated}"
 ```
 
 ```rust
-rich_text.add_binding("color1", modifiers::Color(new_color));
-rich_text.add_binding("color2", modifiers::Color(other_color));
+rich_text.set("color1", new_color);
+rich_text.set("color2", other_color);
 ```
 
 This isn't as type-safe, but with this, you can use multiple dynamic modifiers of the same type.
@@ -190,7 +204,7 @@ Some text {color: GREEN, content:of the green color}.
 
 ### Dynamic content
 
-Similarly to other `Modifier`s, you can set text content dynamically:
+Similarly to other `Modify`s, you can set text content dynamically:
 
 ```
 Some text {color: GREEN, content:$my_content}.
@@ -198,8 +212,8 @@ Some text {color: GREEN, content:$my_content}.
 
 ```rust
 let ammo_left = 255;
-rich_text.add_binding("my_content", modifiers::Content("My own text".into()));
-rich_text.add_content("my_content", ammo_left);
+rich_text.set("my_content", modifiers::Content(format!("{ammo_left}").into()));
+rich_text.set_content("my_content", ammo_left);
 ```
 
 Format strings have a special syntax for content binding:
@@ -225,7 +239,7 @@ Some text {color: GREEN|that is green {font:bold.ttf|and bold {size:3.0|and big}
 ```
 
 Subsections are flattened into a single flat list.
-As expected, subsections inherit `Modifier`s from their parent.
+As expected, subsections inherit `Modify`s from their parent.
 
 The previous format string would be split in **six** segments as follow:
 
@@ -326,6 +340,20 @@ fn update_text(mut query: Query<RichTextSetter, Changed<RichTextData>>, fonts: R
     }
 }
 ```
+
+### Custom modifiers
+
+`Modify` is a rust trait, sections store a `HashMap<TypeId, Box<dyn Modify>>`,
+meaning that each section can have multiple types of modifiers, but at most one of each.
+
+Since it is a public trait, users may add their own `Modify` type.
+Since rich text relies on runtime reflection,
+you must register your custom modifiers to be able to use them.
+
+`Modify` has the methods `name` and `parse`.
+In the section's modifiers segment the _`key`_ matches the `Modify::name`
+of a registered modifier. The _`value`_ is passed to `parse`,
+which returns a `Box<dyn Modify>` of itself.
 
 
 ## Future work

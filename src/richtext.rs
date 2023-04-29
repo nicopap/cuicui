@@ -5,11 +5,14 @@ mod color;
 mod integrate;
 pub mod modifiers;
 mod parse;
+mod section;
+mod trait_nonsense;
 
-use std::any::{Any, TypeId};
+use std::any::TypeId;
 use std::fmt;
 
 use bevy::prelude::Font as BevyFont;
+use bevy::reflect::{ReflectFromReflect, TypeRegistryInternal as TypeRegistry};
 use bevy::{prelude::*, utils::HashMap};
 
 pub use integrate::{RichTextBundle, RichTextData, RichTextSetter, RichTextSetterItem};
@@ -22,50 +25,43 @@ pub type Modifiers = HashMap<TypeId, ModifyBox>;
 // it and modify it in place with new values.
 pub type Bindings = HashMap<&'static str, ModifyBox>;
 
-// TODO: probably better to `: Reflect` instead of reimplementing it myself
 /// A [`TextSection`] modifier.
 ///
 /// A [`TextSection`] may have an arbitary number of `Modify`s, modifying
 /// the styling and content of a given section.
-pub trait Modify {
+pub trait Modify: Reflect {
     // TODO: error handling (ie missing dynamic modifer binding)
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()>;
-
-    // those are workarounds to make tests in richtext/parse.rs work…
-    fn as_any(&self) -> Option<&dyn Any> {
-        None
-    }
-    fn cmp(&self, _: &dyn Modify) -> bool {
-        false
-    }
-    fn debug_show(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Ok(())
-    }
-    fn clone_dyn(&self) -> ModifyBox;
 }
 impl PartialEq for dyn Modify {
     fn eq(&self, other: &Self) -> bool {
-        self.cmp(other)
+        self.as_reflect()
+            .reflect_partial_eq(other.as_reflect())
+            .unwrap_or(false)
     }
 }
 impl PartialEq for ModifyBox {
     fn eq(&self, other: &Self) -> bool {
-        self.cmp(&**other)
+        self.as_reflect()
+            .reflect_partial_eq(other.as_reflect())
+            .unwrap_or(false)
     }
 }
 impl fmt::Debug for dyn Modify {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.debug_show(f)
+        self.debug(f)
     }
 }
 impl fmt::Debug for ModifyBox {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.debug_show(f)
+        self.debug(f)
     }
 }
-impl Clone for ModifyBox {
-    fn clone(&self) -> Self {
-        self.clone_dyn()
+impl dyn Modify {
+    fn clone_reflect(&self, registry: &TypeRegistry) -> Box<Self> {
+        let registration = registry.get_with_name(self.type_name()).unwrap();
+        let rfr = registration.data::<ReflectFromReflect>().unwrap();
+        rfr.from_reflect(self.as_reflect()).unwrap()
     }
 }
 
@@ -102,6 +98,16 @@ pub struct RichText {
 }
 
 impl RichText {
+    // /// Check if a type binding exists for given type
+    // pub fn has_of<T: Any>(&self) -> bool {
+    //     todo!()
+    // }
+    // /// Return the list of named bindings for a given type.
+    // pub fn bindings_of<T: Any>(&self) -> impl Iterator<Item = &str> {
+    //     self.sections.iter().flat_map(|s| &s.modifiers)
+    //         .map(|m|
+    // }
+
     /// Default cuicui rich text parser. Using a syntax inspired by rust's `format!` macro.
     ///
     /// See [rust doc](https://doc.rust-lang.org/stable/std/fmt/index.html).

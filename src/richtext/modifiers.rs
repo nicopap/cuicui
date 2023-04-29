@@ -3,30 +3,13 @@ use std::{borrow::Cow, fmt};
 
 use bevy::prelude::Color as BevyColor;
 use bevy::prelude::*;
+use bevy::reflect::ReflectFromReflect;
 
-use super::{Context, Modify, ModifyBox};
+use super::{Context, Modify};
 
-macro_rules! debug_methods {
-    () => {
-        fn as_any(&self) -> Option<&dyn std::any::Any> {
-            Some(self)
-        }
-        fn cmp(&self, other: &dyn Modify) -> bool {
-            let Some(right) = other.as_any() else { return false};
-            let Some(right) = right.downcast_ref::<Self>() else { return false};
-            self == right
-        }
-        fn debug_show(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            use std::fmt::Debug;
-            self.fmt(f)
-        }
-        fn clone_dyn(&self) -> ModifyBox {
-            Box::new(self.clone())
-        }
-    };
-}
 /// A font name.
-#[derive(PartialEq, Debug, Clone)]
+#[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
+#[reflect(FromReflect)]
 pub struct Font(pub String);
 impl Modify for Font {
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()> {
@@ -34,11 +17,11 @@ impl Modify for Font {
         text.style.font = (ctx.fonts)(&self.0)?;
         Some(())
     }
-    debug_methods! {}
 }
 
 /// Size relative to global text size.
-#[derive(PartialEq, Debug, Clone)]
+#[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
+#[reflect(FromReflect)]
 pub struct RelSize(pub f32);
 impl Modify for RelSize {
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()> {
@@ -46,11 +29,11 @@ impl Modify for RelSize {
         text.style.font_size = ctx.parent_style.font_size * self.0;
         Some(())
     }
-    debug_methods! {}
 }
 
 /// Color.
-#[derive(PartialEq, Debug, Clone)]
+#[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
+#[reflect(FromReflect)]
 pub struct Color(pub BevyColor);
 impl Modify for Color {
     fn apply(&self, _ctx: &Context, text: &mut TextSection) -> Option<()> {
@@ -58,11 +41,11 @@ impl Modify for Color {
         text.style.color = self.0;
         Some(())
     }
-    debug_methods! {}
 }
 
 /// A section text, may either be preset or extracted.
-#[derive(PartialEq, Debug, Clone)]
+#[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
+#[reflect(FromReflect)]
 pub struct Content(pub Cow<'static, str>);
 impl Modify for Content {
     fn apply(&self, _ctx: &Context, text: &mut TextSection) -> Option<()> {
@@ -71,7 +54,6 @@ impl Modify for Content {
         text.value.push_str(&self.0);
         Some(())
     }
-    debug_methods! {}
 }
 impl<T: fmt::Display> From<T> for Content {
     fn from(value: T) -> Self {
@@ -83,7 +65,8 @@ impl<T: fmt::Display> From<T> for Content {
 // this would involve replacing Strings with an enum String|Interned, or private
 // background components, otherwise API seems impossible.
 /// An [`Modify`] that takes it value from [`Context::bindings`].
-#[derive(PartialEq, Debug, Clone)]
+#[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
+#[reflect(FromReflect)]
 pub struct Dynamic {
     pub name: String,
 }
@@ -97,11 +80,9 @@ impl Modify for Dynamic {
         // println!("Get value from binding: {:?}", self.name);
         ctx.bindings?.get(self.name.as_str())?.apply(ctx, text)
     }
-    debug_methods! {}
 }
 impl Modify for () {
     fn apply(&self, _: &Context, _: &mut TextSection) -> Option<()> {
         Some(())
     }
-    debug_methods! {}
 }
