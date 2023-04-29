@@ -1,4 +1,4 @@
-use std::{any::TypeId, borrow::Cow, mem, num::ParseFloatError};
+use std::{any::TypeId, borrow::Cow, num::ParseFloatError};
 
 use thiserror::Error;
 use winnow::{
@@ -69,11 +69,13 @@ fn escape_backslashes(input: &mut Cow<str>) {
         return;
     }
     let input = input.to_mut();
-    let last_was_esc = &mut false;
-    // TODO(bug): \\\[ -> \[
+    let mut prev_normal = true;
     input.retain(|c| {
-        let is_backslash = c == '\\';
-        mem::replace(last_was_esc, is_backslash) || !is_backslash
+        let backslash = c == '\\';
+        let remove = prev_normal && backslash;
+        let normal = !remove;
+        prev_normal = normal || !backslash;
+        normal
     });
 }
 impl<'a> ModifierValue<'a> {

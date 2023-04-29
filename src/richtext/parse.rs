@@ -164,7 +164,7 @@ mod tests {
             Section { modifiers }
         }};
         (@item $text:literal) => {
-            sections!(@modifiers Content($text.to_owned()))
+            sections!(@modifiers Content($text.to_owned().into()))
         };
         (@item {$( $(( fn $type_id:ident ))? $($modifier:ident )::* : $value:expr ),* $(,)? }) => {
             sections!(@modifiers $( $((fn $type_id))? $($modifier)::*($value) ),*)
@@ -173,8 +173,8 @@ mod tests {
             vec![ $( sections!(@item $item) ),* ]
         }
     }
-    fn s(input: &str) -> String {
-        String::from(input)
+    fn s<'a, T: From<&'a str>>(input: &'a str) -> T {
+        input.into()
     }
     fn parse_fn<'a, T, E: fmt::Display + fmt::Debug + ParseError<&'a str>>(
         parser: impl Parser<&'a str, T, E>,
@@ -463,6 +463,12 @@ mod tests {
             r#"Can also escape \"#,
             { Font: s("b"), Content: s("bold") },
         ];
+        assert_eq_sorted!(Ok(expected), parse(input));
+    }
+    #[test]
+    fn escape_double_outer() {
+        let input = r#"Can also escape \\\{}"#;
+        let expected = sections![r#"Can also escape \{}"#,];
         assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
