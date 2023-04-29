@@ -3,9 +3,11 @@ mod helpers;
 
 use thiserror::Error;
 use winnow::{
-    branch::alt, bytes::one_of, bytes::take_till1, character::alpha1, character::alphanumeric1,
-    character::escaped, combinator::opt, error::VerboseError, multi::many0, multi::separated1,
-    sequence::delimited, sequence::preceded, sequence::separated_pair, IResult, Parser,
+    ascii::{alpha1, alphanumeric1, escaped},
+    branch::alt,
+    combinator::{delimited, opt, preceded, repeat0, separated1, separated_pair},
+    token::{one_of, take_till1},
+    IResult, Parser,
 };
 
 use super::{RichText, Section};
@@ -13,8 +15,6 @@ use helpers::{elements_and_content, short_dynamic, ws, Element, ModifierValue, S
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error(transparent)]
-    Winnow(#[from] VerboseError<String>),
     #[error(transparent)]
     WinnowBad(#[from] winnow::error::Error<String>),
     #[error("trailing content: {0}")]
@@ -50,8 +50,8 @@ impl From<winnow::error::Error<&'_ str>> for Error {
 // How to read the following code:
 // Look at the variable names for match with the grammar, they are defined in the same order.
 fn ident(input: &str) -> IResult<&str, &str> {
-    let many = many0::<_, _, (), _, _>;
-    (alt((alpha1, "_")), many(alt((alphanumeric1, "_"))))
+    let repeat = repeat0::<_, _, (), _, _>;
+    (alt((alpha1, "_")), repeat(alt((alphanumeric1, "_"))))
         .recognize()
         .context("ident")
         .parse_next(input)
@@ -59,8 +59,8 @@ fn ident(input: &str) -> IResult<&str, &str> {
 fn balanced_text(input: &str) -> IResult<&str, &str> {
     fn scope(input: &str) -> IResult<&str, &str> {
         let semi_exposed = || escaped(take_till1("()[]{}\\"), '\\', one_of("()[]{}|,\\"));
-        let many = many0::<_, _, (), _, _>;
-        let inner = || (semi_exposed(), many((scope, semi_exposed())));
+        let repeat = repeat0::<_, _, (), _, _>;
+        let inner = || (semi_exposed(), repeat((scope, semi_exposed())));
         // TODO(perf): this is slow, need to replace with `dispatch!`
         alt((
             delimited('{', inner(), '}'),
@@ -73,8 +73,8 @@ fn balanced_text(input: &str) -> IResult<&str, &str> {
     }
     let exposed = || escaped(take_till1("([{}|,\\"), '\\', one_of("()[]{}|,\\"));
 
-    let many = many0::<_, _, (), _, _>;
-    (exposed(), many((scope, exposed())))
+    let repeat = repeat0::<_, _, (), _, _>;
+    (exposed(), repeat((scope, exposed())))
         .context("balanced_text")
         .recognize()
         .parse_next(input)
@@ -122,13 +122,13 @@ fn closed_element(input: &str) -> IResult<&str, Element> {
 }
 fn bare_content(input: &str) -> IResult<&str, Sections> {
     let open = open_subsection;
-    (open, many0((close_section, open)))
+    (open, repeat0((close_section, open)))
         .context("bare_content")
         .map(Sections::tail)
         .parse_next(input)
 }
 fn rich_text_inner(input: &str) -> IResult<&str, Sections> {
-    (open_section, many0((close_section, open_section)))
+    (open_section, repeat0((close_section, open_section)))
         .context("rich_text")
         .map(Sections::tail)
         .parse_next(input)
