@@ -1,12 +1,10 @@
-use std::num::ParseFloatError;
-use std::{any::TypeId, borrow::Cow};
+use std::{any::TypeId, borrow::Cow, mem, num::ParseFloatError};
 
 use thiserror::Error;
-use winnow::character::multispace0;
-use winnow::error::ParseError;
-use winnow::sequence::delimited;
-use winnow::stream::{Accumulate, AsChar, Stream, StreamIsPartial};
-use winnow::Parser;
+use winnow::{
+    character::multispace0, error::ParseError, sequence::delimited, stream::Accumulate,
+    stream::AsChar, stream::Stream, stream::StreamIsPartial, Parser,
+};
 
 use super::super::{color, modifiers, Content, Dynamic, Modifiers, ModifyBox, RichText, Section};
 
@@ -66,6 +64,13 @@ pub(super) enum ModifierValue<'a> {
     Static(Cow<'a, str>),
     DynamicImplicit,
 }
+fn escape_backslash(input: &mut String) {
+    let last_was_esc = &mut false;
+    input.retain(|c| {
+        let is_backslash = c == '\\';
+        mem::replace(last_was_esc, is_backslash) || !is_backslash
+    });
+}
 impl<'a> ModifierValue<'a> {
     pub(super) fn dyn_opt(input: Option<&'a str>) -> Self {
         match input {
@@ -79,7 +84,7 @@ impl<'a> ModifierValue<'a> {
     fn escape_values(&mut self) {
         let Self::Static(value) = self else { return; };
         let value = value.to_mut();
-        value.retain(|c| c != '\\');
+        escape_backslash(value);
     }
 }
 #[derive(Debug)]
@@ -93,14 +98,16 @@ impl<'a> Element<'a> {
     }
 }
 impl Section {
-    pub(super) fn opt_from(input: String) -> Option<Self> {
+    pub(super) fn opt_from(input: &str) -> Option<Self> {
         if input.is_empty() {
             return None;
         }
         let content_id = TypeId::of::<Content>();
 
         let mut modifiers = Modifiers::new();
-        modifiers.insert(content_id, Box::new(Content(input)));
+        let mut escaped = input.to_owned();
+        escape_backslash(&mut escaped);
+        modifiers.insert(content_id, Box::new(Content(escaped)));
 
         Some(Section { modifiers })
     }

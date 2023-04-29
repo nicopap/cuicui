@@ -4,9 +4,8 @@ mod helpers;
 use thiserror::Error;
 use winnow::{
     branch::alt, bytes::one_of, bytes::take_till1, character::alpha1, character::alphanumeric1,
-    character::escaped, character::escaped_transform, combinator::opt, error::VerboseError,
-    multi::many0, multi::separated1, sequence::delimited, sequence::preceded,
-    sequence::separated_pair, IResult, Parser,
+    character::escaped, combinator::opt, error::VerboseError, multi::many0, multi::separated1,
+    sequence::delimited, sequence::preceded, sequence::separated_pair, IResult, Parser,
 };
 
 use super::{RichText, Section};
@@ -81,15 +80,13 @@ fn balanced_text(input: &str) -> IResult<&str, &str> {
         .parse_next(input)
 }
 fn open_subsection(input: &str) -> IResult<&str, Option<Section>> {
-    let esc = alt(("\\".value("\\"), "{".value("{"), "}".value("}")));
-    escaped_transform(take_till1("{}\\"), '\\', esc)
+    escaped(take_till1("{}\\"), '\\', one_of("{}\\"))
         .map(Section::opt_from)
         .context("open_subsection")
         .parse_next(input)
 }
 fn open_section(input: &str) -> IResult<&str, Option<Section>> {
-    let esc = alt(("\\".value("\\"), "{".value("{")));
-    escaped_transform(take_till1("{\\"), '\\', esc)
+    escaped(take_till1("{\\"), '\\', one_of("{}\\"))
         .map(Section::opt_from)
         .context("open_section")
         .parse_next(input)
@@ -460,11 +457,29 @@ mod tests {
         assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
+    fn escape_backslash_outer() {
+        let input = r#"Can also escape \\{font:b|bold}"#;
+        let expected = sections![
+            r#"Can also escape \"#,
+            { Font: s("b"), Content: s("bold") },
+        ];
+        assert_eq_sorted!(Ok(expected), parse(input));
+    }
+    #[test]
     fn escape_curlies_inner() {
-        let input = r#"{color: pink| even inside \{ a closed section \}}."#;
+        let input = r#"{color: pink| even inside \{ a closed section \}}"#;
         let expected = sections![{
             Color: Col::PINK,
             Content: s("even inside { a closed section }"),
+        }];
+        assert_eq_sorted!(Ok(expected), parse(input));
+    }
+    #[test]
+    fn escape_backslash_inner() {
+        let input = r#"{color: pink| This is \\ escaped}"#;
+        let expected = sections![{
+            Color: Col::PINK,
+            Content: s(r#"This is \ escaped"#),
         }];
         assert_eq_sorted!(Ok(expected), parse(input));
     }
@@ -483,7 +498,7 @@ mod tests {
                 then the typeid of the rust type is used}";
         let expected = sections![{
             // TODO(feat): this needs to be TypeId.of(Color)
-            (fn Color) Dynamic::new: s("color"),
+            (fn Color) Dynamic::new: s("implicit"),
             Content: s(
                 "If the identifier of a dynamic metadata value is elided, \
                 then the typeid of the rust type is used"
@@ -497,14 +512,14 @@ mod tests {
         let expected = sections![
             "can also use a single elided content if you want: ",
             // TODO(feat): this needs to be TypeId.of(Content)
-            {(fn Content) Dynamic::new: s("content")},
+            {(fn Content) Dynamic::new: s("implicit")},
         ];
         assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
     fn all_dynamic_content_declarations() {
         let input =
-            "{content:$ident} is equivalent to {ident} also {color:white| {ident} } and {  ident  } and {color:white|{ident}}.";
+            "{content:$ident} is equivalent to {ident} also {color:white| {ident}} and {  ident  } and {color:white|{ident}}.";
         let expected = sections![
             {(fn Content) Dynamic::new: s("ident")},
             " is equivalent to ",
