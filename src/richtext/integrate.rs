@@ -29,7 +29,7 @@ impl RichTextData {
     pub fn add_content(&mut self, key: &'static str, value: &impl fmt::Display) {
         self.change_list.push(key);
         self.bindings
-            .insert(key, Box::new(modifiers::Content(value.to_string())));
+            .insert(key, Box::new(modifiers::Content::from(value)));
     }
     pub fn add_binding(&mut self, key: &'static str, value: impl Modify + Send + Sync + 'static) {
         self.change_list.push(key);

@@ -64,8 +64,13 @@ pub(super) enum ModifierValue<'a> {
     Static(Cow<'a, str>),
     DynamicImplicit,
 }
-fn escape_backslash(input: &mut String) {
+fn escape_backslashes(input: &mut Cow<str>) {
+    if !input.contains('\\') {
+        return;
+    }
+    let input = input.to_mut();
     let last_was_esc = &mut false;
+    // TODO(bug): \\\[ -> \[
     input.retain(|c| {
         let is_backslash = c == '\\';
         mem::replace(last_was_esc, is_backslash) || !is_backslash
@@ -83,8 +88,7 @@ impl<'a> ModifierValue<'a> {
     }
     fn escape_values(&mut self) {
         let Self::Static(value) = self else { return; };
-        let value = value.to_mut();
-        escape_backslash(value);
+        escape_backslashes(value);
     }
 }
 #[derive(Debug)]
@@ -105,15 +109,15 @@ impl Section {
         let content_id = TypeId::of::<Content>();
 
         let mut modifiers = Modifiers::new();
-        let mut escaped = input.to_owned();
-        escape_backslash(&mut escaped);
+        let mut escaped = input.to_owned().into();
+        escape_backslashes(&mut escaped);
         modifiers.insert(content_id, Box::new(Content(escaped)));
 
         Some(Section { modifiers })
     }
 }
 pub(super) fn short_dynamic(input: Option<&str>) -> Vec<Section> {
-    // TODO: use typeid as Dynamic::new arg if None
+    // TODO(feat): use typeid as Dynamic::new arg if None
     let content_id = TypeId::of::<Content>();
     let content_value = input.map_or_else(|| "content".to_owned(), |v| v.to_owned());
 
@@ -134,15 +138,16 @@ pub(super) fn elements_and_content(
             "font" => Ok(Box::new(Font(value.into()))),
             "color" => Ok(Box::new(value.parse::<Color>()?)),
             "size" => Ok(Box::new(RelSize(value.parse()?))),
-            "content" => Ok(Box::new(Content(value.into()))),
+            "content" => Ok(Box::new(Content(value.into_owned().into()))),
             key => Err(Error::UnknownModifier(key)),
         }
     };
     let modifier_value = |key, mut value: ModifierValue| -> Result<ModifyBox> {
         value.escape_values();
         match value {
-            ModifierValue::Dynamic(name) => Ok(Box::new(Dynamic::new(name.to_string()))),
+            ModifierValue::Dynamic(name) => Ok(Box::new(Dynamic::new(name.into()))),
             ModifierValue::Static(value) => static_modifier(key, value),
+            // TODO(feat): use typeid as Dynamic::new arg if implicit
             ModifierValue::DynamicImplicit => Ok(Box::new(Dynamic::new("implicit".to_owned()))),
         }
     };

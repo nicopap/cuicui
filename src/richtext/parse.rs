@@ -33,17 +33,17 @@ impl From<winnow::error::Error<&'_ str>> for Error {
 // scope = '{' inner '}' | '(' inner ')' | '[' inner ']'
 // semi_exposed = <text∌()[]{}>
 // inner = semi_exposed [scope semi_exposed]*
-// exposed = <text∌([{},|>
+// exposed = <text∌([{}|,>
 // balanced_text = exposed [scope exposed]*
 //
 // key = <ident>
 // open_subsection = <text∌{}>
 // open_section = <text∌{>
-// closed_element = key ':' metadata
-// bare_content = open_subsection [close_section open_subsection]*
 // close_section = '{' closed '}'
+// closed_element = key ':' metadata
 // closed = <ident> | [closed_element],* ['|' bare_content]?
-// metadata = '$' <ident> | balanced_text
+// metadata = '$' [<ident>]? | balanced_text
+// bare_content = open_subsection [close_section open_subsection]*
 // rich_text = open_section [close_section open_section]*
 // ```
 //
@@ -71,7 +71,7 @@ fn balanced_text(input: &str) -> IResult<&str, &str> {
         .recognize()
         .parse_next(input)
     }
-    let exposed = || escaped(take_till1("([{},|\\"), '\\', one_of("([{},|\\"));
+    let exposed = || escaped(take_till1("([{}|,\\"), '\\', one_of("()[]{}|,\\"));
 
     let many = many0::<_, _, (), _, _>;
     (exposed(), many((scope, exposed())))
@@ -89,6 +89,20 @@ fn open_section(input: &str) -> IResult<&str, Option<Section>> {
     escaped(take_till1("{\\"), '\\', one_of("{}\\"))
         .map(Section::opt_from)
         .context("open_section")
+        .parse_next(input)
+}
+fn close_section(input: &str) -> IResult<&str, Vec<Section>> {
+    let full_list = (
+        separated1(closed_element, ws(',').context("comma")),
+        opt(preceded(ws('|').context("bar"), bare_content)),
+    );
+    let closed = alt((
+        // TODO(err): actually capture error instead of eating it in winnow
+        full_list.map(|t| elements_and_content(t).unwrap()),
+        opt(ident).map(short_dynamic),
+    ));
+    delimited('{', ws(closed.context("closed")), '}')
+        .context("close_section")
         .parse_next(input)
 }
 fn closed_element(input: &str) -> IResult<&str, Element> {
@@ -111,20 +125,6 @@ fn bare_content(input: &str) -> IResult<&str, Sections> {
     (open, many0((close_section, open)))
         .context("bare_content")
         .map(Sections::tail)
-        .parse_next(input)
-}
-fn close_section(input: &str) -> IResult<&str, Vec<Section>> {
-    let full_list = (
-        separated1(closed_element, ws(',').context("comma")),
-        opt(preceded(ws('|').context("bar"), bare_content)),
-    );
-    let closed = alt((
-        // TODO(err): actually capture error instead of eating it in winnow
-        full_list.map(|t| elements_and_content(t).unwrap()),
-        opt(ident).map(short_dynamic),
-    ));
-    delimited('{', ws(closed.context("closed")), '}')
-        .context("close_section")
         .parse_next(input)
 }
 fn rich_text_inner(input: &str) -> IResult<&str, Sections> {

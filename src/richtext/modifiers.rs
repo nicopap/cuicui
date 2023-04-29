@@ -1,5 +1,5 @@
 //! Default implementations of the [`TextMod`] trait for cuicui.
-use std::fmt;
+use std::{borrow::Cow, fmt};
 
 use bevy::prelude::Color as BevyColor;
 use bevy::prelude::*;
@@ -63,7 +63,7 @@ impl Modify for Color {
 
 /// A section text, may either be preset or extracted.
 #[derive(PartialEq, Debug, Clone)]
-pub struct Content(pub String);
+pub struct Content(pub Cow<'static, str>);
 impl Modify for Content {
     fn apply(&self, _ctx: &Context, text: &mut TextSection) -> Option<()> {
         // println!("Apply new content: {:?}", self.0);
@@ -75,7 +75,7 @@ impl Modify for Content {
 }
 impl<T: fmt::Display> From<T> for Content {
     fn from(value: T) -> Self {
-        Content(value.to_string())
+        Content(value.to_string().into())
     }
 }
 

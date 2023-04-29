@@ -71,7 +71,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 }
 
-const GUESTS: &[&str] = &["bevy", "boovy", "groovy", "bavy", "cuicui"];
+const GUESTS: &[&str] = &["bevy", "boovy", "noovy", "groovy", "bavy", "cuicui"];
 fn text_color_system(
     time: Res<Time>,
     mut query: Query<&mut RichTextData, With<ColorText>>,
@@ -88,7 +88,7 @@ fn text_color_system(
             blue: (0.50 * seconds).sin() / 2.0 + 0.5,
             alpha: 1.0,
         };
-        text.add_binding("color", modifiers::Color(new_color));
+        text.add_binding("implicit", modifiers::Color(new_color));
         if at_interval(3.0) {
             *current_guest = (*current_guest + 1) % GUESTS.len();
             text.add_content("content", &GUESTS[*current_guest]);

@@ -1,6 +1,6 @@
 check:
 	cargo clippy --examples
 run:
-	# cargo run --example richtext
+	cargo run --example richtext
 	# cargo test --features winnow/debug
-	cargo test
+	# cargo test
