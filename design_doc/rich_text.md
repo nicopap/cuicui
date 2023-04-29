@@ -143,7 +143,7 @@ Some text {font:bold.ttf|that is bold} and not anymore
 {color: rgb(10,75, 10) | Colors can be} {color: #ab12fa|specified in many} {color: hsl(98.0, 0.9, 0.3)|different ways}
 ```
 
-Should give:
+Should give (github cuts out the color, so use your imagination):
 
 <blockquote>
 <p>Some text <b>that is bold</b> and not anymore</p>
