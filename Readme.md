@@ -145,12 +145,14 @@ todo!()
   - [X] Allow nesting of sections, so that outer modifiers affect inner sections.
   - [ ] Check that nesting doesn't overwrite parent modifiers.
   - [ ] Use modifier type id for implicit references.
+  - [ ] Use a `Resource` context instead of storing it in a `Component`.
   - [X] Control a bevy `Text` by manipulating `RichTextData`
   - [ ] Provide systems to automatically update `Text` based on `RichTextData`
   - [ ] Provide systems accepting (Entity, Component, ReflectPath) tuple to
         automatically pick data from ECS and update `RichTextData`
   - [ ] Limit amount of updating by implementing a finer-grained change
         detection system in `RichTextData`
+  - [ ] Optimization: update Cow instead of creating new one => no alloc
   - [ ] (unsure) better error messages
   - [ ] (unsure) generalize this to widges, to create a prefab system
   - [ ] (unsure) Allow compile-time verification of rich text spec through a

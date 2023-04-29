@@ -81,96 +81,177 @@ update_richtext!(example_text, light_type);
 example_text.update(hash_map!{"light_type": light_type});
 ```
 
-## Default Syntax
+## Rich text
 
-Since all fields of `RichText` is public, and that `StyleMod` is a trait, making
-it possible to extend with your own style modifiers, it's possible to write our
-own parsers (for example, say, to parse markdown).
+A `RichText` is a series of `Section`s. Sections are specified between
+curly brackets, and contain:
 
-However, `RichText` is deliberately limited. It only supports a syntax derived
-from rust's [`fmt`] syntax.
+1. Multiple _`key`_ : _`value`_ pairs, specifying _modifiers_.
+2. A single text segment, specified after a _`|`_.
 
-- A `RichText` has a root style `TextStyle` and a series of *sections*.
-- A *section* is a list of *content modifiers*.
-- *modifiers* are either predefined static values or dynamic runtime values.
+- The string we parse to create a `RichText` is called the _format string_
+- Stuff that is defined within the _format string_ is _specified_.
+- Rust types are `MonospacedCamelCase`.
+- Element of texts found in the format string, or specifying text found
+  in the format string are _`monospaced_italic`_.
+- _Bindings_ are the names by which _dynamic modifiers_ are referred to.
+- _Type bindings_ are _dynamic modifiers_ without an explicit name, they can
+  only be referred to by the type of the modifier.
 
-### Sections
+### Modifiers
 
-In term of syntax, a *section* is a comma-separated list of `key:value` pairs
-within brackets.
+Modifiers affect the style of the text for a given section.
+
+`Modifier` is a rust trait, sections store a `HashMap<TypeId, Box<dyn Modifier>>`,
+meaning that each section can have multiple types of modifiers, but at most one of each.
+
+Since it is a public trait, users may add their own `Modifier` type.
+Since rich text relies on runtime reflection,
+you must register your custom modifiers to be able to use them.
+
+`Modifier` has the methods `name` and `parse`.
+In the section's modifiers segment the _`key`_ matches the `Modifier::name`
+of a registered modifier. The _`value`_ is passed to `parse`,
+which returns a `Box<dyn Modifier>` of itself.
+
+The default modifiers are:
+
+- _`color`_: The color of text for this section, supports multiple formats:
+    - html-style hex: _`#acabac`_
+    - css-style function, with 3 arguments or 4 for alpha:
+        - _`rgb(u8,u8,u8[,u8]?)`_ (range 0-256)
+        - _`rgb(f32,f32,f32[,f32]?)`_ (range 0-1)
+        - _`hsl(f32,f32,f23[,f32]?)`_ (ranges [0-360], [0-1], [0-1])
+    - named constants, see the bevy [`Color`] for a list of available names
+- _`font`_: A file path in the `assets` directory. You must first load that file
+  and store a `Handle<Font>` to it, otherwise it won't load automatically.
+- _`size`_: Size relative to the root style
 
 ```
-// A section
-{color:blue,font:fonts/fira-sans.ttf,size:0.3,content:this is a section of text}
+Some text {font:bold.ttf|that is bold} and not anymore
+{size:3|The next line spells "rainbow" in all the colors of the rainbow}
+{color:red|r}{color:orange|a}{color:yellow|i}{color:green|n}{color:blue|b}{color:indigo|o}{color:violet|w}
+{color: rgb(10,34, 10) | Colors can be}{color: rgb(0.5,0.9,0.1)| specified in many}{color: hsl(98.0, 0.9, 0.9)|different ways}
 ```
 
-`RichText` supports 4 modifiers:
-
-- `color`: modify color of the text, default is white, on the value side, you
-  can either use a color name or rgb(123,34,334) etc.
-- `font`: the full path name of a loaded font.
-- `size`: Size of this section relative to the size of the `RichText`
-- `content`: The text content of this section
-
-The content is *inside* the curly braces, see the difference
-between **wrong**: `{color:blue}some content{/}` and
-**correct**: `{color:blue,content:some content}`.
-
-### Plain text
-
-More simply, you can elide the `content` at the very end `{color:blue,some content}`,
-the last section element is assumed to be the text content.
-
-If there is no style modifiers, you can omit the curly braces:
-
-```
-// All of those are equivalent
-{color:white,content:some text}
-{content:some text}
-{color:white,some text}
-some text
-// Note that this IS NOT equivalent
-{some text}
-```
+TODO: html version
 
 ### Dynamic modifiers
 
-Similarly to rust's `println!` macro, you can create *references* to style and
-text content by suffixing the `value` side of the `key:value` pair with a `$`
-dollar sign.
+The previous section describes how to specify final modifier values in the format string.
+
+To update modifier values **at runtime**, you would use a *dynamic modifier*.
+
+Instead of specifying a value in _`value`_ position, you use a _`$`_,
+you can then refer to it from your bevy app.
 
 ```
-{color:custom_color$,content:special_content$}
+Illustration: "{color:$|This color is runtime-updated}"
 ```
-
-Those are *dynamic modifiers*. You can update them using `RichText::update`
-method, by passing a `map: HashMap<String, Box<dyn Any>>` as argument
- — the actual signature of `update` is different, but equivalent,
-we simplify here for clarity.
-
-The keys of `map` are the *reference* names (without the $ sign) and the values
-are what to put at the place of the reference.
-
-In the previous example, we would use the map as follow:
 
 ```rust
-let mut map = HashMap::default();
-map.insert("custom_color", Color::ORANGE);
-map.insert("content", "Some content".to_owned());
-rich_text.update(&map);
+rich_text.add_binding(modifiers::Color(new_color));
 ```
 
-Remember how `{some text}` is not equivalent to `some text`? This is because
-`{some_text}` is shorthand for `{content:some_text$}`
+TODO(design): can't have the same function with different arrity, not sure how
+to represent it yet.
 
-This doens't support **bold** or *italic*, just named fonts. Neither does
-it support nesting multiple levels of style, only a single level.
+You can also use _`$identifier`_ to give a name to your modifier,
+so you can refer to it later.
 
-And yeah, you can't even have fonts with commas in their file name (you cursed soul).
+```
+Illustration: "{color:$color1|This color}{color:$color2|is runtime-updated}"
+```
 
-As `cuicui_richtext` evolves, this might change to encompasses more use cases.
-However, to get something out the window, something to start talking about,
-I thought it necessary to start with this very limited API.
+```rust
+rich_text.add_binding("color1", modifiers::Color(new_color));
+rich_text.add_binding("color2", modifiers::Color(other_color));
+```
+
+This isn't as type-safe, but with this, you can use multiple dynamic modifiers of the same type.
+
+### Text segment
+
+Modifiers _always_ apply to some bit of text, therefore the text segment is
+mandatory in a `Section`.
+
+TODO: previous paragraph is patently false.
+
+```
+Some text {color: GREEN|of the green color}.
+```
+
+The text segment of a section does actually specify the _`content`_ modifier.
+The next format string is equivalent to the previous one:
+
+```
+Some text {color: GREEN, content:of the green color}.
+```
+
+### Dynamic content
+
+Similarly to other `Modifier`s, you can set text content dynamically:
+
+```
+Some text {color: GREEN, content:$my_content}.
+```
+
+```rust
+let ammo_left = 255;
+rich_text.add_binding("my_content", modifiers::Content("My own text".into()));
+rich_text.add_content("my_content", ammo_left);
+```
+
+Format strings have a special syntax for content binding:
+
+```
+Some text {my_content}.
+```
+
+Finally, content can be bound by type, same as other modifiers:
+
+```
+Some text {} et voilà.
+Some text {color: GREEN, content:$} et voilà.
+```
+
+### Nested text segments
+
+`RichText` is a _series_ of `Section`s. 
+However, the text segment can contain itself "sub sections".
+
+```
+Some text {color: GREEN|that is green {font:bold.ttf|and bold {size:3.0|and big}} at the same time}.
+```
+
+Subsections are flattened into a single flat list.
+As expected, subsections inherit `Modifier`s from their parent.
+
+The previous format string would be split in **six** segments as follow:
+
+```
+Some text █that is green █and bold █and big█ at the same time█.
+^          ^              ^         ^       ^                 ^
+|          |              |         |       |                 root formatting
+|          |              |         |       root + green
+|          |              |         root + green + bold.ttf font + size×3
+|          |              root + green + bold.ttf font
+|          root + green
+root formatting
+```
+
+This also works with dynamic modifiers.
+
+It is an error to specify a `Modify` in a section and re-set it in a child section.
+
+This doesn't work when _`content`_ is specified as a modifier value:
+
+```
+// I've no idea what this results in, but it's definitively broken
+Some text {color: GREEN,content:that is green {font:bold.ttf|and bold}}.
+```
+
+You can escape curly brackets with a backslash.
 
 ## Context
 
@@ -252,8 +333,6 @@ fn update_text(mut query: Query<RichTextSetter, Changed<RichTextData>>, fonts: R
 - [`bevy_ui_bits`][bui_bits] has cool *embossed* text and preset size constants.
 - It should be possible to write a macro for parsing the specification string
   at compile time
-- Use `nom` for parsing, the recursive descent is cool but difficult to maintain
-  and justify.
 - Better API: typically you'd want `Context` to be a `Res`
 - Better API: something similar to bevy's label for the binding context, so
   that typos are caught at compile time.
@@ -268,3 +347,4 @@ fn update_text(mut query: Query<RichTextSetter, Changed<RichTextData>>, fonts: R
 
 [bui_bits]: https://github.com/septum/bevy_ui_bits
 [`fmt`]: https://doc.rust-lang.org/stable/std/fmt/index.html
+[`Color`]: https://docs.rs/bevy/latest/bevy/prelude/enum.Color.html
