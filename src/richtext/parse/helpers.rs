@@ -76,6 +76,11 @@ impl<'a> ModifierValue<'a> {
     pub(super) fn statik(input: &'a str) -> Self {
         Self::Static(input.into())
     }
+    fn escape_values(&mut self) {
+        let Self::Static(value) = self else { return; };
+        let value = value.to_mut();
+        value.retain(|c| c != '\\');
+    }
 }
 #[derive(Debug)]
 pub(super) struct Element<'a> {
@@ -88,14 +93,14 @@ impl<'a> Element<'a> {
     }
 }
 impl Section {
-    pub(super) fn opt_from(input: &str) -> Option<Self> {
+    pub(super) fn opt_from(input: String) -> Option<Self> {
         if input.is_empty() {
             return None;
         }
         let content_id = TypeId::of::<Content>();
 
         let mut modifiers = Modifiers::new();
-        modifiers.insert(content_id, Box::new(Content(input.to_owned())));
+        modifiers.insert(content_id, Box::new(Content(input)));
 
         Some(Section { modifiers })
     }
@@ -117,19 +122,20 @@ pub(super) fn elements_and_content(
 
     // TODO(correct): check if empty Content (should never happen)
 
-    let static_modifier = |key, value: &str| -> Result<ModifyBox> {
+    let static_modifier = |key, value: Cow<str>| -> Result<ModifyBox> {
         match key {
-            "font" => Ok(Box::new(Font(value.to_owned()))),
+            "font" => Ok(Box::new(Font(value.into()))),
             "color" => Ok(Box::new(value.parse::<Color>()?)),
             "size" => Ok(Box::new(RelSize(value.parse()?))),
-            "content" => Ok(Box::new(Content(value.to_owned()))),
+            "content" => Ok(Box::new(Content(value.into()))),
             key => Err(Error::UnknownModifier(key)),
         }
     };
-    let modifier_value = |key, value| -> Result<ModifyBox> {
+    let modifier_value = |key, mut value: ModifierValue| -> Result<ModifyBox> {
+        value.escape_values();
         match value {
             ModifierValue::Dynamic(name) => Ok(Box::new(Dynamic::new(name.to_string()))),
-            ModifierValue::Static(value) => static_modifier(key, value.as_ref()),
+            ModifierValue::Static(value) => static_modifier(key, value),
             ModifierValue::DynamicImplicit => Ok(Box::new(Dynamic::new("implicit".to_owned()))),
         }
     };

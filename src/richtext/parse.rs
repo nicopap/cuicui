@@ -4,8 +4,9 @@ mod helpers;
 use thiserror::Error;
 use winnow::{
     branch::alt, bytes::one_of, bytes::take_till1, character::alpha1, character::alphanumeric1,
-    character::escaped, combinator::opt, error::VerboseError, multi::many0, multi::separated1,
-    sequence::delimited, sequence::preceded, sequence::separated_pair, Parser,
+    character::escaped, character::escaped_transform, combinator::opt, error::VerboseError,
+    multi::many0, multi::separated1, sequence::delimited, sequence::preceded,
+    sequence::separated_pair, IResult, Parser,
 };
 
 use super::{RichText, Section};
@@ -20,18 +21,11 @@ pub enum Error {
     #[error("trailing content: {0}")]
     Trailing(String),
 }
-impl From<VerboseError<&'_ str>> for Error {
-    fn from(value: VerboseError<&'_ str>) -> Self {
-        let errors = value
-            .errors
-            .into_iter()
-            .map(|(m, k)| (m.to_owned(), k))
-            .collect();
-        Self::Winnow(VerboseError { errors })
+impl From<winnow::error::Error<&'_ str>> for Error {
+    fn from(value: winnow::error::Error<&'_ str>) -> Self {
+        Self::WinnowBad(value.into_owned())
     }
 }
-
-type IResult<'a, I, O> = winnow::IResult<I, O, VerboseError<&'a str>>;
 
 // ```
 // <ident>: "identifier respecting rust's identifier rules"
@@ -87,15 +81,17 @@ fn balanced_text(input: &str) -> IResult<&str, &str> {
         .parse_next(input)
 }
 fn open_subsection(input: &str) -> IResult<&str, Option<Section>> {
-    escaped(take_till1("{}\\"), '\\', one_of("{}\\"))
-        .context("open_subsection")
+    let esc = alt(("\\".value("\\"), "{".value("{"), "}".value("}")));
+    escaped_transform(take_till1("{}\\"), '\\', esc)
         .map(Section::opt_from)
+        .context("open_subsection")
         .parse_next(input)
 }
 fn open_section(input: &str) -> IResult<&str, Option<Section>> {
-    escaped(take_till1("{\\"), '\\', one_of("{\\"))
-        .context("open_section")
+    let esc = alt(("\\".value("\\"), "{".value("{")));
+    escaped_transform(take_till1("{\\"), '\\', esc)
         .map(Section::opt_from)
+        .context("open_section")
         .parse_next(input)
 }
 fn closed_element(input: &str) -> IResult<&str, Element> {
@@ -140,7 +136,7 @@ fn rich_text_inner(input: &str) -> IResult<&str, Sections> {
         .map(Sections::tail)
         .parse_next(input)
 }
-pub(super) fn rich_text(input: &str) -> Result<RichText, VerboseError<&str>> {
+pub(super) fn rich_text(input: &str) -> Result<RichText, winnow::error::Error<&str>> {
     rich_text_inner.map(RichText::from).parse(input)
 }
 
@@ -430,6 +426,7 @@ mod tests {
             { Color: Col::BLUE, Font: s("b"), Content: s(" sections") },
             { Color: Col::BLUE, Content: s(", not anymore ") },
             { Color: Col::BLUE, Font: s("i"), Content: s("yet again") },
+            { Color: Col::BLUE, Content: s("!") },
         ];
         assert_eq_sorted!(Ok(expected), parse(input));
     }
