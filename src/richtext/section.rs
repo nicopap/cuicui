@@ -19,6 +19,8 @@
 //   as the Box, (at least I think?)
 // TODO(perf): should have change tracking (might require internal mutability)
 // to be precise and extremely limited about what we update.
+// TODO(clean): should separate Content from other modifiers, since there is always
+// exactly one per section (I kept it as Modifier because I can re-use Dynamic)
 #[derive(PartialEq, Debug, Default)]
 pub struct Section {
     pub(super) modifiers: super::Modifiers,

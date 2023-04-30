@@ -21,6 +21,9 @@ pub enum Error<'a> {
         content exist in section, those are mutually exclusive"
     )]
     TwoContents,
+    // TODO(err): store modifier name and more detailed error message
+    #[error("Tried to overwrite a modifier in nested content: {0:?}")]
+    ModifierShadowing(TypeId),
 }
 
 pub(super) type Result<'a, T> = std::result::Result<T, Error<'a>>;
@@ -175,6 +178,12 @@ pub(super) fn elements_and_content(
     }
     for section in &mut sections {
         let clone_pair = |(x, y): (&TypeId, &ModifyBox)| (*x, y.clone());
+        let duplicate = modifiers
+            .keys()
+            .find(|ty| section.modifiers.contains_key(ty));
+        if let Some(duplicate) = duplicate {
+            return Err(Error::ModifierShadowing(*duplicate));
+        }
         section.modifiers.extend(modifiers.iter().map(clone_pair));
     }
     Ok(sections)

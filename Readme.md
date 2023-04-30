@@ -143,8 +143,9 @@ todo!()
   - [X] Control styling of sections through modifiers
   - [X] Control by name the modifiers at runtime
   - [X] Allow nesting of sections, so that outer modifiers affect inner sections.
-  - [ ] Check that nesting doesn't overwrite parent modifiers.
+  - [X] Check that nesting doesn't overwrite parent modifiers.
   - [ ] Use modifier type id for implicit references.
+  - [ ] Custom `Modify`, registration, name, parse
   - [ ] Use a `Resource` context instead of storing it in a `Component`.
   - [X] Control a bevy `Text` by manipulating `RichTextData`
   - [ ] Provide systems to automatically update `Text` based on `RichTextData`
