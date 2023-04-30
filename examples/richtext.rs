@@ -4,7 +4,7 @@ use bevy::{
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
-use bevy_mod_cuicui::richtext::{modifiers, RichTextBundle, RichTextData, RichTextSetter};
+use bevy_mod_cuicui::richtext::{RichTextBundle, RichTextData, RichTextSetter};
 
 fn main() {
     App::new()
@@ -88,10 +88,10 @@ fn text_color_system(
             blue: (0.50 * seconds).sin() / 2.0 + 0.5,
             alpha: 1.0,
         };
-        text.add_binding("implicit", modifiers::Color(new_color));
+        text.set_typed(new_color).unwrap();
         if at_interval(3.0) {
             *current_guest = (*current_guest + 1) % GUESTS.len();
-            text.add_content("content", &GUESTS[*current_guest]);
+            text.set_content(None, &GUESTS[*current_guest]).unwrap();
         }
     }
 }
@@ -103,7 +103,7 @@ fn text_update_system(
     for mut text in &mut query {
         if let Some(fps) = diagnostics.get(FrameTimeDiagnosticsPlugin::FPS) {
             if let Some(value) = fps.smoothed() {
-                text.add_content("content", &value);
+                text.set_content(None, &value).unwrap();
             }
         }
     }

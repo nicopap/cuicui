@@ -92,6 +92,9 @@ impl<T: fmt::Display> From<T> for Content {
 #[derive(PartialEq, Debug, Clone)]
 pub enum Dynamic {
     ByName(String),
+    // TODO(clean): remove `TypeId` here, since it is necessarily associated
+    // with a `TypeId` when inserted into the `Modifiers` map.
+    // Probably need to add the `TypeId` to `Context`.
     ByType(TypeId),
 }
 impl Dynamic {

@@ -6,7 +6,6 @@ mod integrate;
 pub mod modifiers;
 mod parse;
 mod section;
-mod trait_nonsense;
 
 use std::any::{Any, TypeId};
 use std::fmt;
@@ -121,21 +120,34 @@ impl<'a, 'b> Context<'a, 'b> {
 
 #[derive(Debug)]
 pub struct RichText {
-    // TODO: this might be improved, for example by storing a binding-> section
+    // TODO(perf): this might be improved, for example by storing a binding-> section
     // list so as to avoid iterating over all sections when updating
     pub sections: Vec<Section>,
 }
 
 impl RichText {
-    // /// Check if a type binding exists for given type
-    // pub fn has_of<T: Any>(&self) -> bool {
-    //     todo!()
-    // }
-    // /// Return the list of named bindings for a given type.
-    // pub fn bindings_of<T: Any>(&self) -> impl Iterator<Item = &str> {
-    //     self.sections.iter().flat_map(|s| &s.modifiers)
-    //         .map(|m|
-    // }
+    /// Check if a type binding exists for given type
+    pub fn has_type_binding(&self, id: TypeId) -> bool {
+        // TODO(perf): probably can do better.
+        let is_type_dynamic = |modifier| matches!(modifier, Some(&Dynamic::ByType(_)));
+        self.sections
+            .iter()
+            .flat_map(|mods| mods.modifiers.get(&id))
+            .any(|modifier| is_type_dynamic(modifier.as_any().downcast_ref()))
+    }
+
+    /// Check if a named binding exists, and has the provided type.
+    pub fn has_binding(&self, binding: &str, id: TypeId) -> bool {
+        // TODO(perf): probably can do better.
+        let is_binding = |modifier| {
+            let Some(&Dynamic::ByName(ref name)) = modifier else { return false; };
+            &**name == binding
+        };
+        self.sections
+            .iter()
+            .flat_map(|mods| mods.modifiers.get(&id))
+            .any(|modifier| is_binding(modifier.as_any().downcast_ref()))
+    }
 
     /// Default cuicui rich text parser. Using a syntax inspired by rust's `format!` macro.
     ///

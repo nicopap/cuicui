@@ -1,40 +1,110 @@
 //! Integrate [`RichText`] with bevy stuff.
 
-use core::fmt;
+use std::{any::TypeId, fmt};
 
 use bevy::{asset::HandleId, ecs::query::WorldQuery, prelude::*};
+use thiserror::Error;
 
-use super::{modifiers, Bindings, Modify, RichText, TypeBindings};
+use super::{modifiers, Bindings, Content, Modify, ModifyBox, RichText, TypeBindings};
 
-// TODO: move `Bindings` to a `Res` so as to avoid duplicating info
+/// Turn any type into a [modifier](ModifyBox).
+///
+/// Used in [`RichTextData::set`] and [`RichTextData::set_typed`].
+pub trait IntoModify {
+    fn into_modify(self) -> ModifyBox;
+}
+impl IntoModify for Color {
+    fn into_modify(self) -> ModifyBox {
+        Box::new(modifiers::Color(self))
+    }
+}
+impl<T: Modify + Send + Sync + 'static> IntoModify for T {
+    fn into_modify(self) -> ModifyBox {
+        Box::new(self)
+    }
+}
+
+// TODO(err): proper naming of types
+#[derive(Error, Debug)]
+pub enum BindingError {
+    #[error("Innexisting name binding \"{key}\" for given type {id:?}")]
+    NoKey { key: &'static str, id: TypeId },
+    #[error("Innexisting type: \"{key:?}\"")]
+    NoType { key: TypeId },
+}
+
+// TODO(feat): move `Bindings` to a `Res` so as to avoid duplicating info
 #[derive(Component)]
 pub struct RichTextData {
     text: RichText,
     bindings: Bindings,
     type_bindings: TypeBindings,
     base_style: TextStyle,
-    // TODO: better caching
-    change_list: Vec<&'static str>,
+    // TODO(perf): better caching
+    has_changed: bool,
 }
 impl fmt::Debug for RichTextData {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RichTextData")
             .field("text", &self.text)
-            .field("bindings", &self.bindings.keys().collect::<Vec<_>>())
+            .field("bindings", &self.bindings.values().collect::<Vec<_>>())
+            .field(
+                "type_bindings",
+                &format!("{} TypeIds", self.type_bindings.len()),
+            )
             .field("base_style", &self.base_style)
-            .field("change_list", &self.change_list)
             .finish()
     }
 }
 impl RichTextData {
-    pub fn add_content(&mut self, key: &'static str, value: &impl fmt::Display) {
-        self.change_list.push(key);
-        self.bindings
-            .insert(key, Box::new(modifiers::Content::from(value)));
+    fn insert_type_binding_checked(
+        &mut self,
+        key: TypeId,
+        value: ModifyBox,
+    ) -> Result<(), BindingError> {
+        if self.text.has_type_binding(key) {
+            self.has_changed = true;
+            self.type_bindings.insert(key, value);
+            Ok(())
+        } else {
+            Err(BindingError::NoType { key })
+        }
     }
-    pub fn add_binding(&mut self, key: &'static str, value: impl Modify + Send + Sync + 'static) {
-        self.change_list.push(key);
-        self.bindings.insert(key, Box::new(value));
+    fn insert_binding_checked(
+        &mut self,
+        key: &'static str,
+        id: TypeId,
+        value: ModifyBox,
+    ) -> Result<(), BindingError> {
+        if self.text.has_binding(key, id) {
+            self.has_changed = true;
+            self.bindings.insert(key, value);
+            Ok(())
+        } else {
+            Err(BindingError::NoKey { key, id })
+        }
+    }
+    pub fn set(&mut self, key: &'static str, value: impl IntoModify) -> Result<(), BindingError> {
+        let modifier = value.into_modify();
+        let type_id = modifier.as_any().type_id();
+        self.insert_binding_checked(key, type_id, modifier)
+    }
+    pub fn set_typed(&mut self, value: impl IntoModify) -> Result<(), BindingError> {
+        let modifier = value.into_modify();
+        let type_id = modifier.as_any().type_id();
+        self.insert_type_binding_checked(type_id, modifier)
+    }
+    pub fn set_content(
+        &mut self,
+        key: Option<&'static str>,
+        value: &impl fmt::Display,
+    ) -> Result<(), BindingError> {
+        let value = Box::new(Content::from(value));
+        let id = TypeId::of::<Content>();
+        match key {
+            Some(key) => self.insert_binding_checked(key, id, value),
+            None => self.insert_type_binding_checked(id, value),
+        }
     }
 }
 
@@ -46,11 +116,10 @@ pub struct RichTextSetter {
 }
 impl<'w> RichTextSetterItem<'w> {
     pub fn update(&mut self, fonts: &Assets<Font>) {
-        if self.rich.change_list.is_empty() {
+        if !self.rich.has_changed {
             return;
         }
-        // TODO: use change list content to limit modifications
-        self.rich.change_list.clear();
+        self.rich.has_changed = false;
         let ctx = super::Context {
             bindings: Some(&self.rich.bindings),
             type_bindings: Some(&self.rich.type_bindings),
@@ -60,7 +129,7 @@ impl<'w> RichTextSetterItem<'w> {
         self.rich.text.update(&mut self.text, &ctx);
     }
 }
-// TODO: generalize so that it works with Text2dBundle as well
+// TODO(feat): generalize so that it works with Text2dBundle as well
 #[derive(Bundle)]
 pub struct RichTextBundle {
     #[bundle]
@@ -77,7 +146,7 @@ impl RichTextBundle {
             bindings: Bindings::new(),
             type_bindings: TypeBindings::default(),
             base_style,
-            change_list: Vec::new(),
+            has_changed: true,
         };
         let mut text = TextBundle::default();
         let ctx = super::Context {
