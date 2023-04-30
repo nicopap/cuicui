@@ -7,6 +7,14 @@ use bevy::reflect::ReflectFromReflect;
 
 use super::{Context, Modify};
 
+macro_rules! common_modify_methods {
+    () => {
+        fn clone_dyn(&self) -> super::ModifyBox {
+            Box::new(self.clone())
+        }
+    };
+}
+
 /// A font name.
 #[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
 #[reflect(FromReflect)]
@@ -17,6 +25,7 @@ impl Modify for Font {
         text.style.font = (ctx.fonts)(&self.0)?;
         Some(())
     }
+    common_modify_methods! {}
 }
 
 /// Size relative to global text size.
@@ -29,6 +38,7 @@ impl Modify for RelSize {
         text.style.font_size = ctx.parent_style.font_size * self.0;
         Some(())
     }
+    common_modify_methods! {}
 }
 
 /// Color.
@@ -41,6 +51,7 @@ impl Modify for Color {
         text.style.color = self.0;
         Some(())
     }
+    common_modify_methods! {}
 }
 
 /// A section text, may either be preset or extracted.
@@ -54,6 +65,7 @@ impl Modify for Content {
         text.value.push_str(&self.0);
         Some(())
     }
+    common_modify_methods! {}
 }
 impl<T: fmt::Display> From<T> for Content {
     fn from(value: T) -> Self {
@@ -80,9 +92,11 @@ impl Modify for Dynamic {
         // println!("Get value from binding: {:?}", self.name);
         ctx.bindings?.get(self.name.as_str())?.apply(ctx, text)
     }
+    common_modify_methods! {}
 }
 impl Modify for () {
     fn apply(&self, _: &Context, _: &mut TextSection) -> Option<()> {
         Some(())
     }
+    common_modify_methods! {}
 }

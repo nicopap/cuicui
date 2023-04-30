@@ -12,12 +12,12 @@ use std::any::TypeId;
 use std::fmt;
 
 use bevy::prelude::Font as BevyFont;
-use bevy::reflect::{ReflectFromReflect, TypeRegistryInternal as TypeRegistry};
 use bevy::{prelude::*, utils::HashMap};
 
 pub use integrate::{RichTextBundle, RichTextData, RichTextSetter, RichTextSetterItem};
 pub use modifiers::{Color, Content, Dynamic, Font, RelSize};
 pub use parse::Error as ParseError;
+pub use section::Section;
 
 pub type ModifyBox = Box<dyn Modify + Send + Sync + 'static>;
 pub type Modifiers = HashMap<TypeId, ModifyBox>;
@@ -30,8 +30,25 @@ pub type Bindings = HashMap<&'static str, ModifyBox>;
 /// A [`TextSection`] may have an arbitary number of `Modify`s, modifying
 /// the styling and content of a given section.
 pub trait Modify: Reflect {
-    // TODO: error handling (ie missing dynamic modifer binding)
+    // TODO(err): error handling (ie missing dynamic modifer binding)
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()>;
+
+    // TODO(perf): used at the end of `richtext::parser::helpers::elements_and_content`
+    // to propagate modifiers to nested text segments. Can't use `Modify: Clone`
+    // since we need to work on trait objects and clone is not object-safe.
+    // The alternative of using bevy's reflect is painful, since this would require
+    // `ReflectFromReflect` and access to the type registry where the modifiers would
+    // be pre-registered.
+    // See todo in [`section`] for potential implementations.
+    /// Clone the value as a trait object.
+    ///
+    /// The following implementation should work:
+    /// ```ignore
+    /// fn clone_dyn(&self) -> super::ModifyBox {
+    ///     Box::new(self.clone())
+    /// }
+    /// ```
+    fn clone_dyn(&self) -> ModifyBox;
 }
 impl PartialEq for dyn Modify {
     fn eq(&self, other: &Self) -> bool {
@@ -48,6 +65,7 @@ impl PartialEq for ModifyBox {
     }
 }
 impl fmt::Debug for dyn Modify {
+    // TODO(test): this makes reading test outputs difficult
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.debug(f)
     }
@@ -57,21 +75,29 @@ impl fmt::Debug for ModifyBox {
         self.debug(f)
     }
 }
-impl dyn Modify {
-    fn clone_reflect(&self, registry: &TypeRegistry) -> Box<Self> {
-        let registration = registry.get_with_name(self.type_name()).unwrap();
-        let rfr = registration.data::<ReflectFromReflect>().unwrap();
-        rfr.from_reflect(self.as_reflect()).unwrap()
+// NOTE: an alternative implementation avoiding `Modify::clone_dyn` but requiring
+// bevy reflect's TypeRegistry:
+// use bevy::reflect::{ReflectFromReflect, TypeRegistryInternal as TypeRegistry};
+// impl dyn Modify {
+//     fn clone_reflect(&self, registry: &TypeRegistry) -> Box<Self> {
+//         let registration = registry.get_with_name(self.type_name()).unwrap();
+//         let rfr = registration.data::<ReflectFromReflect>().unwrap();
+//         rfr.from_reflect(self.as_reflect()).unwrap()
+//     }
+// }
+impl Clone for ModifyBox {
+    fn clone(&self) -> Self {
+        self.clone_dyn()
     }
 }
 
-// TODO: more details, explain bidings.
+// TODO(doc): more details, explain bidings.
 /// The context used in [`Modify`].
 #[derive(Clone, Copy)]
 pub struct Context<'a, 'b> {
     pub bindings: Option<&'b Bindings>,
     pub parent_style: &'b TextStyle,
-    // Note: we use a `&'a dyn` here instead of a type parameter because we intend
+    // NOTE: we use a `&'a dyn` here instead of a type parameter because we intend
     // for `Context` to be a parameter for a trait object method. If `Context` had
     // a non-lifetime type parameter, it would require that method to have a type
     // parameter itself, but this would make it non-dispatchable: ie not available
@@ -84,12 +110,6 @@ impl<'a, 'b> Context<'a, 'b> {
     }
 }
 
-// TODO(text): should have change tracking (might require internal mutability)
-// to be precise and extremely limited about what we update.
-#[derive(PartialEq, Debug, Default)]
-pub struct Section {
-    modifiers: Modifiers,
-}
 #[derive(Debug)]
 pub struct RichText {
     // TODO: this might be improved, for example by storing a binding-> section
