@@ -341,6 +341,110 @@ fn update_text(mut query: Query<RichTextSetter, Changed<RichTextData>>, fonts: R
 }
 ```
 
+### Fetchers
+
+Fetchers let you delegate the work of reading from `World` and updating `RichText`
+data to the `RichText` plugin.
+
+They update the `GlobalRichTextBindings` based on the value of resources or components.
+`cuicui_richtext` provides bundles to make this as little intrusive as possible.
+
+```rust
+
+fn setup(mut commands: Commands) {
+    let value = 3.41;
+
+    // If your component implements `fmt::Display`, you can use the `Tracked` bundle,
+    // This will update content bound to provided name based on the value of component.
+    commands.spawn((
+        SomeBundle {
+            foo: 34.0,
+            ..default()
+        },
+        Tracked("tracked_slider_value", Slider(value)),
+    ));
+    // You can use `DebugTracked` if you want to derive `Debug` and not have to
+    // manually implement Display
+    commands.spawn((
+        SomeBundle {
+            foo: 34.0,
+            ..default()
+        },
+        DebugTracked("debug_tracked_slider_value", Slider(value)),
+    ));
+    // `TrackedModifier` let you tie a value to an arbitrary modifier. Your component
+    // needs to implement `IntoModify`.
+    commands.spawn((
+        SomeBundle {
+            foo: 34.0,
+            ..default()
+        },
+        TrackedModifier("snd_line_color", UserColor(Color::PINK)),
+    ));
+
+
+    // More fancy setups are possible with `Fetcher`s. 
+    let id = commands.spawn(SliderBundle {
+        slider: Slider(value),
+        ..default()
+    }).id();
+    commands.add(AddEntityFetcher {
+        entity: id,
+        fetch: |s: Slider| Content::from(s.0),
+        target_binding: "entity_slider_value",
+    });
+
+    // from name
+    commands.spawn((
+        Name::new("slider entity"),
+        SliderBundle {
+            slider: Slider(value),
+            ..default()
+        }
+    ));
+    commands.add(AddNamedFetcher {
+        entity_name: "slider entity",
+        fetch: |s: Slider| Content::from(s.0),
+        target_binding: "named_slider_value",
+    });
+
+    // You can also do this with resources
+    commands.insert_resource(PlayerCount(10));
+    commands.add(AddResourceFetcher {
+        fetch: |s: PlayerCount| Content::from(s.0),
+        target_binding: "player_count",
+    });
+
+    // Rich text will automatically be updated.
+    commands.spawn(RichTextBundle::parse(
+        "Player count: {player_count}\n\
+        {color:$snd_line_color|slider value for name: {named_slider_value}}\n\
+        slider value for entity: {entity_slider_value}\n\
+        slider value for from DebugTracked: {debug_tracked_slider_value}\n\
+        slider from tracked: {tracked_slider_value}",
+        TextStyle {
+            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+            font_size: 34.0,
+            color: Color::WHITE,
+        },
+    ));
+
+    
+}
+
+#[derive(Component, Debug)]
+struct Slider(f32);
+impl fmt::Display for Slider { /* ... */ }
+
+#[derive(Component)]
+struct UserColor(Color);
+impl IntoModify for UserColor {
+    // ...
+}
+```
+
+
+
 ### Custom modifiers
 
 `Modify` is a rust trait, sections store a `HashMap<TypeId, Box<dyn Modify>>`,

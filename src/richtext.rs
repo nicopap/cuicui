@@ -12,15 +12,18 @@ use std::fmt;
 
 use bevy::prelude::Font as BevyFont;
 use bevy::utils::{hashbrown, PassHash};
-use bevy::{prelude::*, utils::HashMap};
+use bevy::{prelude::Plugin as BevyPlugin, prelude::*, utils::HashMap};
 
-pub use integrate::{RichTextBundle, RichTextData, RichTextSetter, RichTextSetterItem};
+pub use integrate::setter::{update_text, RichTextSetter, RichTextSetterItem};
+pub use integrate::{GlobalRichTextBindings, RichTextBundle, RichTextData};
 pub use modifiers::{Color, Content, Dynamic, Font, RelSize};
 pub use parse::Error as ParseError;
 pub use section::Section;
 
+/// A Boxed [`Modify`] trait object, with all necessary bounds to make it work
+/// with bevy's [`Resource`] and [`Component`] types.
 pub type ModifyBox = Box<dyn Modify + Send + Sync + 'static>;
-pub type Modifiers = HashMap<TypeId, ModifyBox>;
+pub type Modifiers = hashbrown::HashMap<TypeId, ModifyBox, PassHash>;
 // here we want to own the `dyn Modify`, we might potentially be able to "cache"
 // it and modify it in place with new values.
 // TODO(arch): Maybe merge Bindings and TypeBindings into HashMap<(TypeId, Option<&str>), ModifyBox>
@@ -169,5 +172,15 @@ impl RichText {
                 modifier.apply(ctx, to_set);
             }
         }
+    }
+}
+
+/// Plugin to update bevy [`Text`] component based on [`GlobalRichTextBindings`]
+/// and [`RichTextData`] content.
+pub struct Plugin;
+impl BevyPlugin for Plugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<GlobalRichTextBindings>()
+            .add_system(update_text.in_base_set(CoreSet::PostUpdate));
     }
 }

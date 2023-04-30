@@ -155,7 +155,7 @@ mod tests {
                 TypeId::of::<modifiers::$actual>()
         };
         (@modifiers $( $((fn $id:ident))? $($modifier:ident)::* ( $value:expr ) ),* $(,)? ) => {{
-            let mut modifiers = Modifiers::new();
+            let mut modifiers = Modifiers::default();
             $(
                 let id = sections!(@type_id $($id)? $($modifier)*);
                 let value = modifiers::$($modifier)::*( $value );

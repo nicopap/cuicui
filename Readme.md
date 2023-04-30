@@ -146,12 +146,14 @@ todo!()
   - [X] Check that nesting doesn't overwrite parent modifiers.
   - [X] Use modifier type id for implicit references.
   - [X] Implement ez methods for implicit refs
-  - [ ] Use a `Resource` context instead of storing it in a `Component`.
+  - [X] Use a `Resource` context instead of storing it in a `Component`.
   - [ ] Proper error handling when parsing keys/values
   - [X] Control a bevy `Text` by manipulating `RichTextData`
-  - [ ] Provide systems to automatically update `Text` based on `RichTextData`
-  - [ ] Provide systems accepting (Entity, Component, ReflectPath) tuple to
-        automatically pick data from ECS and update `RichTextData`
+  - [X] Provide systems to automatically update `Text` based on `RichTextData`
+  - [ ] `Fetcher`s and `Tracker`s
+    - [ ] `Tracked`
+    - [ ] `DebugTracked`
+    - [ ] Fetch commands
   - [ ] Limit amount of updating by implementing a finer-grained change
         detection system in `RichTextData`
   - [ ] Optimization: update Cow instead of creating new one => no alloc

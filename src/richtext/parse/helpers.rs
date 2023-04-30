@@ -113,7 +113,7 @@ impl Section {
         }
         let content_id = TypeId::of::<Content>();
 
-        let mut modifiers = Modifiers::new();
+        let mut modifiers = Modifiers::default();
         let mut escaped = input.to_owned().into();
         escape_backslashes(&mut escaped);
         modifiers.insert(content_id, Box::new(Content(escaped)));
@@ -127,7 +127,7 @@ pub(super) fn short_dynamic(input: Option<&str>) -> Vec<Section> {
         Some(input) => Dynamic::new(input.to_owned()),
         None => Dynamic::ByType(content_id),
     };
-    let mut modifiers = Modifiers::new();
+    let mut modifiers = Modifiers::default();
     modifiers.insert(content_id, Box::new(content_value));
 
     vec![Section { modifiers }]
@@ -171,7 +171,7 @@ pub(super) fn elements_and_content(
         key => Err(Error::UnknownModifier(key)),
     };
 
-    let mut modifiers = Modifiers::new();
+    let mut modifiers = Modifiers::default();
     // TODO(clean): This might be error prone, why do we initialize `sections`
     // first, then add content? Does the default `section` mean anything?
     let mut sections = vec![Section::default()];

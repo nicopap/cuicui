@@ -1,8 +1,11 @@
 //! Integrate [`RichText`] with bevy stuff.
+// TODO(clean): this module should be renamed to something like "bevy_integration"
+pub mod fetchers;
+pub mod setter;
 
 use std::{any::TypeId, fmt};
 
-use bevy::{asset::HandleId, ecs::query::WorldQuery, prelude::*};
+use bevy::prelude::*;
 use thiserror::Error;
 
 use super::{modifiers, Bindings, Content, Modify, ModifyBox, RichText, TypeBindings};
@@ -32,8 +35,37 @@ pub enum BindingError {
     #[error("Innexisting type: \"{key:?}\"")]
     NoType { key: TypeId },
 }
+pub type BindingResult = Result<(), BindingError>;
 
-// TODO(feat): move `Bindings` to a `Res` so as to avoid duplicating info
+/// Bindings read by all [`RichText`]s.
+///
+/// Unlike [`RichTextData`], this doesn't support type binding, because they
+/// would necessarily be shared between all
+#[derive(Resource, Default)]
+pub struct GlobalRichTextBindings {
+    bindings: Bindings,
+    has_changed: bool,
+}
+impl GlobalRichTextBindings {
+    fn insert_binding(&mut self, key: &'static str, value: ModifyBox) {
+        self.has_changed = true;
+        self.bindings.insert(key, value);
+    }
+    /// Set a named modifier binding.
+    ///
+    /// Unlike [`RichTextData`] this doesn't check that the key exists or that
+    /// `value` is of the right type.
+    pub fn set(&mut self, key: &'static str, value: impl IntoModify) {
+        self.insert_binding(key, value.into_modify())
+    }
+    /// Set a named content binding.
+    ///
+    /// Unlike [`RichTextData`] this doesn't check that the key exists or that
+    /// `value` is of the right type.
+    pub fn set_content(&mut self, key: &'static str, value: &impl fmt::Display) {
+        self.insert_binding(key, Box::new(Content::from(value)))
+    }
+}
 #[derive(Component)]
 pub struct RichTextData {
     text: RichText,
@@ -57,11 +89,7 @@ impl fmt::Debug for RichTextData {
     }
 }
 impl RichTextData {
-    fn insert_type_binding_checked(
-        &mut self,
-        key: TypeId,
-        value: ModifyBox,
-    ) -> Result<(), BindingError> {
+    fn insert_type_binding_checked(&mut self, key: TypeId, value: ModifyBox) -> BindingResult {
         if self.text.has_type_binding(key) {
             self.has_changed = true;
             self.type_bindings.insert(key, value);
@@ -75,7 +103,7 @@ impl RichTextData {
         key: &'static str,
         id: TypeId,
         value: ModifyBox,
-    ) -> Result<(), BindingError> {
+    ) -> BindingResult {
         if self.text.has_binding(key, id) {
             self.has_changed = true;
             self.bindings.insert(key, value);
@@ -84,12 +112,12 @@ impl RichTextData {
             Err(BindingError::NoKey { key, id })
         }
     }
-    pub fn set(&mut self, key: &'static str, value: impl IntoModify) -> Result<(), BindingError> {
+    pub fn set(&mut self, key: &'static str, value: impl IntoModify) -> BindingResult {
         let modifier = value.into_modify();
         let type_id = modifier.as_any().type_id();
         self.insert_binding_checked(key, type_id, modifier)
     }
-    pub fn set_typed(&mut self, value: impl IntoModify) -> Result<(), BindingError> {
+    pub fn set_typed(&mut self, value: impl IntoModify) -> BindingResult {
         let modifier = value.into_modify();
         let type_id = modifier.as_any().type_id();
         self.insert_type_binding_checked(type_id, modifier)
@@ -98,7 +126,7 @@ impl RichTextData {
         &mut self,
         key: Option<&'static str>,
         value: &impl fmt::Display,
-    ) -> Result<(), BindingError> {
+    ) -> BindingResult {
         let value = Box::new(Content::from(value));
         let id = TypeId::of::<Content>();
         match key {
@@ -108,27 +136,6 @@ impl RichTextData {
     }
 }
 
-#[derive(WorldQuery)]
-#[world_query(mutable)]
-pub struct RichTextSetter {
-    pub rich: &'static mut RichTextData,
-    pub text: &'static mut Text,
-}
-impl<'w> RichTextSetterItem<'w> {
-    pub fn update(&mut self, fonts: &Assets<Font>) {
-        if !self.rich.has_changed {
-            return;
-        }
-        self.rich.has_changed = false;
-        let ctx = super::Context {
-            bindings: Some(&self.rich.bindings),
-            type_bindings: Some(&self.rich.type_bindings),
-            parent_style: &self.rich.base_style,
-            fonts: &|name| Some(fonts.get_handle(HandleId::from(name))),
-        };
-        self.rich.text.update(&mut self.text, &ctx);
-    }
-}
 // TODO(feat): generalize so that it works with Text2dBundle as well
 #[derive(Bundle)]
 pub struct RichTextBundle {

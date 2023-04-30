@@ -4,16 +4,16 @@ use bevy::{
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
-use bevy_mod_cuicui::richtext::{RichTextBundle, RichTextData, RichTextSetter};
+use bevy_mod_cuicui::richtext::{self, RichTextBundle, RichTextData};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        .add_plugin(richtext::Plugin)
         .add_startup_system(setup)
-        .add_system(text_update_system.before(update_text))
-        .add_system(text_color_system.before(update_text))
-        .add_system(update_text)
+        .add_system(text_update_system)
+        .add_system(text_color_system)
         .run();
 }
 
@@ -106,13 +106,5 @@ fn text_update_system(
                 text.set_content(None, &value).unwrap();
             }
         }
-    }
-}
-
-fn update_text(mut query: Query<RichTextSetter, Changed<RichTextData>>, fonts: Res<Assets<Font>>) {
-    for mut text in &mut query {
-        text.update(&fonts);
-        // dbg!(&text.text);
-        // dbg!(&text.rich);
     }
 }
