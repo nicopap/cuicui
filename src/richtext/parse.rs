@@ -139,7 +139,7 @@ pub(super) fn rich_text(input: &str) -> Result<RichText, winnow::error::Error<&s
 
 #[cfg(test)]
 mod tests {
-    use std::any::TypeId;
+    use std::any::{Any, TypeId};
     use std::fmt;
 
     use bevy::prelude::Color as Col;
@@ -175,6 +175,9 @@ mod tests {
     }
     fn s<'a, T: From<&'a str>>(input: &'a str) -> T {
         input.into()
+    }
+    fn id<T: Any>() -> TypeId {
+        TypeId::of::<T>()
     }
     fn parse_fn<'a, T, E: fmt::Display + fmt::Debug + ParseError<&'a str>>(
         parser: impl Parser<&'a str, T, E>,
@@ -377,9 +380,7 @@ mod tests {
     #[test]
     fn outer_dynamic_content_implicit() {
         let input = "{}";
-        let expected=
-                // TODO(feat): this needs to be TypeId.of(Content)
-                sections![{(fn Content) Dynamic::new : s("content")}];
+        let expected = sections![{(fn Content) Dynamic::ByType : id::<modifiers::Content>()}];
         assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
@@ -387,8 +388,7 @@ mod tests {
         let input = "An empty {} is equivalent to {name}, but referred by typeid instead of name";
         let expected = sections![
             "An empty ",
-            // TODO(feat): this needs to be TypeId.of(Content)
-            {(fn Content) Dynamic::new : s("content")},
+            {(fn Content) Dynamic::ByType : id::<modifiers::Content>()},
             " is equivalent to ",
             {(fn Content) Dynamic::new : s("name")},
             ", but referred by typeid instead of name"
@@ -503,8 +503,7 @@ mod tests {
         let input = "{color: $ |If the identifier of a dynamic metadata value is elided, \
                 then the typeid of the rust type is used}";
         let expected = sections![{
-            // TODO(feat): this needs to be TypeId.of(Color)
-            (fn Color) Dynamic::new: s("implicit"),
+            (fn Color) Dynamic::ByType: id::<modifiers::Color>(),
             Content: s(
                 "If the identifier of a dynamic metadata value is elided, \
                 then the typeid of the rust type is used"
@@ -517,8 +516,7 @@ mod tests {
         let input = "can also use a single elided content if you want: {content:$}";
         let expected = sections![
             "can also use a single elided content if you want: ",
-            // TODO(feat): this needs to be TypeId.of(Content)
-            {(fn Content) Dynamic::new: s("implicit")},
+            {(fn Content) Dynamic::ByType: id::<modifiers::Content>()},
         ];
         assert_eq_sorted!(Ok(expected), parse(input));
     }

@@ -122,12 +122,13 @@ impl Section {
     }
 }
 pub(super) fn short_dynamic(input: Option<&str>) -> Vec<Section> {
-    // TODO(feat): use typeid as Dynamic::new arg if None
     let content_id = TypeId::of::<Content>();
-    let content_value = input.map_or_else(|| "content".to_owned(), |v| v.to_owned());
-
+    let content_value = match input {
+        Some(input) => Dynamic::new(input.to_owned()),
+        None => Dynamic::ByType(content_id),
+    };
     let mut modifiers = Modifiers::new();
-    modifiers.insert(content_id, Box::new(Dynamic::new(content_value)));
+    modifiers.insert(content_id, Box::new(content_value));
 
     vec![Section { modifiers }]
 }
@@ -138,6 +139,13 @@ pub(super) fn elements_and_content(
 
     // TODO(correct): check if empty Content (should never happen)
 
+    let key_typeid = |key| match key {
+        "font" => Ok(TypeId::of::<Font>()),
+        "color" => Ok(TypeId::of::<Color>()),
+        "size" => Ok(TypeId::of::<RelSize>()),
+        "content" => Ok(TypeId::of::<Content>()),
+        key => Err(Error::UnknownModifier(key)),
+    };
     let static_modifier = |key, value: Cow<str>| -> Result<ModifyBox> {
         match key {
             "font" => Ok(Box::new(Font(value.into()))),
@@ -152,8 +160,7 @@ pub(super) fn elements_and_content(
         match value {
             ModifierValue::Dynamic(name) => Ok(Box::new(Dynamic::new(name.into()))),
             ModifierValue::Static(value) => static_modifier(key, value),
-            // TODO(feat): use typeid as Dynamic::new arg if implicit
-            ModifierValue::DynamicImplicit => Ok(Box::new(Dynamic::new("implicit".to_owned()))),
+            ModifierValue::DynamicImplicit => Ok(Box::new(Dynamic::ByType(key_typeid(key)?))),
         }
     };
     let modifier_key = |key| match key {

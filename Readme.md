@@ -144,7 +144,8 @@ todo!()
   - [X] Control by name the modifiers at runtime
   - [X] Allow nesting of sections, so that outer modifiers affect inner sections.
   - [X] Check that nesting doesn't overwrite parent modifiers.
-  - [ ] Use modifier type id for implicit references.
+  - [X] Use modifier type id for implicit references.
+  - [ ] Implement ez methods for implicit refs
   - [ ] Custom `Modify`, registration, name, parse
   - [ ] Use a `Resource` context instead of storing it in a `Component`.
   - [X] Control a bevy `Text` by manipulating `RichTextData`
