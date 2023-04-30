@@ -1,5 +1,5 @@
 //! Default implementations of the [`TextMod`] trait for cuicui.
-use std::{borrow::Cow, fmt};
+use std::{any::Any, any::TypeId, borrow::Cow, fmt};
 
 use bevy::prelude::Color as BevyColor;
 use bevy::prelude::*;
@@ -11,6 +11,18 @@ macro_rules! common_modify_methods {
     () => {
         fn clone_dyn(&self) -> super::ModifyBox {
             Box::new(self.clone())
+        }
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn eq_dyn(&self, other: &dyn Modify) -> bool {
+            let any = other.as_any();
+            let Some(right) = any.downcast_ref::<Self>() else { return false; };
+            self == right
+        }
+        fn debug_dyn(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            use std::fmt::Debug;
+            self.fmt(f)
         }
     };
 }
@@ -77,20 +89,24 @@ impl<T: fmt::Display> From<T> for Content {
 // this would involve replacing Strings with an enum String|Interned, or private
 // background components, otherwise API seems impossible.
 /// An [`Modify`] that takes it value from [`Context::bindings`].
-#[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
-#[reflect(FromReflect)]
-pub struct Dynamic {
-    pub name: String,
+#[derive(PartialEq, Debug, Clone)]
+pub enum Dynamic {
+    ByName(String),
+    ByType(TypeId),
 }
 impl Dynamic {
     pub fn new(name: String) -> Self {
-        Self { name }
+        Dynamic::ByName(name)
     }
 }
 impl Modify for Dynamic {
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()> {
         // println!("Get value from binding: {:?}", self.name);
-        ctx.bindings?.get(self.name.as_str())?.apply(ctx, text)
+        let modifier = match self {
+            Dynamic::ByName(name) => ctx.bindings?.get(&**name),
+            Dynamic::ByType(type_id) => ctx.type_bindings?.get(type_id),
+        };
+        modifier?.apply(ctx, text)
     }
     common_modify_methods! {}
 }

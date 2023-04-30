@@ -4,13 +4,14 @@ use core::fmt;
 
 use bevy::{asset::HandleId, ecs::query::WorldQuery, prelude::*};
 
-use super::{modifiers, Bindings, Modify, RichText};
+use super::{modifiers, Bindings, Modify, RichText, TypeBindings};
 
 // TODO: move `Bindings` to a `Res` so as to avoid duplicating info
 #[derive(Component)]
 pub struct RichTextData {
     text: RichText,
     bindings: Bindings,
+    type_bindings: TypeBindings,
     base_style: TextStyle,
     // TODO: better caching
     change_list: Vec<&'static str>,
@@ -52,6 +53,7 @@ impl<'w> RichTextSetterItem<'w> {
         self.rich.change_list.clear();
         let ctx = super::Context {
             bindings: Some(&self.rich.bindings),
+            type_bindings: Some(&self.rich.type_bindings),
             parent_style: &self.rich.base_style,
             fonts: &|name| Some(fonts.get_handle(HandleId::from(name))),
         };
@@ -73,12 +75,14 @@ impl RichTextBundle {
         let data = RichTextData {
             text: rich,
             bindings: Bindings::new(),
+            type_bindings: TypeBindings::default(),
             base_style,
             change_list: Vec::new(),
         };
         let mut text = TextBundle::default();
         let ctx = super::Context {
             bindings: None,
+            type_bindings: None,
             parent_style: &data.base_style,
             fonts: &|_| None,
         };

@@ -8,10 +8,11 @@ mod parse;
 mod section;
 mod trait_nonsense;
 
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 use std::fmt;
 
 use bevy::prelude::Font as BevyFont;
+use bevy::utils::{hashbrown, PassHash};
 use bevy::{prelude::*, utils::HashMap};
 
 pub use integrate::{RichTextBundle, RichTextData, RichTextSetter, RichTextSetterItem};
@@ -23,13 +24,17 @@ pub type ModifyBox = Box<dyn Modify + Send + Sync + 'static>;
 pub type Modifiers = HashMap<TypeId, ModifyBox>;
 // here we want to own the `dyn Modify`, we might potentially be able to "cache"
 // it and modify it in place with new values.
+// TODO(arch): Maybe merge Bindings and TypeBindings into HashMap<(TypeId, Option<&str>), ModifyBox>
+// TODO(clean): This relies on TypeId being a u64, which is BAAADDD
+// TODO(perf): use some form of interning, or actually phf.
 pub type Bindings = HashMap<&'static str, ModifyBox>;
+pub type TypeBindings = hashbrown::HashMap<TypeId, ModifyBox, PassHash>;
 
 /// A [`TextSection`] modifier.
 ///
 /// A [`TextSection`] may have an arbitary number of `Modify`s, modifying
 /// the styling and content of a given section.
-pub trait Modify: Reflect {
+pub trait Modify {
     // TODO(err): error handling (ie missing dynamic modifer binding)
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()>;
 
@@ -49,30 +54,28 @@ pub trait Modify: Reflect {
     /// }
     /// ```
     fn clone_dyn(&self) -> ModifyBox;
+    fn as_any(&self) -> &dyn Any;
+    fn eq_dyn(&self, other: &dyn Modify) -> bool;
+    fn debug_dyn(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
 }
 impl PartialEq for dyn Modify {
     fn eq(&self, other: &Self) -> bool {
-        self.as_reflect()
-            .reflect_partial_eq(other.as_reflect())
-            .unwrap_or(false)
+        self.eq_dyn(other)
     }
 }
 impl PartialEq for ModifyBox {
     fn eq(&self, other: &Self) -> bool {
-        self.as_reflect()
-            .reflect_partial_eq(other.as_reflect())
-            .unwrap_or(false)
+        self.eq_dyn(&**other)
     }
 }
 impl fmt::Debug for dyn Modify {
-    // TODO(test): this makes reading test outputs difficult
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.debug(f)
+        self.debug_dyn(f)
     }
 }
 impl fmt::Debug for ModifyBox {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.debug(f)
+        self.debug_dyn(f)
     }
 }
 // NOTE: an alternative implementation avoiding `Modify::clone_dyn` but requiring
@@ -96,6 +99,7 @@ impl Clone for ModifyBox {
 #[derive(Clone, Copy)]
 pub struct Context<'a, 'b> {
     pub bindings: Option<&'b Bindings>,
+    pub type_bindings: Option<&'b TypeBindings>,
     pub parent_style: &'b TextStyle,
     // NOTE: we use a `&'a dyn` here instead of a type parameter because we intend
     // for `Context` to be a parameter for a trait object method. If `Context` had
@@ -106,7 +110,12 @@ pub struct Context<'a, 'b> {
 }
 impl<'a, 'b> Context<'a, 'b> {
     pub fn from_style(parent_style: &'b TextStyle) -> Self {
-        Context { bindings: None, parent_style, fonts: &|_| None }
+        Context {
+            bindings: None,
+            parent_style,
+            fonts: &|_| None,
+            type_bindings: None,
+        }
     }
 }
 

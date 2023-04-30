@@ -167,7 +167,7 @@ Illustration: "{color:$|This color is runtime-updated}"
 
 ```rust
 let new_color: Color;
-rich_text.set_short(new_color);
+rich_text.set_typed(new_color);
 ```
 
 You can also use _`$identifier`_ to give a name to your modifier,
