@@ -11,8 +11,8 @@ use bevy::{
     sprite::MaterialMesh2dBundle,
     utils::HashMap,
 };
-use bevy_mod_cuicui::richtext::{
-    self, AppResourceTrackerExt, DebugTracked, GlobalRichTextBindings, RichTextBundle,
+use cuicui_richtext::{
+    AppResourceTrackerExt, DebugTracked, GlobalRichTextBindings, RichTextBundle,
 };
 
 const TIME_STEP: f32 = 1.0 / 60.0;
@@ -56,7 +56,7 @@ const TEXT_COLOR: Color = Color::rgb(0.5, 0.5, 1.0);
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(richtext::Plugin)
+        .add_plugin(cuicui_richtext::Plugin)
         .init_tracked_resource::<Score>()
         .init_debug_tracked_resource::<Deaths>()
         .insert_resource(ClearColor(BACKGROUND_COLOR))

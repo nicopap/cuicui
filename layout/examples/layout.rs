@@ -6,7 +6,7 @@ use bevy::{
     render::{mesh::Indices, render_resource::PrimitiveTopology, view::RenderLayers},
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
-use bevy_mod_cuicui::layout;
+use cuicui_layout as layout;
 
 const UI_LAYER: RenderLayers = RenderLayers::none().with(20);
 

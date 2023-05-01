@@ -3,7 +3,7 @@
 
 use bevy::prelude::*;
 
-use crate::richtext::ModifyBox;
+use crate::ModifyBox;
 
 pub type FetchBox = Box<dyn Fetch + Send + Sync + 'static>;
 pub trait Fetch {

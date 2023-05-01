@@ -1,5 +1,9 @@
+[workspace]
+members = ["richtext", "layout"]
+resolver = "2"
+
 [package]
-name = "bevy_mod_cuicui"
+name = "bevy_cuicui"
 version = "0.1.0"
 edition = "2021"
 exclude = ["assets"]
@@ -21,9 +25,6 @@ picking_widges = ["bevy_mod_picking"]
 bevy = { version = "0.10", default-features = false, features = ["bevy_render", "bevy_core_pipeline", "bevy_text", "bevy_ui"] }
 bevy-ui-navigation = { version = "0.24.0", default-features = false }
 bevy_mod_sysfail = "2"
-anyhow = "1"
-thiserror = "1"
-winnow = "0.4.4"
 
 [dependencies.bevy_mod_picking]
 version = "0.11"
@@ -33,6 +34,5 @@ branch = "beta"
 default-features = false
 
 [dev-dependencies]
-pretty_assertions_sorted = "1.2.1"
 bevy-inspector-egui = "0.18.3"
 bevy = { version = "0.10", features = ["png", "x11", "bevy_asset", "bevy_render" ] }

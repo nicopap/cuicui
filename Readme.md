@@ -85,6 +85,12 @@ cuicui layout returns postion as offset from parent, which may not be useful
 if you do not use bevy's transform hierarchy. This also locks you into using
 bevy hierarchy for your Ui.
 
+## Rich text
+
+cuicui defines a `RichText` component.
+
+TODO(doc): Link to relevant documentation.
+
 ## Usage
 
 The `CuicuiPlugin` by default manages the `Transform` of spawned elements.

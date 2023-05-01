@@ -1,5 +1,5 @@
 check:
-	cargo clippy --examples
+	cargo clippy --examples --workspace --all-targets --all-features
 run:
 	cargo run --example richtext
 	cargo run --example breakout

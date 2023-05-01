@@ -8,7 +8,7 @@ use super::{
     fetchers::{DynamicFetcher, FetchBox},
     GlobalRichTextBindings, IntoModify,
 };
-use crate::richtext::{Content, ModifyBox};
+use crate::{Content, ModifyBox};
 
 // TODO(clean): A safer alternative is to have `Tracker` bundles actually be
 // bundles and expose a `new` constructor. I could then provide a macro
