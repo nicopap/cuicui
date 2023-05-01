@@ -163,12 +163,12 @@ todo!()
     - [X] resource tracker
     - [ ] Reflection-based resource tracker (useful for config resources)
     - [ ] (unsure) Fetch commands
-  - [ ] Refactor
-    - [ ] extract richtext into separate crate
-    - [ ] Reorganize modules: `trackers`, `modify` (trait) `modifiers` (impls)
+  - [X] Refactor
+    - [X] extract richtext into separate crate
+    - [X] Reorganize modules: `trackers`, `modify` (trait) `modifiers` (impls)
           `parse`, `plugin`, `change_check`
-    - [ ] Replace hackish implementation of `Bundle` with simple macros
-    - [ ] Remove dead code (existed only so that it can be stored in git history for later retrieval)
+    - [X] Replace hackish implementation of `Bundle` with simple macros
+    - [X] Remove dead code (existed only so that it can be stored in git history for later retrieval)
   - [ ] Limit amount of updating by implementing a finer-grained change
         detection system in `RichTextData`
   - [ ] Optimization: update Cow instead of creating new one => no alloc

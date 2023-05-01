@@ -6,7 +6,8 @@ use winnow::{
     stream::AsChar, stream::Stream, stream::StreamIsPartial, Parser,
 };
 
-use super::super::{color, modifiers, Content, Dynamic, Modifiers, ModifyBox, RichText, Section};
+use super::color;
+use crate::{modifiers::Content, modifiers::Dynamic, Modifiers, ModifyBox, RichText, Section};
 
 #[derive(Error, Debug)]
 pub enum Error<'a> {
@@ -135,7 +136,7 @@ pub(super) fn short_dynamic(input: Option<&str>) -> Vec<Section> {
 pub(super) fn elements_and_content(
     (elements, content): (Vec<Element>, Option<Sections>),
 ) -> Result<Vec<Section>> {
-    use modifiers::{Color, Font, RelSize};
+    use crate::modifiers::{Color, Font, RelSize};
 
     // TODO(correct): check if empty Content (should never happen)
 
@@ -149,7 +150,7 @@ pub(super) fn elements_and_content(
     let static_modifier = |key, value: Cow<str>| -> Result<ModifyBox> {
         match key {
             "font" => Ok(Box::new(Font(value.into()))),
-            "color" => Ok(Box::new(value.parse::<Color>()?)),
+            "color" => Ok(Box::new(Color(color::parse(&value)?))),
             "size" => Ok(Box::new(RelSize(value.parse()?))),
             "content" => Ok(Box::new(Content(value.into_owned().into()))),
             key => Err(Error::UnknownModifier(key)),

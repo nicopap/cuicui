@@ -1,11 +1,10 @@
 //! Default implementations of the [`TextMod`] trait for cuicui.
 use std::{any::Any, any::TypeId, borrow::Cow, fmt};
 
-use bevy::prelude::Color as BevyColor;
-use bevy::prelude::*;
+use bevy::prelude::{FromReflect, Reflect, TextSection};
 use bevy::reflect::ReflectFromReflect;
 
-use super::{Context, Modify};
+use crate::{modify::Context, IntoModify, Modify, ModifyBox};
 
 macro_rules! common_modify_methods {
     () => {
@@ -56,7 +55,7 @@ impl Modify for RelSize {
 /// Color.
 #[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
 #[reflect(FromReflect)]
-pub struct Color(pub BevyColor);
+pub struct Color(pub bevy::prelude::Color);
 impl Modify for Color {
     fn apply(&self, _ctx: &Context, text: &mut TextSection) -> Option<()> {
         // println!("Apply new color: {:?}", self.0);
@@ -64,6 +63,11 @@ impl Modify for Color {
         Some(())
     }
     common_modify_methods! {}
+}
+impl IntoModify for bevy::prelude::Color {
+    fn into_modify(self) -> ModifyBox {
+        Box::new(Color(self))
+    }
 }
 
 /// A section text, may either be preset or extracted.

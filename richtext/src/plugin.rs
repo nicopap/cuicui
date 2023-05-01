@@ -1,32 +1,16 @@
 //! Integrate [`RichText`] with bevy stuff.
-// TODO(clean): this module should be renamed to something like "bevy_integration"
-pub mod fetchers;
-pub mod setter;
-pub mod trackers;
 
 use std::{any::TypeId, fmt};
 
-use bevy::prelude::*;
+use bevy::{asset::HandleId, prelude::*};
 use thiserror::Error;
 
-use super::{modifiers, Bindings, Content, Modify, ModifyBox, RichText, TypeBindings};
-
-/// Turn any type into a [modifier](ModifyBox).
-///
-/// Used in [`RichTextData::set`] and [`RichTextData::set_typed`].
-pub trait IntoModify {
-    fn into_modify(self) -> ModifyBox;
-}
-impl IntoModify for Color {
-    fn into_modify(self) -> ModifyBox {
-        Box::new(modifiers::Color(self))
-    }
-}
-impl<T: Modify + Send + Sync + 'static> IntoModify for T {
-    fn into_modify(self) -> ModifyBox {
-        Box::new(self)
-    }
-}
+use crate::{
+    modifiers::Content,
+    modify::{self, Bindings, TypeBindings},
+    track::{update_tracked_components, update_tracked_resources},
+    IntoModify, ModifyBox, ResTrackers, RichText,
+};
 
 // TODO(err): proper naming of types
 #[derive(Error, Debug)]
@@ -43,12 +27,12 @@ pub type BindingResult = Result<(), BindingError>;
 /// Unlike [`RichTextData`], this doesn't support type binding, because they
 /// would necessarily be shared between all
 #[derive(Resource, Default)]
-pub struct GlobalRichTextBindings {
+pub struct WorldBindings {
     bindings: Bindings,
     has_changed: bool,
 }
-impl GlobalRichTextBindings {
-    fn insert_binding(&mut self, key: &'static str, value: ModifyBox) {
+impl WorldBindings {
+    fn insert(&mut self, key: &'static str, value: ModifyBox) {
         self.has_changed = true;
         self.bindings.insert(key, value);
     }
@@ -57,14 +41,14 @@ impl GlobalRichTextBindings {
     /// Unlike [`RichTextData`] this doesn't check that the key exists or that
     /// `value` is of the right type.
     pub fn set(&mut self, key: &'static str, value: impl IntoModify) {
-        self.insert_binding(key, value.into_modify())
+        self.insert(key, value.into_modify())
     }
     /// Set a named content binding.
     ///
     /// Unlike [`RichTextData`] this doesn't check that the key exists or that
     /// `value` is of the right type.
     pub fn set_content(&mut self, key: &'static str, value: &impl fmt::Display) {
-        self.insert_binding(key, Box::new(Content::from(value)))
+        self.insert(key, Box::new(Content::from(value)))
     }
 }
 #[derive(Component)]
@@ -157,7 +141,7 @@ impl RichTextBundle {
             has_changed: true,
         };
         let mut text = TextBundle::default();
-        let ctx = super::Context {
+        let ctx = modify::Context {
             bindings: None,
             type_bindings: None,
             parent_style: &data.base_style,
@@ -186,5 +170,50 @@ impl RichTextBundle {
     pub const fn with_background_color(mut self, color: Color) -> Self {
         self.text.background_color = BackgroundColor(color);
         self
+    }
+}
+
+pub fn update_text(
+    mut query: Query<(&mut RichTextData, &mut Text)>,
+    mut global_context: ResMut<WorldBindings>,
+    fonts: Res<Assets<Font>>,
+) {
+    for (mut rich, mut text) in &mut query {
+        if global_context.has_changed {
+            let ctx = modify::Context {
+                bindings: Some(&global_context.bindings),
+                type_bindings: None,
+                parent_style: &rich.base_style,
+                fonts: &|name| Some(fonts.get_handle(HandleId::from(name))),
+            };
+            rich.text.update(&mut text, &ctx);
+            global_context.has_changed = false;
+        }
+        if rich.has_changed {
+            let ctx = modify::Context {
+                bindings: Some(&rich.bindings),
+                type_bindings: Some(&rich.type_bindings),
+                parent_style: &rich.base_style,
+                fonts: &|name| Some(fonts.get_handle(HandleId::from(name))),
+            };
+            rich.text.update(&mut text, &ctx);
+            rich.has_changed = false;
+        }
+    }
+}
+
+/// Plugin to update bevy [`Text`] component based on [`GlobalRichTextBindings`]
+/// and [`RichTextData`] content.
+pub struct RichTextPlugin;
+impl Plugin for RichTextPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<WorldBindings>()
+            .add_system(
+                update_tracked_resources
+                    .in_base_set(CoreSet::PostUpdate)
+                    .run_if(resource_exists::<ResTrackers>()),
+            )
+            .add_system(update_tracked_components.in_base_set(CoreSet::PostUpdate))
+            .add_system(update_text.in_base_set(CoreSet::PostUpdate));
     }
 }

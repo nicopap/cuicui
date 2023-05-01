@@ -1,4 +1,5 @@
 //! Parse rich text according to spec
+mod color;
 mod helpers;
 
 use thiserror::Error;
@@ -10,7 +11,7 @@ use winnow::{
     IResult, Parser,
 };
 
-use super::{RichText, Section};
+use crate::{RichText, Section};
 use helpers::{elements_and_content, short_dynamic, ws, Element, ModifierValue, Sections};
 
 #[derive(Error, Debug)]

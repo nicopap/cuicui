@@ -123,91 +123,84 @@ fn named(color: &str) -> Option<Color> {
         _ => None,
     }
 }
-
-impl FromStr for super::Color {
-    type Err = Error;
-
-    fn from_str(color: &str) -> Result<Self> {
-        let err = || Error::BadColor(color.to_owned());
-        let color = color.trim().to_lowercase();
-        let color = named(&color)
-            .map(Ok)
-            .or_else(|| hex(&color))
-            .or_else(|| parameter(&color))
-            .ok_or_else(err)??;
-        Ok(super::Color(color))
-    }
+pub(super) fn parse(input: &str) -> Result<Color> {
+    let err = || Error::BadColor(input.to_owned());
+    let color = input.trim().to_lowercase();
+    named(&color)
+        .map(Ok)
+        .or_else(|| hex(&color))
+        .or_else(|| parameter(&color))
+        .ok_or_else(err)?
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::Color as RichColor;
     use super::*;
 
     #[test]
     fn valid_named() {
-        let color = RichColor::from_str("violet").unwrap();
-        assert_eq!(color.0, Color::VIOLET);
+        let color = parse("violet").unwrap();
+        assert_eq!(color, Color::VIOLET);
 
-        let color = RichColor::from_str("Yellow").unwrap();
-        assert_eq!(color.0, Color::YELLOW);
+        let color = parse("Yellow").unwrap();
+        assert_eq!(color, Color::YELLOW);
 
-        let color = RichColor::from_str("RED").unwrap();
-        assert_eq!(color.0, Color::RED);
+        let color = parse("RED").unwrap();
+        assert_eq!(color, Color::RED);
     }
     #[test]
     fn invalid_named() {
-        assert!(RichColor::from_str("deep_purple").is_err());
-        assert!(RichColor::from_str("klein_blue").is_err());
+        assert!(parse("deep_purple").is_err());
+        assert!(parse("klein_blue").is_err());
     }
     #[test]
     fn valid_parameters() {
-        let color = RichColor::from_str("rgb(10, 20, 30)").unwrap();
-        assert_eq!(color.0, Color::rgba_u8(10, 20, 30, 255));
+        let color = parse("rgb(10, 20, 30)").unwrap();
+        assert_eq!(color, Color::rgba_u8(10, 20, 30, 255));
 
-        let color = RichColor::from_str("rgb(1.0, 0.1, 0.5)").unwrap();
-        assert_eq!(color.0, Color::rgba(1.0, 0.1, 0.5, 1.0));
+        let color = parse("rgb(1.0, 0.1, 0.5)").unwrap();
+        assert_eq!(color, Color::rgba(1.0, 0.1, 0.5, 1.0));
 
-        let color = RichColor::from_str("rgb_lin(1.0, 0.1, 0.5, 1.0)").unwrap();
-        assert_eq!(color.0, Color::rgba_linear(1.0, 0.1, 0.5, 1.0));
+        let color = parse("rgb_lin(1.0, 0.1, 0.5, 1.0)").unwrap();
+        assert_eq!(color, Color::rgba_linear(1.0, 0.1, 0.5, 1.0));
 
-        let color = RichColor::from_str("rgb(10,34,   102)").unwrap();
-        assert_eq!(color.0, Color::rgba_u8(10, 34, 102, 255));
+        let color = parse("rgb(10,34,   102)").unwrap();
+        assert_eq!(color, Color::rgba_u8(10, 34, 102, 255));
 
-        let color = RichColor::from_str("hsl(330.0, 0.5,0.5)").unwrap();
-        assert_eq!(color.0, Color::hsla(330.0, 0.5, 0.5, 1.0));
+        let color = parse("hsl(330.0, 0.5,0.5)").unwrap();
+        assert_eq!(color, Color::hsla(330.0, 0.5, 0.5, 1.0));
 
-        let color = RichColor::from_str("hsl(3.141516, 0.1,0.99   ,1.0)").unwrap();
-        assert_eq!(color.0, Color::hsla(3.141516, 0.1, 0.99, 1.0));
+        let color = parse("hsl(3.141516, 0.1,0.99   ,1.0)").unwrap();
+        assert_eq!(color, Color::hsla(3.141516, 0.1, 0.99, 1.0));
 
-        let color = RichColor::from_str("rgb(        233       )").unwrap();
-        assert_eq!(color.0, Color::rgba_u8(233, 233, 233, 255));
+        let color = parse("rgb(        233       )").unwrap();
+        assert_eq!(color, Color::rgba_u8(233, 233, 233, 255));
     }
     #[test]
     fn invalid_parameters() {
-        assert!(RichColor::from_str("rgb(1000, 3434, 2223)").is_err());
-        assert!(RichColor::from_str("rgb_lin(1.0, 0.1, 0.5, 1.0, 1.0, 1.0)").is_err());
-        assert!(RichColor::from_str("rgb_lin(1.0, 1.0)").is_err());
-        assert!(RichColor::from_str("rgb_lin(10, 34)").is_err());
-        assert!(RichColor::from_str("hsl(330.0, 0.5,0.5").is_err());
+        assert!(parse("rgb(1000, 3434, 2223)").is_err());
+        assert!(parse("rgb_lin(1.0, 0.1, 0.5, 1.0, 1.0, 1.0)").is_err());
+        assert!(parse("rgb_lin(1.0, 1.0)").is_err());
+        assert!(parse("rgb_lin(10, 34)").is_err());
+        assert!(parse("hsl(330.0, 0.5,0.5").is_err());
         // FIXME
-        // assert!(RichColor::from_str("hsl(10,34    , 102)").is_err());
+        // assert!(parse("hsl(10,34    , 102)").is_err());
     }
     #[test]
     fn valid_hex() {
-        let color = RichColor::from_str("#343434").unwrap();
-        assert_eq!(color.0, Color::hex("343434").unwrap());
+        let color = parse("#343434").unwrap();
+        assert_eq!(color, Color::hex("343434").unwrap());
 
-        let color = RichColor::from_str("#baddab").unwrap();
-        assert_eq!(color.0, Color::hex("baddab").unwrap());
+        let color = parse("#baddab").unwrap();
+        assert_eq!(color, Color::hex("baddab").unwrap());
 
-        let color = RichColor::from_str("#F00B4D").unwrap();
-        assert_eq!(color.0, Color::hex("F00B4D").unwrap());
+        let color = parse("#F00B4D").unwrap();
+        assert_eq!(color, Color::hex("F00B4D").unwrap());
     }
     #[test]
     fn invalid_hex() {
-        assert!(RichColor::from_str("#fr3ncH").is_err());
-        assert!(RichColor::from_str("#1").is_err());
-        assert!(RichColor::from_str("#1234567890").is_err());
+        assert!(parse("#fr3ncH").is_err());
+        assert!(parse("#1").is_err());
+        assert!(parse("#1234567890").is_err());
     }
 }
