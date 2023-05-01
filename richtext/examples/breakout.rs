@@ -12,7 +12,7 @@ use bevy::{
     utils::HashMap,
 };
 use cuicui_richtext::{
-    AppResourceTrackerExt, DebugTracked, GlobalRichTextBindings, RichTextBundle,
+    track, AppResourceTrackerExt, RichTextBundle, RichTextPlugin, WorldBindings,
 };
 
 const TIME_STEP: f32 = 1.0 / 60.0;
@@ -56,7 +56,7 @@ const TEXT_COLOR: Color = Color::rgb(0.5, 0.5, 1.0);
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(cuicui_richtext::Plugin)
+        .add_plugin(RichTextPlugin)
         .init_tracked_resource::<Score>()
         .init_debug_tracked_resource::<Deaths>()
         .insert_resource(ClearColor(BACKGROUND_COLOR))
@@ -211,7 +211,7 @@ fn setup(
             ..default()
         },
         Paddle,
-        DebugTracked("paddle_hits", Collider::default()),
+        track!("d", paddle_hits, Collider::default()),
     ));
 
     // Ball
@@ -296,7 +296,7 @@ fn setup(
 }
 
 fn update_ball_bindings(
-    mut context: ResMut<GlobalRichTextBindings>,
+    mut context: ResMut<WorldBindings>,
     ball_pos: Query<&Transform, With<Ball>>,
 ) {
     let Ok(ball_pos) = ball_pos.get_single() else { return; };

@@ -9,12 +9,13 @@ pub mod track;
 
 use std::any::TypeId;
 
-use bevy::prelude::*;
+use bevy::prelude::{Text, TextSection};
 
 use modifiers::Dynamic;
 
 pub use modify::{IntoModify, Modifiers, Modify, ModifyBox};
 pub use parse::Error as ParseError;
+pub use plugin::{RichTextBundle, RichTextData, RichTextPlugin, WorldBindings};
 pub use track::{AppResourceTrackerExt, ResTrackers, Tracked};
 
 // TODO(perf): See design_doc/richtext/better_section_impl.md

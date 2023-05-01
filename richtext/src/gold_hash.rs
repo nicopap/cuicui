@@ -17,7 +17,7 @@ impl BuildHasher for GoldHash {
 }
 
 /// The golden ratio
-const PHI: f64 = 1.618033988749894848204586834365638117720309179805762862;
+const PHI: f64 = 1.618033988749895;
 const UPHI: u64 = ((u64::MAX as f64) / PHI) as u64 - 1;
 const SHIFT: u32 = 32;
 

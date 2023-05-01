@@ -3,7 +3,7 @@ use std::fmt;
 use bevy::{prelude::*, reflect::Typed, utils::get_short_name};
 
 use super::{some_content, FetchBox};
-use crate::{modifiers::Content, plugin::WorldBindings, IntoModify, ModifyBox};
+use crate::{plugin::WorldBindings, IntoModify};
 
 pub fn update_tracked_resources(world: &mut World) {
     world.resource_scope(|world, mut world_bindings: Mut<WorldBindings>| {

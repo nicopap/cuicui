@@ -4,13 +4,13 @@ use bevy::{
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
-use cuicui_richtext::{RichTextBundle, RichTextData};
+use cuicui_richtext::{RichTextBundle, RichTextData, RichTextPlugin};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
-        .add_plugin(cuicui_richtext::Plugin)
+        .add_plugin(RichTextPlugin)
         .add_startup_system(setup)
         .add_system(text_update_system)
         .add_system(text_color_system)
