@@ -2,6 +2,7 @@
 // TODO(clean): this module should be renamed to something like "bevy_integration"
 pub mod fetchers;
 pub mod setter;
+pub mod trackers;
 
 use std::{any::TypeId, fmt};
 

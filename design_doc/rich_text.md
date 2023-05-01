@@ -432,14 +432,20 @@ fn setup(mut commands: Commands) {
     
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Clone, Copy)]
 struct Slider(f32);
-impl fmt::Display for Slider { /* ... */ }
+impl fmt::Display for Slider {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:.3}", self.0)
+    }
+}
 
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 struct UserColor(Color);
 impl IntoModify for UserColor {
-    // ...
+    fn into_modify(self) -> richtext::ModifyBox {
+        Box::new(modifiers::Color(self.0))
+    }
 }
 ```
 

@@ -151,9 +151,18 @@ todo!()
   - [X] Control a bevy `Text` by manipulating `RichTextData`
   - [X] Provide systems to automatically update `Text` based on `RichTextData`
   - [ ] `Fetcher`s and `Tracker`s
-    - [ ] `Tracked`
-    - [ ] `DebugTracked`
-    - [ ] Fetch commands
+    - [X] `Tracked`
+    - [X] `DebugTracked`
+    - [ ] `TrackReflect`
+    - [X] resource tracker
+    - [ ] Reflection-based resource tracker (useful for config resources)
+    - [ ] (unsure) Fetch commands
+  - [ ] Refactor
+    - [ ] extract richtext into separate crate
+    - [ ] Reorganize modules: `trackers`, `modify` (trait) `modifiers` (impls)
+          `parse`, `plugin`, `change_check`
+    - [ ] Replace hackish implementation of `Bundle` with simple macros
+    - [ ] Remove dead code (existed only so that it can be stored in git history for later retrieval)
   - [ ] Limit amount of updating by implementing a finer-grained change
         detection system in `RichTextData`
   - [ ] Optimization: update Cow instead of creating new one => no alloc
