@@ -486,3 +486,42 @@ which returns a `Box<dyn Modify>` of itself.
 [bui_bits]: https://github.com/septum/bevy_ui_bits
 [`fmt`]: https://doc.rust-lang.org/stable/std/fmt/index.html
 [`Color`]: https://docs.rs/bevy/latest/bevy/prelude/enum.Color.html
+
+## TODO
+
+- [X] Define and verify a grammar for defining rich text through a string
+      like rust's format macro.
+- [X] Control by name the content of sections
+- [X] Control styling of sections through modifiers
+- [X] Control by name the modifiers at runtime
+- [X] Allow nesting of sections, so that outer modifiers affect inner sections.
+- [X] Check that nesting doesn't overwrite parent modifiers.
+- [X] Use modifier type id for implicit references.
+- [X] Implement ez methods for implicit refs
+- [X] Use a `Resource` context instead of storing it in a `Component`.
+- [ ] Proper error handling when parsing keys/values
+- [X] Control a bevy `Text` by manipulating `RichTextData`
+- [X] Provide systems to automatically update `Text` based on `RichTextData`
+- [ ] `Fetcher`s and `Tracker`s
+  - [X] `Tracked`
+  - [X] `DebugTracked`
+  - [ ] `TrackReflect`
+  - [X] resource tracker
+  - [ ] Reflection-based resource tracker (useful for config resources)
+  - [ ] (unsure) Fetch commands
+- [X] Refactor
+  - [X] extract richtext into separate crate
+  - [X] Reorganize modules: `trackers`, `modify` (trait) `modifiers` (impls)
+        `parse`, `plugin`, `change_check`
+  - [X] Replace hackish implementation of `Bundle` with simple macros
+  - [X] Remove dead code (existed only so that it can be stored in git history for later retrieval)
+- [ ] Limit amount of updating by implementing a finer-grained change
+      detection system in `RichTextData`
+- [ ] Optimization: update Cow instead of creating new one => no alloc
+- [ ] Custom `Modify`, registration, name, parse
+- [ ] Extract `Modify<T>` to be generic over what it modifies
+      + `Context` as associated type of `T` most likely.
+- [ ] (unsure) better error messages
+- [ ] (unsure) generalize this to widges, to create a prefab system
+- [ ] (unsure) Allow compile-time verification of rich text spec through a
+      proc macro

@@ -1,5 +1,12 @@
 [package]
 name = "cuicui_richtext"
+authors = ["Nicola Papale"]
+description = "A bevy plugin to manage text without boilerplate"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["bevy", "markup", "text", "template", "styling"]
+categories = ["game-development", "gui", "value-formatting", "template-engine"]
+repository = "https://github.com/devildahu/bevy_mod_cuicui"
 version = "0.1.0"
 edition = "2021"
 
