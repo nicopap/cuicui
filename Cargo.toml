@@ -14,24 +14,12 @@ default = ["reflect"]
 # Derive Reflect for all (relevant) types defined in the crate.
 reflect = []
 
-# Define additional widges that depend on specific mouse behaviors such as
-# grabbing.
-# This depends on the beta branch of bevy_mod_picking
-picking_widges = ["bevy_mod_picking"]
-
 [dependencies]
 # TODO: split layouting, prefabs, rendering in different crates with
 # relevant level of bevy features
 bevy = { version = "0.10", default-features = false, features = ["bevy_render", "bevy_core_pipeline", "bevy_text", "bevy_ui"] }
 bevy-ui-navigation = { version = "0.24.0", default-features = false }
 bevy_mod_sysfail = "2"
-
-[dependencies.bevy_mod_picking]
-version = "0.11"
-optional = true
-git = "https://github.com/devildahu/bevy_mod_picking.git"
-branch = "beta"
-default-features = false
 
 [dev-dependencies]
 bevy-inspector-egui = "0.18.3"

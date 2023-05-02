@@ -10,6 +10,10 @@ repository = "https://github.com/devildahu/bevy_mod_cuicui"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = []
+no_tracked_debug = []
+
 [dependencies]
 anyhow = "1"
 thiserror = "1"

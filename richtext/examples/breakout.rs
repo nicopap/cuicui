@@ -211,7 +211,7 @@ fn setup(
             ..default()
         },
         Paddle,
-        track!("d", paddle_hits, Collider::default()),
+        track!('d, paddle_hits, Collider::default()),
     ));
 
     // Ball

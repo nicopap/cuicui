@@ -359,71 +359,47 @@ fn setup(mut commands: Commands) {
 
     // If your component implements `fmt::Display`, you can use the `Tracked` bundle,
     // This will update content bound to provided name based on the value of component.
+    // `track!` is a thin wrapper around `Tracked` to make it a bit less honerous to use.
     commands.spawn((
         SomeBundle {
             foo: 34.0,
             ..default()
         },
-        Tracked("tracked_slider_value", Slider(value)),
+        track!(tracked_slider_value, Slider(value)),
     ));
-    // You can use `DebugTracked` if you want to derive `Debug` and not have to
+    // You can use the `"d"` flag if you want to derive `Debug` and not have to
     // manually implement Display
     commands.spawn((
         SomeBundle {
             foo: 34.0,
             ..default()
         },
-        DebugTracked("debug_tracked_slider_value", Slider(value)),
+        track!('d, debug_tracked_slider_value, Relevant(value)),
     ));
-    // `TrackedModifier` let you tie a value to an arbitrary modifier. Your component
-    // needs to implement `IntoModify`.
+    // The `"m"` flag let you tie a value to an arbitrary modifier.
+    // Your component needs to implement `IntoModify`.
     commands.spawn((
         SomeBundle {
             foo: 34.0,
             ..default()
         },
-        TrackedModifier("snd_line_color", UserColor(Color::PINK)),
+        track!('m, snd_line_color, UserColor(Color::PINK)),
     ));
 
 
-    // More fancy setups are possible with `Fetcher`s. 
-    let id = commands.spawn(SliderBundle {
-        slider: Slider(value),
-        ..default()
-    }).id();
-    commands.add(AddEntityFetcher {
-        entity: id,
-        fetch: |s: Slider| Content::from(s.0),
-        target_binding: "entity_slider_value",
-    });
+    // You can also do this with resources. This binds to the name of the type.
+    // You can use `commands.init_tracked_resource` for default resources.
+    commands.insert_tracked_resource(PlayerCount(10));
 
-    // from name
-    commands.spawn((
-        Name::new("slider entity"),
-        SliderBundle {
-            slider: Slider(value),
-            ..default()
-        }
-    ));
-    commands.add(AddNamedFetcher {
-        entity_name: "slider entity",
-        fetch: |s: Slider| Content::from(s.0),
-        target_binding: "named_slider_value",
-    });
-
-    // You can also do this with resources
-    commands.insert_resource(PlayerCount(10));
-    commands.add(AddResourceFetcher {
-        fetch: |s: PlayerCount| Content::from(s.0),
-        target_binding: "player_count",
-    });
+    // Works with `Modify` resources as well.
+    commands.insert_modify_resource(LineColor(Color::RED));
 
     // Rich text will automatically be updated.
     commands.spawn(RichTextBundle::parse(
-        "Player count: {player_count}\n\
+        "Player count: {$PlayerCount}\n\
         {color:$snd_line_color|slider value for name: {named_slider_value}}\n\
         slider value for entity: {entity_slider_value}\n\
-        slider value for from DebugTracked: {debug_tracked_slider_value}\n\
+        {color:$LineColor|slider value for from DebugTracked: {debug_tracked_slider_value}}\n\
         slider from tracked: {tracked_slider_value}",
         TextStyle {
             font: asset_server.load("fonts/FiraSans-Bold.ttf"),

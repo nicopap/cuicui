@@ -9,6 +9,9 @@ use crate::gold_hash::GoldMap;
 
 /// A Boxed [`Modify`] trait object, with all necessary bounds to make it work
 /// with bevy's [`Resource`] and [`Component`] types.
+///
+/// [`Resource`]: bevy::prelude::Resource
+/// [`Component`]: bevy::prelude::Component
 pub type ModifyBox = Box<dyn Modify + Send + Sync + 'static>;
 
 pub type Modifiers = GoldMap<TypeId, ModifyBox>;

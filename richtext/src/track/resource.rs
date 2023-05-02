@@ -29,6 +29,10 @@ impl Tracker {
     }
 }
 
+/// Keeps track of resources that should be tracked.
+///
+/// Used in [`update_tracked_resources`] to update [`WorldBindings`] with the
+/// content of tracked resources.
 #[derive(Resource, Default)]
 pub struct ResTrackers(Vec<Tracker>);
 
@@ -110,7 +114,7 @@ pub trait AppResourceTrackerExt {
     }
     /// Initialize a [`Resource`] with standard starting value,
     /// and bind its [`IntoModify`] value to the [`get_short_name`] of its type.
-    fn init_tracked_modifier<R: Typed + Resource + FromWorld + IntoModify + Clone>(
+    fn init_modify_resource<R: Typed + Resource + FromWorld + IntoModify + Clone>(
         &mut self,
     ) -> &mut Self {
         let fetch: FetchBox =
@@ -119,7 +123,7 @@ pub trait AppResourceTrackerExt {
     }
     /// Inserts a [`Resource`] with provided value,
     /// and bind its [`IntoModify`] value to the [`get_short_name`] of its type.
-    fn insert_tracked_modifier<R: Typed + Resource + IntoModify + Clone>(
+    fn insert_modify_resource<R: Typed + Resource + IntoModify + Clone>(
         &mut self,
         resource: R,
     ) -> &mut Self {

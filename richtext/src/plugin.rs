@@ -202,7 +202,7 @@ pub fn update_text(
     }
 }
 
-/// Plugin to update bevy [`Text`] component based on [`GlobalRichTextBindings`]
+/// Plugin to update bevy [`Text`] component based on [`WorldBindings`]
 /// and [`RichTextData`] content.
 pub struct RichTextPlugin;
 impl Plugin for RichTextPlugin {
