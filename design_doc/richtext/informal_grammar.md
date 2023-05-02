@@ -7,25 +7,25 @@
 scope = '{' inner '}' | '(' inner ')' | '[' inner ']'
 semi_exposed = <text∌()[]{}>
 inner = semi_exposed [scope semi_exposed]*
-exposed = <text∌([{},|>
+exposed = <text∌([{}|,>
 balanced_text = exposed [scope exposed]*
 
 key = <ident>
 open_subsection = <text∌{}>
 open_section = <text∌{>
-closed_element = key ':' metadata
-bare_content = open_subsection [close_section open_subsection]*
 close_section = '{' closed '}'
+closed_element = key ':' metadata
 closed = <ident> | [closed_element],* ['|' bare_content]?
-metadata = '$' <ident> | balanced_text
+metadata = '$' [<ident>]? | balanced_text
+bare_content = open_subsection [close_section open_subsection]*
 rich_text = open_section [close_section open_section]*
 ```
 
 Rich text is composed of N sections.
 Sections are a collection of metadatas plus some content.
 Metadatas are values associated with some `key`.
-If the section is just an identifer between braces (`{like_this}`) 
-hen it is *dynamic* `content`.
+If the section is just an identifer between braces (`{like_this}`),
+then it is *dynamic* `content`.
 If the metadata value is a `$` followed by an identifer, then it is *dynamic*.
 *Dynamic* metadata can be set and updated at runtime by the user.
 

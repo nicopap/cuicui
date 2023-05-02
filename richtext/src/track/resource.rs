@@ -1,6 +1,6 @@
-use std::fmt;
+use std::{fmt, marker::PhantomData};
 
-use bevy::{prelude::*, reflect::Typed, utils::get_short_name};
+use bevy::{ecs::system::Command, prelude::*, reflect::Typed, utils::get_short_name};
 
 use super::{some_content, FetchBox};
 use crate::{plugin::WorldBindings, IntoModify};
@@ -16,12 +16,50 @@ pub fn update_tracked_resources(world: &mut World) {
     })
 }
 
-pub(super) struct Tracker {
-    pub(super) binding_name: &'static str,
-    pub(super) fetch: FetchBox,
+// TODO(feat): probably worthwhile to make this public
+struct Tracker {
+    binding_name: &'static str,
+    fetch: FetchBox,
 }
+impl Tracker {
+    fn new<R: Typed>(fetch: FetchBox) -> Self {
+        let binding_name = get_short_name(<R as Typed>::type_info().type_name()).into_boxed_str();
+        // TODO(perf): leaky
+        Self { binding_name: Box::leak(binding_name), fetch }
+    }
+}
+
 #[derive(Resource, Default)]
-pub struct ResTrackers(pub(super) Vec<Tracker>);
+pub struct ResTrackers(Vec<Tracker>);
+
+struct SetupResTracker<R: Resource> {
+    tracker: Tracker,
+    resource: R,
+}
+impl<R: Resource> Command for SetupResTracker<R> {
+    fn write(self, world: &mut World) {
+        let Self { tracker, resource } = self;
+        let mut trackers = world.get_resource_or_insert_with(ResTrackers::default);
+        trackers.0.push(tracker);
+        world.insert_resource(resource);
+    }
+}
+struct SetupInitResTracker<R: Resource + FromWorld> {
+    tracker: Tracker,
+    _r: PhantomData<R>,
+}
+impl<R: Typed + Resource + FromWorld> SetupInitResTracker<R> {
+    fn new(fetch: FetchBox) -> Self {
+        Self { tracker: Tracker::new::<R>(fetch), _r: PhantomData }
+    }
+}
+impl<R: Resource + FromWorld> Command for SetupInitResTracker<R> {
+    fn write(self, world: &mut World) {
+        let mut trackers = world.get_resource_or_insert_with(ResTrackers::default);
+        trackers.0.push(self.tracker);
+        world.init_resource::<R>();
+    }
+}
 
 /// [`App`] extension to add [`Resource`]s which value are kept in sync with
 /// [`WorldBindings`].
@@ -104,14 +142,8 @@ impl AppResourceTrackerExt for App {
         &mut self,
         fetch: FetchBox,
     ) -> &mut Self {
-        let mut trackers = self.world.get_resource_or_insert_with(ResTrackers::default);
-        let name = get_short_name(<R as Typed>::type_info().type_name());
-        trackers.0.push(Tracker {
-            // TODO(perf): hue, probably need to store a String or smth
-            binding_name: Box::leak(name.into_boxed_str()),
-            fetch,
-        });
-        self.init_resource::<R>()
+        SetupInitResTracker::<R>::new(fetch).write(&mut self.world);
+        self
     }
 
     fn insert_resource_with_fetch<R: Typed + Resource>(
@@ -119,13 +151,26 @@ impl AppResourceTrackerExt for App {
         resource: R,
         fetch: FetchBox,
     ) -> &mut Self {
-        let mut trackers = self.world.get_resource_or_insert_with(ResTrackers::default);
-        let name = get_short_name(<R as Typed>::type_info().type_name());
-        trackers.0.push(Tracker {
-            // TODO(perf): hue, probably need to store a String or smth
-            binding_name: Box::leak(name.into_boxed_str()),
-            fetch,
-        });
-        self.insert_resource(resource)
+        let setup = SetupResTracker { tracker: Tracker::new::<R>(fetch), resource };
+        setup.write(&mut self.world);
+        self
+    }
+}
+impl AppResourceTrackerExt for Commands<'_, '_> {
+    fn init_resource_with_fetch<R: Typed + Resource + FromWorld>(
+        &mut self,
+        fetch: FetchBox,
+    ) -> &mut Self {
+        self.add(SetupInitResTracker::<R>::new(fetch));
+        self
+    }
+
+    fn insert_resource_with_fetch<R: Typed + Resource>(
+        &mut self,
+        resource: R,
+        fetch: FetchBox,
+    ) -> &mut Self {
+        self.add(SetupResTracker { tracker: Tracker::new::<R>(fetch), resource });
+        self
     }
 }

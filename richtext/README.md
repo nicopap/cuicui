@@ -87,6 +87,9 @@ example_text.set_content("light_type", light_type);
 This line {color: blue |contains} multiple {size: 3.0, font: bold.ttf |sections}
 ```
 
+| 📝 The grammar of the format string is [available here][fs-grammar] | 
+|---------------------------------------------------------------------|
+
 Rich text is a bevy plugin to simplify text management in bevy. It can be thought
 as 3 modules:
 
@@ -486,6 +489,7 @@ which returns a `Box<dyn Modify>` of itself.
 [bui_bits]: https://github.com/septum/bevy_ui_bits
 [`fmt`]: https://doc.rust-lang.org/stable/std/fmt/index.html
 [`Color`]: https://docs.rs/bevy/latest/bevy/prelude/enum.Color.html
+[fs-grammar]: https://github.com/devildahu/bevy_mod_cuicui/blob/main/design_doc/richtext/informal_grammar.md
 
 ## TODO
 
