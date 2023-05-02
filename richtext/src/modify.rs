@@ -1,11 +1,11 @@
-use std::{any::Any, any::TypeId, fmt};
+use std::{any::type_name, any::Any, any::TypeId, fmt};
 
 use bevy::{
     prelude::{Font, Handle, TextSection, TextStyle},
     utils::HashMap,
 };
 
-use crate::gold_hash::GoldMap;
+use crate::{gold_hash::GoldMap, short_name::short_name};
 
 /// A Boxed [`Modify`] trait object, with all necessary bounds to make it work
 /// with bevy's [`Resource`] and [`Component`] types.
@@ -71,7 +71,7 @@ impl IntoModify for ModifyBox {
 /// ```
 ///
 /// [`Section`]: crate::Section
-pub trait Modify {
+pub trait Modify: Any {
     /// Apply this modifier to the `text`, given a [`Context`].
     ///
     /// Note that the order of application of modifiers in [`RichText`] is
@@ -86,6 +86,31 @@ pub trait Modify {
     fn as_any(&self) -> &dyn Any;
     fn eq_dyn(&self, other: &dyn Modify) -> bool;
     fn debug_dyn(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
+
+    // TODO(feat): custom `Modify` for parsing
+    /// **UNUSED** this doc string is purely prospective.
+    ///
+    /// The name to use when parsing metadata in [`RichText::parse`].
+    ///
+    /// **This must be formatted as an identifier** (ie: `[:alpha:_][:alphanum:_]*`).
+    /// Otherwise, the [`RichText::parse`]-ing will not pick up your modifier.
+    ///
+    /// By default, this is the name of your type.
+    ///
+    /// The default implementation should cause a compile time error if `Self`
+    /// has generic parameters. In which case, you should provide your own
+    /// implementation.
+    ///
+    /// You may overwrite this method regardless, as long as the return value
+    /// is an identifier.
+    #[inline]
+    fn name() -> &'static str
+    where
+        Self: Sized,
+    {
+        short_name(type_name::<Self>())
+    }
+    // fn parse(input: &str) -> Result<Self, ???> where Self: Sized;
 }
 impl PartialEq for dyn Modify {
     fn eq(&self, other: &Self) -> bool {

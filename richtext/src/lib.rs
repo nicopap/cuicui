@@ -102,6 +102,7 @@
 //! [the README]: https://github.com/devildahu/bevy_mod_cuicui/tree/main/richtext
 
 mod gold_hash;
+mod short_name;
 
 /// Provided implementations for the [`Modify`] trait for cuicui.
 pub mod modifiers;

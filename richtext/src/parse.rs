@@ -240,8 +240,6 @@ mod tests {
         let incomplete = [
             ("foo , bar", ", bar"),
             (",", ","),
-            // ('(', ""),
-            // ("foo ( bar", ""),
             ("foo | bar", "| bar"),
             (r#"foo \, , bar"#, ", bar"),
             (r#"foo , \, bar"#, r#", \, bar"#),

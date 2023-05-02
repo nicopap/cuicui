@@ -1,7 +1,7 @@
 # Parsing grammar for rich text 
 
 ```
-<ident>: "identifier respecting rust's identifier rules"
+<ident>: [:alpha:_][:alphanum:_]* "identifier respecting rust's identifier rules"
 <text∌FOO>: "text that doesn't contain FOO, unless prefixed by backslash `\`
              may be empty"
 scope = '{' inner '}' | '(' inner ')' | '[' inner ']'

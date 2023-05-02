@@ -430,35 +430,13 @@ impl IntoModify for UserColor {
 }
 ```
 
-
-
-### Custom modifiers
-
-`Modify` is a rust trait, sections store a `HashMap<TypeId, Box<dyn Modify>>`,
-meaning that each section can have multiple types of modifiers, but at most one of each.
-
-Since it is a public trait, users may add their own `Modify` type.
-Since rich text relies on runtime reflection,
-you must register your custom modifiers to be able to use them.
-
-`Modify` has the methods `name` and `parse`.
-In the section's modifiers segment the _`key`_ matches the `Modify::name`
-of a registered modifier. The _`value`_ is passed to `parse`,
-which returns a `Box<dyn Modify>` of itself.
-
-
 ## Future work
 
 - [`bevy_ui_bits`][bui_bits] has cool *embossed* text and preset size constants.
 - It should be possible to write a macro for parsing the specification string
   at compile time
-- Better API: typically you'd want `Context` to be a `Res`
 - Better API: something similar to bevy's label for the binding context, so
   that typos are caught at compile time.
-- Better API: provide a system to automatically update the bevy `Text`.
-- Provide adaptors that makes use of a (`Entity`, `ComponentId`, `ReflectPath`)
-  tuple to read directly from ECS data, instead of forcing user to update
-  themselves the text value.
 
 ## Previous work
 
