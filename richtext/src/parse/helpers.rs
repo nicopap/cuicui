@@ -10,13 +10,13 @@ use super::color;
 use crate::{modifiers::Content, modifiers::Dynamic, Modifiers, ModifyBox, RichText, Section};
 
 #[derive(Error, Debug)]
-pub enum Error<'a> {
-    #[error("{0}")]
+pub enum Error {
+    #[error(transparent)]
     ColorParse(#[from] color::Error),
-    #[error("{0}")]
+    #[error(transparent)]
     FloatParse(#[from] ParseFloatError),
     #[error("Tried to use an unregistered modifier: {0}")]
-    UnknownModifier(&'a str),
+    UnknownModifier(String),
     #[error(
         "Both a trailing content section and a modifier declaration \
         content exist in section, those are mutually exclusive"
@@ -27,7 +27,7 @@ pub enum Error<'a> {
     ModifierShadowing(TypeId),
 }
 
-pub(super) type Result<'a, T> = std::result::Result<T, Error<'a>>;
+pub(super) type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub(super) struct Sections(pub(super) Vec<Section>);
@@ -145,7 +145,7 @@ pub(super) fn elements_and_content(
         "color" => Ok(TypeId::of::<Color>()),
         "size" => Ok(TypeId::of::<RelSize>()),
         "content" => Ok(TypeId::of::<Content>()),
-        key => Err(Error::UnknownModifier(key)),
+        key => Err(Error::UnknownModifier(key.into())),
     };
     let static_modifier = |key, value: Cow<str>| -> Result<ModifyBox> {
         match key {
@@ -153,7 +153,7 @@ pub(super) fn elements_and_content(
             "color" => Ok(Box::new(Color(color::parse(&value)?))),
             "size" => Ok(Box::new(RelSize(value.parse()?))),
             "content" => Ok(Box::new(Content(value.into_owned().into()))),
-            key => Err(Error::UnknownModifier(key)),
+            key => Err(Error::UnknownModifier(key.into())),
         }
     };
     let modifier_value = |key, mut value: ModifierValue| -> Result<ModifyBox> {
@@ -169,7 +169,7 @@ pub(super) fn elements_and_content(
         "content" => Ok(TypeId::of::<Content>()),
         "size" => Ok(TypeId::of::<RelSize>()),
         "color" => Ok(TypeId::of::<Color>()),
-        key => Err(Error::UnknownModifier(key)),
+        key => Err(Error::UnknownModifier(key.into())),
     };
 
     let mut modifiers = Modifiers::default();

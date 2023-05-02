@@ -495,7 +495,8 @@ which returns a `Box<dyn Modify>` of itself.
 - [X] Use modifier type id for implicit references.
 - [X] Implement ez methods for implicit refs
 - [X] Use a `Resource` context instead of storing it in a `Component`.
-- [ ] Proper error handling when parsing keys/values
+- [X] Proper error handling when parsing keys/values
+- [ ] Text2d support (maybe even _generic_ support)
 - [X] Control a bevy `Text` by manipulating `RichTextData`
 - [X] Provide systems to automatically update `Text` based on `RichTextData`
 - [ ] `Fetcher`s and `Tracker`s

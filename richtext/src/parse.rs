@@ -1,31 +1,23 @@
 //! Parse rich text according to spec
 mod color;
+mod error;
 mod helpers;
 
-use thiserror::Error;
 use winnow::{
     ascii::{alpha1, alphanumeric1, escaped},
     branch::alt,
     combinator::{delimited, opt, preceded, repeat0, separated1, separated_pair},
     token::{one_of, take_till1},
-    IResult, Parser,
+    Parser,
 };
 
 use crate::{RichText, Section};
 use helpers::{elements_and_content, short_dynamic, ws, Element, ModifierValue, Sections};
 
-#[derive(Error, Debug)]
-pub enum Error {
-    #[error(transparent)]
-    WinnowBad(#[from] winnow::error::Error<String>),
-    #[error("trailing content: {0}")]
-    Trailing(String),
-}
-impl From<winnow::error::Error<&'_ str>> for Error {
-    fn from(value: winnow::error::Error<&'_ str>) -> Self {
-        Self::WinnowBad(value.into_owned())
-    }
-}
+/// Parsing error, caused by a poorly formatted format string.
+pub type Error<'a> = error::Parse<&'a str>;
+
+type PResult<'a, O> = winnow::IResult<&'a str, O, Error<'a>>;
 
 // ```
 // <ident>: "identifier respecting rust's identifier rules"
@@ -50,15 +42,14 @@ impl From<winnow::error::Error<&'_ str>> for Error {
 //
 // How to read the following code:
 // Look at the variable names for match with the grammar, they are defined in the same order.
-fn ident(input: &str) -> IResult<&str, &str> {
+fn ident(input: &str) -> PResult<&str> {
     let repeat = repeat0::<_, _, (), _, _>;
     (alt((alpha1, "_")), repeat(alt((alphanumeric1, "_"))))
         .recognize()
-        .context("ident")
         .parse_next(input)
 }
-fn balanced_text(input: &str) -> IResult<&str, &str> {
-    fn scope(input: &str) -> IResult<&str, &str> {
+fn balanced_text(input: &str) -> PResult<&str> {
+    fn scope(input: &str) -> PResult<&str> {
         let semi_exposed = || escaped(take_till1("()[]{}\\"), '\\', one_of("()[]{}|,\\"));
         let repeat = repeat0::<_, _, (), _, _>;
         let inner = || (semi_exposed(), repeat((scope, semi_exposed())));
@@ -68,7 +59,6 @@ fn balanced_text(input: &str) -> IResult<&str, &str> {
             delimited('[', inner(), ']'),
             delimited('(', inner(), ')'),
         ))
-        .context("scope")
         .recognize()
         .parse_next(input)
     }
@@ -76,37 +66,31 @@ fn balanced_text(input: &str) -> IResult<&str, &str> {
 
     let repeat = repeat0::<_, _, (), _, _>;
     (exposed(), repeat((scope, exposed())))
-        .context("balanced_text")
         .recognize()
         .parse_next(input)
 }
-fn open_subsection(input: &str) -> IResult<&str, Option<Section>> {
+fn open_subsection(input: &str) -> PResult<Option<Section>> {
     escaped(take_till1("{}\\"), '\\', one_of("{}\\"))
         .map(Section::opt_from)
-        .context("open_subsection")
         .parse_next(input)
 }
-fn open_section(input: &str) -> IResult<&str, Option<Section>> {
+fn open_section(input: &str) -> PResult<Option<Section>> {
     escaped(take_till1("{\\"), '\\', one_of("{}\\"))
         .map(Section::opt_from)
-        .context("open_section")
         .parse_next(input)
 }
-fn close_section(input: &str) -> IResult<&str, Vec<Section>> {
+fn close_section(input: &str) -> PResult<Vec<Section>> {
     let full_list = (
-        separated1(closed_element, ws(',').context("comma")),
-        opt(preceded(ws('|').context("bar"), bare_content)),
+        separated1(closed_element, ws(',')),
+        opt(preceded(ws('|'), bare_content)),
     );
     let closed = alt((
-        // TODO(err): actually capture error instead of eating it in winnow
-        full_list.map(|t| elements_and_content(t).unwrap()),
+        full_list.try_map(elements_and_content),
         opt(ident).map(short_dynamic),
     ));
-    delimited('{', ws(closed.context("closed")), '}')
-        .context("close_section")
-        .parse_next(input)
+    delimited('{', ws(closed.context("closed")), '}').parse_next(input)
 }
-fn closed_element(input: &str) -> IResult<&str, Element> {
+fn closed_element(input: &str) -> PResult<Element> {
     use ModifierValue as Mod;
 
     // TODO(feat): dynamic tags
@@ -114,27 +98,25 @@ fn closed_element(input: &str) -> IResult<&str, Element> {
 
     let metadata = alt((
         preceded('$', opt(ident)).context("$meta").map(Mod::dyn_opt),
-        balanced_text.map(Mod::statik),
+        balanced_text.context("metadata value").map(Mod::statik),
     ));
-    separated_pair(key, ws(':'), metadata.context("metadata"))
-        .context("closed_element")
+    separated_pair(key, ws(':'), metadata)
         .map(Element::modifier)
         .parse_next(input)
 }
-fn bare_content(input: &str) -> IResult<&str, Sections> {
-    let open = open_subsection;
-    (open, repeat0((close_section, open)))
-        .context("bare_content")
+fn bare_content(input: &str) -> PResult<Sections> {
+    let open_sub = open_subsection;
+    (open_sub, repeat0((close_section, open_sub)))
+        .context("section content")
         .map(Sections::tail)
         .parse_next(input)
 }
-fn rich_text_inner(input: &str) -> IResult<&str, Sections> {
+fn rich_text_inner(input: &str) -> PResult<Sections> {
     (open_section, repeat0((close_section, open_section)))
-        .context("rich_text")
         .map(Sections::tail)
         .parse_next(input)
 }
-pub(super) fn rich_text(input: &str) -> Result<RichText, winnow::error::Error<&str>> {
+pub(super) fn rich_text(input: &str) -> std::result::Result<RichText, Error<'_>> {
     rich_text_inner.map(RichText::from).parse(input)
 }
 
