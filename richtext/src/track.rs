@@ -13,4 +13,4 @@ fn some_content(input: impl std::fmt::Display) -> Option<ModifyBox> {
 }
 
 pub use component::{update_tracked_components, Tracked};
-pub use resource::{update_tracked_resources, AppResourceTrackerExt, ResTrackers};
+pub use resource::{update_tracked_resources, ResTrackers, ResourceTrackerExt};

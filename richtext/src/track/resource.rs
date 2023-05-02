@@ -67,7 +67,7 @@ impl<R: Resource + FromWorld> Command for SetupInitResTracker<R> {
 
 /// [`App`] extension to add [`Resource`]s which value are kept in sync with
 /// [`WorldBindings`].
-pub trait AppResourceTrackerExt {
+pub trait ResourceTrackerExt {
     /// Initialize a [`Resource`] with standard starting value,
     /// and keep track of its value in a rich text content binding.
     ///
@@ -141,7 +141,7 @@ pub trait AppResourceTrackerExt {
         fetch: FetchBox,
     ) -> &mut Self;
 }
-impl AppResourceTrackerExt for App {
+impl ResourceTrackerExt for App {
     fn init_resource_with_fetch<R: Typed + Resource + FromWorld>(
         &mut self,
         fetch: FetchBox,
@@ -160,7 +160,7 @@ impl AppResourceTrackerExt for App {
         self
     }
 }
-impl AppResourceTrackerExt for Commands<'_, '_> {
+impl ResourceTrackerExt for Commands<'_, '_> {
     fn init_resource_with_fetch<R: Typed + Resource + FromWorld>(
         &mut self,
         fetch: FetchBox,

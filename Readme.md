@@ -1,6 +1,7 @@
 # Beyv Cuicui
 
-> ❗**THIS IS A WIP, MOST FEATURES ARE NOT IMPLEMENTED YET, SEE TODO** ❗
+| ❗ **THIS IS A WIP, MOST FEATURES ARE NOT IMPLEMENTED YET, SEE TODO** ❗ |
+|--------------------------------------------------------------------------|
 
 A quick and dirty UI lib for bevy built on bevy's excellent 2d primitives.
 

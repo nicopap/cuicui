@@ -16,7 +16,7 @@ pub type ModifyBox = Box<dyn Modify + Send + Sync + 'static>;
 
 pub type Modifiers = GoldMap<TypeId, ModifyBox>;
 
-/// Turn any type into a [modifier](ModifyBox).
+/// Turn a type into a boxed [`Modify`] trait object.
 pub trait IntoModify {
     fn into_modify(self) -> ModifyBox;
 }
@@ -33,20 +33,55 @@ impl IntoModify for ModifyBox {
 
 /// A [`TextSection`] modifier.
 ///
-/// A [`TextSection`] may have an arbitary number of `Modify`s, modifying
+/// A rich text [`Section`] may have an arbitary number of `Modify`s, modifying
 /// the styling and content of a given section.
+///
+/// # Implementing `Modify`
+///
+/// You can create your own modifiers, the `clone_dyn`, `as_any`, `eq_dyn` and
+/// `debug_dyn` cannot be implemented at the trait level due to rust's trait object
+/// rules, but they should all look similar.
+///
+/// The `apply` method is what should be interesting for you.
+///
+/// ```rust
+/// use std::{any::Any, fmt};
+/// use bevy::prelude::*;
+/// use cuicui_richtext::modify::{Modify, Context, ModifyBox};
+///
+/// #[derive(Debug, PartialEq, Clone, Copy)]
+/// struct SetExactFontSize(f32);
+///
+/// impl Modify for SetExactFontSize {
+///
+///     /// Set the size of the text.
+///     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()> {
+///         text.style.font_size = self.0;
+///         Some(())
+///     }
+///     fn clone_dyn(&self) -> ModifyBox { Box::new(self.clone()) }
+///     fn as_any(&self) -> &dyn Any { self }
+///     fn debug_dyn(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{self:?}") }
+///     fn eq_dyn(&self, other: &dyn Modify) -> bool {
+///         let any = other.as_any();
+///         let Some(right) = any.downcast_ref::<Self>() else { return false; };
+///         self == right
+///     }
+/// }
+/// ```
+///
+/// [`Section`]: crate::Section
 pub trait Modify {
+    /// Apply this modifier to the `text`, given a [`Context`].
+    ///
+    /// Note that the order of application of modifiers in [`RichText`] is
+    /// **unspecified**, so you need to make sure your [`Modify`] is
+    /// order-independent.
+    ///
+    /// [`RichText`]: crate::RichText
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()>;
 
     // TODO(perf): See design_doc/richtext/better_section_impl.md.
-    /// Clone the value as a trait object.
-    ///
-    /// The following implementation should work:
-    /// ```ignore
-    /// fn clone_dyn(&self) -> super::ModifyBox {
-    ///     Box::new(self.clone())
-    /// }
-    /// ```
     fn clone_dyn(&self) -> ModifyBox;
     fn as_any(&self) -> &dyn Any;
     fn eq_dyn(&self, other: &dyn Modify) -> bool;

@@ -1,4 +1,3 @@
-//! Default implementations of the [`Modify`] trait for cuicui.
 use std::{any::Any, any::TypeId, borrow::Cow, fmt};
 
 use bevy::prelude::{FromReflect, Reflect, TextSection};

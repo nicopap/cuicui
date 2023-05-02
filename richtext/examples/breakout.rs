@@ -11,9 +11,7 @@ use bevy::{
     sprite::MaterialMesh2dBundle,
     utils::HashMap,
 };
-use cuicui_richtext::{
-    track, AppResourceTrackerExt, RichTextBundle, RichTextPlugin, WorldBindings,
-};
+use cuicui_richtext::{track, ResourceTrackerExt, RichTextBundle, RichTextPlugin, WorldBindings};
 
 const TIME_STEP: f32 = 1.0 / 60.0;
 

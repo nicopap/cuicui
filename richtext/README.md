@@ -6,6 +6,9 @@ to individually separate sections and manually update content.
 Ideally we should be using a "template string" both to specify the style and
 what to put in the content, ideally update it seemlessly.
 
+| 📝 [Read a shorter intro][docsrs-root] | 
+|----------------------------------------|
+
 ### Current
 
 ```rust
@@ -76,7 +79,6 @@ commands.spawn(RichText::parse(instructions, style).unwrap());
 // ...
 
 let light_type =  if point_light { "PointLight" } else { "DirectionalLight" };
-set_richtext_content!(example_text, light_type);
 // without macro:
 example_text.set_content("light_type", light_type);
 ```
@@ -87,8 +89,8 @@ example_text.set_content("light_type", light_type);
 This line {color: blue |contains} multiple {size: 3.0, font: bold.ttf |sections}
 ```
 
-| 📝 The grammar of the format string is [available here][fs-grammar] | 
-|---------------------------------------------------------------------|
+| 📝 [Read the format string grammar][fs-grammar] | 
+|-------------------------------------------------|
 
 Rich text is a bevy plugin to simplify text management in bevy. It can be thought
 as 3 modules:
@@ -367,7 +369,7 @@ fn setup(mut commands: Commands) {
         },
         track!(tracked_slider_value, Slider(value)),
     ));
-    // You can use the `"d"` flag if you want to derive `Debug` and not have to
+    // You can use the `'d` flag if you want to derive `Debug` and not have to
     // manually implement Display
     commands.spawn((
         SomeBundle {
@@ -376,7 +378,7 @@ fn setup(mut commands: Commands) {
         },
         track!('d, debug_tracked_slider_value, Relevant(value)),
     ));
-    // The `"m"` flag let you tie a value to an arbitrary modifier.
+    // The `'m` flag let you tie a value to an arbitrary modifier.
     // Your component needs to implement `IntoModify`.
     commands.spawn((
         SomeBundle {
@@ -466,9 +468,23 @@ which returns a `Box<dyn Modify>` of itself.
 [`fmt`]: https://doc.rust-lang.org/stable/std/fmt/index.html
 [`Color`]: https://docs.rs/bevy/latest/bevy/prelude/enum.Color.html
 [fs-grammar]: https://github.com/devildahu/bevy_mod_cuicui/blob/main/design_doc/richtext/informal_grammar.md
+[docsrs-root]: https://docs.rs/cuicui_richtext/latest/cuicui_richtext/
 
 ## TODO
 
+- [ ] Documentation
+    - [ ] Instructions on how to add richtext to your project (but avoid explicitly naming version,
+          or use a crate to maintain it)
+    - [ ] This time, the README is different from the crate root's doc string, so we need to check
+          the code listings manually
+    - [ ] Important items:
+        - [ ] `RichTextPlugin`
+        - [ ] `RichText`
+        - [ ] `RichText::parse`
+        - [ ] `RichTextData`
+        - [ ] `RichText::set`-family
+        - [X] `modify` module
+        - [X] crate root.
 - [X] Define and verify a grammar for defining rich text through a string
       like rust's format macro.
 - [X] Control by name the content of sections
@@ -488,7 +504,6 @@ which returns a `Box<dyn Modify>` of itself.
   - [ ] `TrackReflect`
   - [X] resource tracker
   - [ ] Reflection-based resource tracker (useful for config resources)
-  - [ ] (unsure) Fetch commands
 - [X] Refactor
   - [X] extract richtext into separate crate
   - [X] Reorganize modules: `trackers`, `modify` (trait) `modifiers` (impls)
@@ -501,7 +516,6 @@ which returns a `Box<dyn Modify>` of itself.
 - [ ] Custom `Modify`, registration, name, parse
 - [ ] Extract `Modify<T>` to be generic over what it modifies
       + `Context` as associated type of `T` most likely.
-- [ ] (unsure) better error messages
-- [ ] (unsure) generalize this to widges, to create a prefab system
+- [ ] (unsure) better format string error messages
 - [ ] (unsure) Allow compile-time verification of rich text spec through a
       proc macro

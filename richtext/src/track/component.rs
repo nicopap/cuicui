@@ -49,15 +49,14 @@ use crate::{plugin::WorldBindings, IntoModify, ModifyBox};
 /// # struct Slider(f32);
 /// #
 /// # #[derive(Bundle, Default)]
-/// # struct SliderBundle {
+/// # struct NonsliderBundle {
 /// #     max: MaxValue,
 /// #     min: MinValue,
-/// #     slider: Slider,
 /// # }
 /// fn setup(mut commands: Commands) {
 ///     let value = 11.0;
 ///     commands.spawn((
-///         SliderBundle { max: MaxValue(34.0), ..default() },
+///         NonsliderBundle { max: MaxValue(34.0), ..default() },
 ///         track!('d, slider, Slider(value)),
 ///     ));
 /// }
@@ -65,7 +64,6 @@ use crate::{plugin::WorldBindings, IntoModify, ModifyBox};
 ///
 /// Note that if the component you want to track is already part of a bundle,
 /// you can work around it by inserting the tracked version afterward.
-///
 ///
 /// ```
 /// use bevy::prelude::*;
