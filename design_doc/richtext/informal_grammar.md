@@ -10,16 +10,19 @@ inner = semi_exposed [scope semi_exposed]*
 exposed = <text∌([{}|,>
 balanced_text = exposed [scope exposed]*
 
+path = [:alphanum:_.]+
 key = <ident>
 open_subsection = <text∌{}>
 open_section = <text∌{>
 close_section = '{' closed '}'
 closed_element = key ':' metadata
 closed = <ident> | [closed_element],* ['|' bare_content]?
-metadata = '$' [<ident>]? | balanced_text
+metadata = '$' [path]? | balanced_text
 bare_content = open_subsection [close_section open_subsection]*
 rich_text = open_section [close_section open_section]*
 ```
+
+TODO(feat): `balanced_text` should support quoting, for format strings.
 
 Rich text is composed of N sections.
 Sections are a collection of metadatas plus some content.

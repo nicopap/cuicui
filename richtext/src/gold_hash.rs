@@ -1,3 +1,5 @@
+//! Hashing and hashmaps based on the golden ratio, also known as Fibonacci Hashing.
+
 use std::hash::{BuildHasher, Hasher};
 
 use bevy::utils::hashbrown;
@@ -17,8 +19,7 @@ impl BuildHasher for GoldHash {
 }
 
 /// The golden ratio
-const PHI: f64 = 1.618033988749895;
-const UPHI: u64 = ((u64::MAX as f64) / PHI) as u64 - 1;
+const UPHI: u64 = 11400714819323198485; // u64::MAX / PHI
 const SHIFT: u32 = 32;
 
 /// A hash that only works on `u64`s, multiplying by the golden ratio.

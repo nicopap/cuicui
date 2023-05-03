@@ -480,9 +480,11 @@ impl IntoModify for UserColor {
 - [ ] `Fetcher`s and `Tracker`s
   - [X] `Tracked`
   - [X] `DebugTracked`
-  - [ ] `TrackReflect`
   - [X] resource tracker
-  - [ ] Reflection-based resource tracker (useful for config resources)
+- [ ] Reflection handling
+    - [ ] "Pull bindings" format string decides what to read rather than `tracker`s
+    - [ ] namespaced binding -> Require update to grammar.
+    - [ ] Reflection for user-defined display options.
 - [X] Refactor
   - [X] extract richtext into separate crate
   - [X] Reorganize modules: `trackers`, `modify` (trait) `modifiers` (impls)

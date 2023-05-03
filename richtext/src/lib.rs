@@ -102,16 +102,13 @@
 //! [the README]: https://github.com/devildahu/bevy_mod_cuicui/tree/main/richtext
 
 mod gold_hash;
-mod short_name;
-
-/// Provided implementations for the [`Modify`] trait for cuicui.
 pub mod modifiers;
-
-/// Traits and structs related to the [`Modify`] trait.
 pub mod modify;
-
 mod parse;
 mod plugin;
+mod pull;
+mod short_name;
+mod show;
 pub mod track;
 
 use std::any::TypeId;

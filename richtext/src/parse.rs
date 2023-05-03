@@ -7,7 +7,7 @@ use winnow::{
     ascii::{alpha1, alphanumeric1, escaped},
     branch::alt,
     combinator::{delimited, opt, preceded, repeat0, separated1, separated_pair},
-    token::{one_of, take_till1},
+    token::{one_of, take_till1, take_while1},
     Parser,
 };
 
@@ -29,19 +29,23 @@ type PResult<'a, O> = winnow::IResult<&'a str, O, Error<'a>>;
 // exposed = <text∌([{}|,>
 // balanced_text = exposed [scope exposed]*
 //
+// path = [:alphanum:_.]+
 // key = <ident>
 // open_subsection = <text∌{}>
 // open_section = <text∌{>
 // close_section = '{' closed '}'
 // closed_element = key ':' metadata
 // closed = <ident> | [closed_element],* ['|' bare_content]?
-// metadata = '$' [<ident>]? | balanced_text
+// metadata = '$' [path]? | balanced_text
 // bare_content = open_subsection [close_section open_subsection]*
 // rich_text = open_section [close_section open_section]*
 // ```
 //
 // How to read the following code:
 // Look at the variable names for match with the grammar, they are defined in the same order.
+fn path(input: &str) -> PResult<&str> {
+    take_while1(('a'..='z', 'A'..='Z', '0'..='9', "_.")).parse_next(input)
+}
 fn ident(input: &str) -> PResult<&str> {
     let repeat = repeat0::<_, _, (), _, _>;
     (alt((alpha1, "_")), repeat(alt((alphanumeric1, "_"))))
@@ -97,7 +101,7 @@ fn closed_element(input: &str) -> PResult<Element> {
     let key = ident.context("key");
 
     let metadata = alt((
-        preceded('$', opt(ident)).context("$meta").map(Mod::dyn_opt),
+        preceded('$', opt(path)).context("$meta").map(Mod::dyn_opt),
         balanced_text.context("metadata value").map(Mod::statik),
     ));
     separated_pair(key, ws(':'), metadata)

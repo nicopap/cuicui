@@ -1,3 +1,5 @@
+//! Traits and structs related to the [`Modify`] trait.
+
 use std::{any::type_name, any::Any, any::TypeId, fmt};
 
 use bevy::{
