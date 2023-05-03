@@ -89,3 +89,58 @@ All the following strings should result in an error:
 ```
 {some, text, with comma}
 ```
+
+## Why a custom markup language?
+
+### Why not HTML
+
+- HTML is **HARD** to parse. It is an evolved markup language, it formalizes
+  parsing quirks of browser versions from several decades ago.
+  This means you are either doing **fake HTML**: breaking users' expectation
+  with your quirky parser or pull in a **massive dependency** that solves the
+  thousands of edge cases you have to consider when parsing HTML.
+- If you opt for the fake HTML route, you force your users to keep in mind at all
+  time what differences your markup has with HTML, what they can and cannot do.
+  With a clearly distinct markup language, you don't have to adjust expectations.
+- HTML is associated with web technologies. Providing HTML implicitly tells our
+  users the names of attributes to use, what they are capable of, what they do.
+  We will necessarily break those implicit promises in cuicui, so we should not
+  make them.
+  \
+  Take the example of the `<br>` element. Should I do with that?
+  Interpret it as a line break? Why not let the user add a line break to their
+  input string instead?
+  \
+  And this isn't to mention stuff like the `style` or `onclick` attributes.
+
+Overall, we are trying to solve a different problem than what HTML is solving.
+We just want to display some text with basic styling in bevy,
+HTML is not appropriate for that.
+
+### Why cuicui_richtext's markup language
+
+The markup language wasn't designed as a paragon of language design perfection,
+in fact, you could say it wasn't designed at all!
+
+But it works and is the perfect fit for the rich text format string.
+
+Unlike HTML, our markup language is not widely known, people aren't already
+familiar with it. However, this is a non-issue.
+
+In fact, people _are_ already familiar with it:
+
+- If you've seen JSON before, you understand the concept of
+  `a series {of: key, values: within|brackets}`.
+- Previous HTML familiarity helps understand distinction
+  `{between: attributes|and text}`.
+- It also `helps {understand:nested|collections{of:content|that}follow each} other`
+- The only trully new and "weird" bit are empty bindings and the `|` to
+  start an inline text section.
+- If you have a math background, you've already seen `{predicate|declaration}`
+
+I hope cuicui's markup is less complex than HTML.
+
+- Unlike XML, people feel the need to close opened "nodes" by using `}`.
+- metadata is consistent, and always declared at the same position.
+
+So I've no doubt people will be able to pick it up quickly.
