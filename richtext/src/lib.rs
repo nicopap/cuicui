@@ -88,14 +88,14 @@
 //!
 //!     // Rich text will automatically be updated.
 //!     commands.spawn(RichTextBundle::parse(
-//!         "{color:$DeathLineColor|Death count: {DeathCount}}\n\
+//!         "{Color:$DeathLineColor|Death count: {DeathCount}}\n\
 //!         slider1 value: {slider1}\n\
 //!         slider2 debug text: {slider2}",
 //!         TextStyle {
 //!             font: asset_server.load("fonts/FiraSans-Bold.ttf"),
 //!             ..default()
 //!         },
-//!     ));
+//!     ).unwrap());
 //! }
 //! ```
 //!
@@ -106,27 +106,25 @@ pub mod modifiers;
 pub mod modify;
 mod parse;
 mod plugin;
-mod pull;
+// mod pull;
 mod short_name;
-mod show;
+// mod show;
 pub mod track;
 
 use std::any::TypeId;
 
-use bevy::prelude::{Text, TextSection};
+use bevy::prelude::{warn, Text, TextSection};
 
 use modifiers::Dynamic;
+use parse::interpret;
 
-pub use modify::{IntoModify, Modifiers, Modify, ModifyBox};
-pub use parse::Error as ParseError;
+pub use modify::{AnyError, IntoModify, Modifiers, Modify, ModifyBox};
 pub use plugin::{RichTextBundle, RichTextData, RichTextPlugin, WorldBindings};
 pub use track::{ResTrackers, ResourceTrackerExt, Tracked};
 
 // TODO(perf): See design_doc/richtext/better_section_impl.md
 // TODO(perf): should have change tracking (might require internal mutability)
 // to be precise and extremely limited about what we update.
-// TODO(clean): should separate Content from other modifiers, since there is always
-// exactly one per section (I kept it as Modifier because I can re-use Dynamic)
 #[derive(PartialEq, Debug, Default)]
 pub struct Section {
     modifiers: Modifiers,
@@ -164,8 +162,9 @@ impl RichText {
     /// Default cuicui rich text parser. Using a syntax inspired by rust's `format!` macro.
     ///
     /// See [rust doc](https://doc.rust-lang.org/stable/std/fmt/index.html).
-    pub fn parse(input: &str) -> Result<Self, ParseError<'_>> {
-        parse::rich_text(input)
+    pub fn parse(input: &str) -> Result<Self, AnyError> {
+        let ctx = interpret::Context::richtext_defaults();
+        parse::rich_text(ctx, input)
     }
     // TODO(text): consider RichText independent from entity, might control several
     pub fn update(&self, to_update: &mut Text, ctx: &modify::Context) {
@@ -178,7 +177,9 @@ impl RichText {
 
         for (to_set, value) in poor.zip(rich) {
             for modifier in value.modifiers.values() {
-                modifier.apply(ctx, to_set);
+                if let Err(err) = modifier.apply(ctx, to_set) {
+                    warn!("error when applying modifiers: {err}");
+                }
             }
         }
     }

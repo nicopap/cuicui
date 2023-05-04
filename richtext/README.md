@@ -11,51 +11,8 @@ what to put in the content, ideally update it seemlessly.
 
 ### Current
 
-```rust
-    let style = TextStyle {
-        font_size: 20.,
-        ..default()
-    };
-    commands.spawn(
-        TextBundle::from_sections([
-            TextSection::new("Controls:\n", style.clone()),
-            TextSection::new("WSAD  - forward/back/strafe left/right\n", style.clone()),
-            TextSection::new("E / Q - up / down\n", style.clone()),
-            TextSection::new(
-                "L     - switch between directional and point lights [",
-                style.clone(),
-            ),
-            TextSection::new("DirectionalLight", style.clone()),
-            TextSection::new("]\n", style.clone()),
-            TextSection::new("1/2   - change point light depth bias [", style.clone()),
-            TextSection::new("0.00", style.clone()),
-            TextSection::new("]\n", style.clone()),
-            TextSection::new("3/4   - change point light normal bias [", style.clone()),
-            TextSection::new("0.0", style.clone()),
-            TextSection::new("]\n", style.clone()),
-            TextSection::new("5/6   - change direction light depth bias [", style.clone()),
-            TextSection::new("0.00", style.clone()),
-            TextSection::new("]\n", style.clone()),
-            TextSection::new(
-                "7/8   - change direction light normal bias [",
-                style.clone(),
-            ),
-            TextSection::new("0.0", style.clone()),
-            TextSection::new("]", style),
-        ])
-        .with_style(Style {
-            position_type: PositionType::Absolute,
-            top: Val::Px(12.0),
-            left: Val::Px(12.0),
-            ..default()
-        }),
-    );
+https://github.com/bevyengine/bevy/blob/22121e69fb4a72bb514d43240df220b8938a1e13/examples/3d/shadow_biases.rs#L107-L141
 
-// ...
-
-let new_text =  if point_light { "PointLight" } else { "DirectionalLight" };
-example_text.single_mut().sections[4].value = new_text.to_string();
-```
 
 ### With cuicui_richtext
 
@@ -130,22 +87,22 @@ Modifiers affect the style of the text for a given section.
 
 The default modifiers are:
 
-- _`color`_: The color of text for this section, supports multiple formats:
+- _`Color`_: The color of text for this section, supports multiple formats:
     - html-style hex: _`#acabac`_
     - css-style function, with 3 arguments or 4 for alpha:
         - _`rgb(u8,u8,u8[,u8]?)`_ (range 0-256)
         - _`rgb(f32,f32,f32[,f32]?)`_ (range 0-1)
         - _`hsl(f32,f32,f23[,f32]?)`_ (ranges [0-360], [0-1], [0-1])
     - named constants, see the bevy [`Color`] for a list of available names
-- _`font`_: A file path in the `assets` directory. You must first load that file
+- _`Font`_: A file path in the `assets` directory. You must first load that file
   and store a `Handle<Font>` to it, otherwise it won't load automatically.
-- _`size`_: Size relative to the root style
+- _`RelSize`_: Size relative to the root style
 
 ```
-Some text {font:bold.ttf|that is bold} and not anymore
-{size:0.5|The next line spells "rainbow" in all the colors of the rainbow}
-{color:red|r}{color:orange|a}{color:yellow|i}{color:green|n}{color:blue|b}{color:indigo|o}{color:violet|w}
-{color: rgb(10,75, 10) | Colors can be} {color: #ab12fa|specified in many} {color: hsl(98.0, 0.9, 0.3)|different ways}
+Some text {Font:bold.ttf|that is bold} and not anymore
+{RelSize:0.5|The next line spells "rainbow" in all the colors of the rainbow}
+{Color:red|r}{Color:orange|a}{Color:yellow|i}{Color:green|n}{Color:blue|b}{Color:indigo|o}{Color:violet|w}
+{Color: rgb(10,75, 10) | Colors can be} {Color: #ab12fa|specified in many} {Color: hsl(98.0, 0.9, 0.3)|different ways}
 ```
 
 Should give (github cuts out the color, so use your imagination):
@@ -167,7 +124,7 @@ Instead of specifying a value in _`value`_ position, you use a _`$`_,
 you can then refer to it from your bevy app.
 
 ```
-Illustration: "{color:$|This color is runtime-updated}"
+Illustration: "{Color:$|This color is runtime-updated}"
 ```
 
 ```rust
@@ -179,7 +136,7 @@ You can also use _`$identifier`_ to give a name to your modifier,
 so you can refer to it later.
 
 ```
-Illustration: "{color:$color1|This color}{color:$color2|is runtime-updated}"
+Illustration: "{Color:$color1|This color}{Color:$color2|is runtime-updated}"
 ```
 
 ```rust
@@ -197,14 +154,14 @@ mandatory in a `Section`.
 TODO: previous paragraph is patently false.
 
 ```
-Some text {color: GREEN|of the green color}.
+Some text {Color: GREEN|of the green color}.
 ```
 
-The text segment of a section does actually specify the _`content`_ modifier.
+The text segment of a section does actually specify the _`Content`_ modifier.
 The next format string is equivalent to the previous one:
 
 ```
-Some text {color: GREEN, content:of the green color}.
+Some text {Color: GREEN, Content:of the green color}.
 ```
 
 ### Dynamic content
@@ -212,7 +169,7 @@ Some text {color: GREEN, content:of the green color}.
 Similarly to other `Modify`s, you can set text content dynamically:
 
 ```
-Some text {color: GREEN, content:$my_content}.
+Some text {Color: GREEN, Content:$my_content}.
 ```
 
 ```rust
@@ -231,7 +188,7 @@ Finally, content can be bound by type, same as other modifiers:
 
 ```
 Some text {} et voilà.
-Some text {color: GREEN, content:$} et voilà.
+Some text {Color: GREEN, Content:$} et voilà.
 ```
 
 ### Nested text segments
@@ -240,7 +197,7 @@ Some text {color: GREEN, content:$} et voilà.
 However, the text segment can contain itself "sub sections".
 
 ```
-Some text {color: GREEN|that is green {font:bold.ttf|and bold {size:3.0|and big}} at the same time}.
+Some text {Color: GREEN|that is green {Font:bold.ttf|and bold {RelSize:3.0|and big}} at the same time}.
 ```
 
 Subsections are flattened into a single flat list.
@@ -263,11 +220,11 @@ This also works with dynamic modifiers.
 
 It is an error to specify a `Modify` in a section and re-set it in a child section.
 
-This doesn't work when _`content`_ is specified as a modifier value:
+This doesn't work when _`Content`_ is specified as a modifier value:
 
 ```
 // I've no idea what this results in, but it's definitively broken
-Some text {color: GREEN,content:that is green {font:bold.ttf|and bold}}.
+Some text {Color: GREEN,content:that is green {Font:bold.ttf|and bold}}.
 ```
 
 You can escape curly brackets with a backslash.
@@ -287,7 +244,7 @@ are a list of *modifiers* aka `Box<dyn Modify>` objects.
 
 ```rust
 pub trait Modify {
-    fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()>;
+    fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError>;
 }
 ```
 
@@ -301,15 +258,19 @@ More precisely:
 
 ```rust
 pub struct Context<'a, 'b> {
-    pub bindings: &'b Bindings,
-    pub parent_style: TextStyle,
-    pub fonts: &'a Assets<Font>,
+    pub registry: Option<&'b TypeRegistry>,
+    pub bindings: Option<&'b Bindings>,
+    pub world_bindings: Option<&'b Bindings>,
+    pub type_bindings: Option<&'b TypeBindings>,
+    pub parent_style: &'b TextStyle,
+    pub fonts: &'a dyn Fn(&str) -> Option<Handle<Font>>,
 }
 ```
 
 - `parent_styles`: The base style we will dervie the style of each section
 - `fonts`: Just a way to read fonts.
-- `bindings`: The interesting bit
+- `registry`: The bevy app type registry.
+- `bindings`, `world_bindigns`, `type_bindings`: The interesting bit
 
 ### Bindings
 
@@ -326,25 +287,21 @@ pre-defined `Modify`, will pick it from the `Bindings` and use it.
 
 #### Adding bindings
 
-Currently bevy integration goes through the `RichTextData` component.
+Currently bevy integration goes through the `RichTextData` component
+and `WorldBindings` resource.
+
 Add some rich text with the `RichTextBundle` and modify it by querying for
 `RichTextData` and calling:
 
-- `rich_text_data.add_binding(binding_name, value)` To set a non-content binding
-- `rich_text_data.add_content(binding_name, content)` to set a content binding
+- `rich_text_data.set(binding_name, value)` To set a non-content binding
+- `rich_text_data.set_content(binding_name, content)` to set a content binding
 
-This is not enough to update `RichTextData`, you need to then update the bevy `Text`
-component.
+You can also use the similarly named methods on the `WorldBindings` resource.
+`WorldBindings`, unlike `RichTextData` applies to **all** `RichText`s, not just
+the one on the `RichTextData`'s entity.
 
-To do so, you can use the `RichTextSetter` world query. As follow:
-
-```rust
-fn update_text(mut query: Query<RichTextSetter, Changed<RichTextData>>, fonts: Res<Assets<Font>>) {
-    for mut text in &mut query {
-        text.update(&fonts);
-    }
-}
-```
+With this the `RichTextPlugin` will be able to update the text sections based
+on your run-time values.
 
 ### Fetchers
 
@@ -363,45 +320,38 @@ fn setup(mut commands: Commands) {
     // This will update content bound to provided name based on the value of component.
     // `track!` is a thin wrapper around `Tracked` to make it a bit less honerous to use.
     commands.spawn((
-        SomeBundle {
-            foo: 34.0,
-            ..default()
-        },
+        SomeBundle { foo: 34.0, ..default() },
         track!(tracked_slider_value, Slider(value)),
     ));
-    // You can use the `'d` flag if you want to derive `Debug` and not have to
+    // You can use the 'd flag if you want to derive `Debug` and not have to
     // manually implement Display
-    commands.spawn((
-        SomeBundle {
-            foo: 34.0,
-            ..default()
-        },
-        track!('d, debug_tracked_slider_value, Relevant(value)),
-    ));
-    // The `'m` flag let you tie a value to an arbitrary modifier.
+    commands
+        // If a bundle has the component you want to track, you should insert
+        // it separately as shown here.
+        .spawn(BundleWithRelevantComponent { foo: 34.0, ..default() })
+        .insert(track!('d, debug_tracked_slider_value, Relevant(value)));
+
+    // The 'm flag let you tie a value to an arbitrary modifier.
     // Your component needs to implement `IntoModify`.
     commands.spawn((
-        SomeBundle {
-            foo: 34.0,
-            ..default()
-        },
+        SomeBundle { foo: 34.0, ..default() },
         track!('m, snd_line_color, UserColor(Color::PINK)),
     ));
-
-
-    // You can also do this with resources. This binds to the name of the type.
+    // You can also do this with resources. Import the `ResourceTrackerExt` trait.
+    // This binds to the name of the type.
     // You can use `commands.init_tracked_resource` for default resources.
     commands.insert_tracked_resource(PlayerCount(10));
 
     // Works with `Modify` resources as well.
+    // Those methods also exist on `App`.
     commands.insert_modify_resource(LineColor(Color::RED));
 
     // Rich text will automatically be updated.
     commands.spawn(RichTextBundle::parse(
         "Player count: {$PlayerCount}\n\
-        {color:$snd_line_color|slider value for name: {named_slider_value}}\n\
+        {Color:$snd_line_color|slider value for name: {named_slider_value}}\n\
         slider value for entity: {entity_slider_value}\n\
-        {color:$LineColor|slider value for from DebugTracked: {debug_tracked_slider_value}}\n\
+        {Color:$LineColor|slider value for from DebugTracked: {debug_tracked_slider_value}}\n\
         slider from tracked: {tracked_slider_value}",
         TextStyle {
             font: asset_server.load("fonts/FiraSans-Bold.ttf"),
@@ -477,7 +427,7 @@ impl IntoModify for UserColor {
 - [ ] Text2d support (maybe even _generic_ support)
 - [X] Control a bevy `Text` by manipulating `RichTextData`
 - [X] Provide systems to automatically update `Text` based on `RichTextData`
-- [ ] `Fetcher`s and `Tracker`s
+- [X] `Fetcher`s and `Tracker`s
   - [X] `Tracked`
   - [X] `DebugTracked`
   - [X] resource tracker
@@ -485,16 +435,21 @@ impl IntoModify for UserColor {
     - [ ] "Pull bindings" format string decides what to read rather than `tracker`s
     - [ ] namespaced binding -> Require update to grammar.
     - [ ] Reflection for user-defined display options.
+    - [X] Design a reflection-based format system.
+    - [X] Prepare code for pull formatting
+        - [X] Separate `RichText` from datastructures used for parsing
+        - [X] Custom `Modify`, registration, name, parse
 - [X] Refactor
   - [X] extract richtext into separate crate
   - [X] Reorganize modules: `trackers`, `modify` (trait) `modifiers` (impls)
         `parse`, `plugin`, `change_check`
   - [X] Replace hackish implementation of `Bundle` with simple macros
   - [X] Remove dead code (existed only so that it can be stored in git history for later retrieval)
+- [ ] Way to avoid warnings when inserting the RichText
+- [ ] Better error model than `anyhow`
 - [ ] Limit amount of updating by implementing a finer-grained change
       detection system in `RichTextData`
 - [ ] Optimization: update Cow instead of creating new one => no alloc
-- [ ] Custom `Modify`, registration, name, parse
 - [ ] Extract `Modify<T>` to be generic over what it modifies
       + `Context` as associated type of `T` most likely.
 - [ ] (unsure) better format string error messages

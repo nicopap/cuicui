@@ -28,7 +28,7 @@ Rich text is composed of N sections.
 Sections are a collection of metadatas plus some content.
 Metadatas are values associated with some `key`.
 If the section is just an identifer between braces (`{like_this}`),
-then it is *dynamic* `content`.
+then it is *dynamic* `Content`.
 If the metadata value is a `$` followed by an identifer, then it is *dynamic*.
 *Dynamic* metadata can be set and updated at runtime by the user.
 
@@ -53,22 +53,22 @@ Each line of the following code block represents a valid rich text string.
 ```
 This is some text, it is just a single content section
 This one contains a single {dynamic_content} that can be replaced at runtime
-{color:$|This is also just some non-dynamic text, commas need not be escaped}
-{content: This may also work\, but commas need to be escaped}
+{Color:$|This is also just some non-dynamic text, commas need not be escaped}
+{Content: This may also work\, but commas need to be escaped}
 {dynamic_content}
 {}
 An empty {} is equivalent to {name}, but referred by typeid instead of name
-{color: Blue | This text is blue}
-{color: Blue | {dynamic_blue_content}}
-{color: Blue | This is non-bold text: {font:bold.ttf|now it is bold, you may also use {size:1.3|{deeply_nested}} sections}, not anymore {b:_|yet again}!}
-{color:Red| Some red text}, some default color {dynamic_name}. {color:pink|And pink, why not?}
-{color:rgb(12, 34, 50),font:bold.ttf|metadata values} can contain commas within parenthesis or square brackets
+{Color: Blue | This text is blue}
+{Color: Blue | {dynamic_blue_content}}
+{Color: Blue | This is non-bold text: {Font:bold.ttf|now it is bold, you may also use {RelSize:1.3|{deeply_nested}} sections}, not anymore {b:_|yet again}!}
+{Color:Red| Some red text}, some default Color {dynamic_name}. {Color:pink|And pink, why not?}
+{Color:rgb(12, 34, 50),Font:bold.ttf|metadata values} can contain commas within parenthesis or square brackets
 You can escape \{ curly brackets \}.
-{color: pink| even inside \{ a closed section \}}.
-{color: $relevant_color | Not only content can be dynamic, also value of other metadata}
-{color: $ |If the identifier of a dynamic metadata value is elided, then the typeid of the rust type is used}
-can also use a single elided content if you want: {content:$}
-{content:$ident} is equivalent to {ident} also {  ident  }.
+{Color: pink| even inside \{ a closed section \}}.
+{Color: $relevant_color | Not only Content can be dynamic, also value of other metadata}
+{Color: $ |If the identifier of a dynamic metadata value is elided, then the typeid of the rust type is used}
+can also use a single elided Content if you want: {Content:$}
+{Content:$ident} is equivalent to {ident} also {  ident  }.
 ```
 
 Note that spaces surrounding metadata delimiters are trimmed from the output.

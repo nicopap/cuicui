@@ -53,9 +53,11 @@ See [`cuicui_richtext`'s README](./richtext).
 
 ## Short term roadmap
 
-0. [ ] Fix panic on modifier parsing in richtext
+0. [X] Fix panic on modifier parsing in richtext
+0. [ ] Enable usage with `Reflect` resources
 1. [ ] Publish richtext
-2. [ ] Study documentation, best way of presenting the crate
+1. [ ] Implement change detection
+2. [X] Study documentation, best way of presenting the crate
 3. [ ] Advertise to bevy community richtext and potential for `Modify` trait
 4. [ ] Abstract `Modify`, Create a `cuicui_fab` crate, dedicated to `Modify`.
 5. [ ] Study bevy_proto, how could the `Modify` trait be integrated?

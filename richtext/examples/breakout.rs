@@ -54,11 +54,11 @@ const TEXT_COLOR: Color = Color::rgb(0.5, 0.5, 1.0);
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .init_resource::<FontHandles>()
         .add_plugin(RichTextPlugin)
         .init_tracked_resource::<Score>()
         .init_debug_tracked_resource::<Deaths>()
         .insert_resource(ClearColor(BACKGROUND_COLOR))
-        .init_resource::<FontHandles>()
         .add_startup_system(setup)
         .add_event::<CollisionEvent>()
         // Add our gameplay simulation systems to the fixed timestep schedule
@@ -227,16 +227,16 @@ fn setup(
     // Score
     commands.spawn(
         RichTextBundle::parse(
-            "Score: {font: fonts/FiraMono-Medium.ttf, color: rgb(1.0, 0.5, 0.5), content: $Score}\n\
-            {color: rgb(1.0, 0.2, 0.2), content: $Deaths}\n\
-            Paddle hits: {color: pink, content: $paddle_hits}\n\
-            Ball position: {font: fonts/FiraMono-Medium.ttf,color: pink|\\{x: {ball_x}, y: {ball_y}\\}}",
+            "Score: {Font: fonts/FiraMono-Medium.ttf, Color: rgb(1.0, 0.5, 0.5), RelSize: 1.5, Content: $Score}\n\
+            {Color: rgb(1.0, 0.2, 0.2), Content: $Deaths}\n\
+            Paddle hits: {Color: pink, Content: $paddle_hits}\n\
+            Ball position: {Font: fonts/FiraMono-Medium.ttf, Color: pink|\\{x: {ball_x}, y: {ball_y}\\}}",
                 TextStyle {
                     font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                     font_size: SCOREBOARD_FONT_SIZE,
                     color: TEXT_COLOR,
                 },
-        )
+        ).unwrap()
         .with_style(Style {
             position_type: PositionType::Absolute,
             position: UiRect {

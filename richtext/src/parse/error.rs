@@ -2,7 +2,7 @@ use std::fmt;
 
 use winnow::error::{ContextError, ErrorKind, FromExternalError, ParseError};
 
-use super::helpers::Error as Helpers;
+use super::interpret;
 
 #[derive(Debug)]
 pub struct Parse<I>(Vec<(I, InternalElem)>);
@@ -27,7 +27,7 @@ impl<I: fmt::Display> fmt::Display for Parse<I> {
 
 #[derive(Debug)]
 pub(super) enum InternalElem {
-    Section(Helpers),
+    Section(interpret::Error),
     Context(&'static str),
 }
 impl<I> ParseError<I> for Parse<I> {
@@ -44,8 +44,8 @@ impl<I> ContextError<I> for Parse<I> {
         self
     }
 }
-impl<I> FromExternalError<I, Helpers> for Parse<I> {
-    fn from_external_error(input: I, _: ErrorKind, e: Helpers) -> Self {
+impl<I> FromExternalError<I, interpret::Error> for Parse<I> {
+    fn from_external_error(input: I, _: ErrorKind, e: interpret::Error) -> Self {
         Parse(vec![(input, InternalElem::Section(e))])
     }
 }

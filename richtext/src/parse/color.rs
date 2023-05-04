@@ -123,7 +123,7 @@ fn named(color: &str) -> Option<Color> {
         _ => None,
     }
 }
-pub(super) fn parse(input: &str) -> Result<Color> {
+pub(crate) fn parse(input: &str) -> Result<Color> {
     let err = || Error::BadColor(input.to_owned());
     let color = input.trim().to_lowercase();
     named(&color)

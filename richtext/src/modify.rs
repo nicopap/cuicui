@@ -4,10 +4,14 @@ use std::{any::type_name, any::Any, any::TypeId, fmt};
 
 use bevy::{
     prelude::{Font, Handle, TextSection, TextStyle},
+    reflect::TypeRegistryInternal as TypeRegistry,
     utils::HashMap,
 };
+use thiserror::Error;
 
 use crate::{gold_hash::GoldMap, short_name::short_name};
+
+pub use anyhow::Error as AnyError;
 
 /// A Boxed [`Modify`] trait object, with all necessary bounds to make it work
 /// with bevy's [`Resource`] and [`Component`] types.
@@ -15,7 +19,6 @@ use crate::{gold_hash::GoldMap, short_name::short_name};
 /// [`Resource`]: bevy::prelude::Resource
 /// [`Component`]: bevy::prelude::Component
 pub type ModifyBox = Box<dyn Modify + Send + Sync + 'static>;
-
 pub type Modifiers = GoldMap<TypeId, ModifyBox>;
 
 /// Turn a type into a boxed [`Modify`] trait object.
@@ -33,6 +36,10 @@ impl IntoModify for ModifyBox {
     }
 }
 
+#[derive(Error, Debug)]
+#[error("The modify type for {0} is not implemented")]
+struct ParserUnimplemented(&'static str);
+
 /// A [`TextSection`] modifier.
 ///
 /// A rich text [`Section`] may have an arbitary number of `Modify`s, modifying
@@ -49,7 +56,7 @@ impl IntoModify for ModifyBox {
 /// ```rust
 /// use std::{any::Any, fmt};
 /// use bevy::prelude::*;
-/// use cuicui_richtext::modify::{Modify, Context, ModifyBox};
+/// use cuicui_richtext::modify::{Modify, Context, ModifyBox, AnyError};
 ///
 /// #[derive(Debug, PartialEq, Clone, Copy)]
 /// struct SetExactFontSize(f32);
@@ -57,9 +64,9 @@ impl IntoModify for ModifyBox {
 /// impl Modify for SetExactFontSize {
 ///
 ///     /// Set the size of the text.
-///     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()> {
+///     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError> {
 ///         text.style.font_size = self.0;
-///         Some(())
+///         Ok(())
 ///     }
 ///     fn clone_dyn(&self) -> ModifyBox { Box::new(self.clone()) }
 ///     fn as_any(&self) -> &dyn Any { self }
@@ -81,7 +88,7 @@ pub trait Modify: Any {
     /// order-independent.
     ///
     /// [`RichText`]: crate::RichText
-    fn apply(&self, ctx: &Context, text: &mut TextSection) -> Option<()>;
+    fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError>;
 
     // TODO(perf): See design_doc/richtext/better_section_impl.md.
     fn clone_dyn(&self) -> ModifyBox;
@@ -89,10 +96,11 @@ pub trait Modify: Any {
     fn eq_dyn(&self, other: &dyn Modify) -> bool;
     fn debug_dyn(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
 
-    // TODO(feat): custom `Modify` for parsing
-    /// **UNUSED** this doc string is purely prospective.
-    ///
+    // TODO(clean): Drop the Option: if not meant to be parsed, then user
+    // shouldn't add to `RichText` parser builder.
     /// The name to use when parsing metadata in [`RichText::parse`].
+    ///
+    /// `None` when this isn't supposed to be parsed.
     ///
     /// **This must be formatted as an identifier** (ie: `[:alpha:_][:alphanum:_]*`).
     /// Otherwise, the [`RichText::parse`]-ing will not pick up your modifier.
@@ -106,13 +114,33 @@ pub trait Modify: Any {
     /// You may overwrite this method regardless, as long as the return value
     /// is an identifier.
     #[inline]
-    fn name() -> &'static str
+    fn name() -> Option<&'static str>
     where
         Self: Sized,
     {
-        short_name(type_name::<Self>())
+        Some(short_name(type_name::<Self>()))
     }
-    // fn parse(input: &str) -> Result<Self, ???> where Self: Sized;
+    /// Parse from the string representation of the `metadata` value section
+    /// of the format string.
+    ///
+    /// When parsing a format string, we call `Modify::parse` of registered
+    /// `Modify` types which name we encounter in the `key` metadata position.
+    ///
+    /// By default, this returns a `ParserUnimplemented` error. Make sure to
+    /// impelment it yourself if you intend on parsing metadata.
+    fn parse(_input: &str) -> Result<ModifyBox, AnyError>
+    where
+        Self: Sized,
+    {
+        match Self::name() {
+            Some(name) => Err(ParserUnimplemented(name).into()),
+            None => unreachable!(
+                "Parsers without names cannot be called, \
+                in fact if the rust compiler is intelligent enough, this string \
+                shouldn't be in your final binary."
+            ),
+        }
+    }
 }
 impl PartialEq for dyn Modify {
     fn eq(&self, other: &Self) -> bool {
@@ -151,7 +179,9 @@ pub type TypeBindings = GoldMap<TypeId, ModifyBox>;
 /// The context used in [`Modify`].
 #[derive(Clone, Copy)]
 pub struct Context<'a, 'b> {
+    pub registry: Option<&'b TypeRegistry>,
     pub bindings: Option<&'b Bindings>,
+    pub world_bindings: Option<&'b Bindings>,
     pub type_bindings: Option<&'b TypeBindings>,
     pub parent_style: &'b TextStyle,
     // NOTE: we use a `&'a dyn` here instead of a type parameter because we intend
@@ -164,10 +194,12 @@ pub struct Context<'a, 'b> {
 impl<'a, 'b> Context<'a, 'b> {
     pub fn from_style(parent_style: &'b TextStyle) -> Self {
         Context {
+            registry: None,
             bindings: None,
+            world_bindings: None,
+            type_bindings: None,
             parent_style,
             fonts: &|_| None,
-            type_bindings: None,
         }
     }
 }

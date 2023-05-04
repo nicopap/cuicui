@@ -199,7 +199,7 @@ in the format string and provide the name in the call. For example
 
 ```rust
 let rich_text = RichText::parse(
-  "Difficulty: {content:$Resources.GameConfig.difficulty, format: 'show_difficulty'}"
+  "Difficulty: {Content:$Resources.GameConfig.difficulty, Format: 'show_difficulty'}"
 )
   .with("show_difficulty", |d| match d {
     Difficulty::Hard => "hard",

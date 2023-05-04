@@ -6,10 +6,10 @@ use bevy::{asset::HandleId, prelude::*};
 use thiserror::Error;
 
 use crate::{
-    modifiers::Content,
+    modifiers::{self, Content},
     modify::{self, Bindings, TypeBindings},
     track::{update_tracked_components, update_tracked_resources},
-    IntoModify, ModifyBox, ResTrackers, RichText,
+    AnyError, IntoModify, ModifyBox, ResTrackers, RichText,
 };
 
 // TODO(err): proper naming of types
@@ -129,8 +129,8 @@ pub struct RichTextBundle {
     pub data: RichTextData,
 }
 impl RichTextBundle {
-    pub fn parse(input: &str, base_style: TextStyle) -> Self {
-        Self::new(RichText::parse(input).unwrap(), base_style)
+    pub fn parse(input: &str, base_style: TextStyle) -> Result<Self, AnyError> {
+        Ok(Self::new(RichText::parse(input)?, base_style))
     }
     pub fn new(rich: RichText, base_style: TextStyle) -> Self {
         let data = RichTextData {
@@ -142,7 +142,9 @@ impl RichTextBundle {
         };
         let mut text = TextBundle::default();
         let ctx = modify::Context {
+            registry: None,
             bindings: None,
+            world_bindings: None,
             type_bindings: None,
             parent_style: &data.base_style,
             fonts: &|_| None,
@@ -174,29 +176,24 @@ impl RichTextBundle {
 }
 
 pub fn update_text(
+    type_registry: Res<AppTypeRegistry>,
     mut query: Query<(&mut RichTextData, &mut Text)>,
     mut global_context: ResMut<WorldBindings>,
     fonts: Res<Assets<Font>>,
 ) {
+    let type_registry = &type_registry.read();
     for (mut rich, mut text) in &mut query {
-        if global_context.has_changed {
+        if rich.has_changed || global_context.has_changed {
             let ctx = modify::Context {
-                bindings: Some(&global_context.bindings),
-                type_bindings: None,
-                parent_style: &rich.base_style,
-                fonts: &|name| Some(fonts.get_handle(HandleId::from(name))),
-            };
-            rich.text.update(&mut text, &ctx);
-            global_context.has_changed = false;
-        }
-        if rich.has_changed {
-            let ctx = modify::Context {
+                registry: Some(type_registry),
                 bindings: Some(&rich.bindings),
+                world_bindings: global_context.has_changed.then(|| &global_context.bindings),
                 type_bindings: Some(&rich.type_bindings),
                 parent_style: &rich.base_style,
                 fonts: &|name| Some(fonts.get_handle(HandleId::from(name))),
             };
             rich.text.update(&mut text, &ctx);
+            global_context.has_changed = false;
             rich.has_changed = false;
         }
     }
@@ -207,7 +204,11 @@ pub fn update_text(
 pub struct RichTextPlugin;
 impl Plugin for RichTextPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<WorldBindings>()
+        app.register_type::<modifiers::Content>()
+            .register_type::<modifiers::RelSize>()
+            .register_type::<modifiers::Font>()
+            .register_type::<modifiers::Color>()
+            .init_resource::<WorldBindings>()
             .add_system(
                 update_tracked_resources
                     .in_base_set(CoreSet::PostUpdate)

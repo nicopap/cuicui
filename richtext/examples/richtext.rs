@@ -30,13 +30,14 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2dBundle::default());
     commands.spawn((
         RichTextBundle::parse(
-            "{color:$|hello\n{}!}",
+            "{Color:$|hello\n{}!}",
             TextStyle {
                 font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                 font_size: 100.0,
                 color: Color::WHITE,
             },
         )
+        .unwrap()
         .with_text_alignment(TextAlignment::Center)
         .with_style(Style {
             position_type: PositionType::Absolute,
@@ -60,13 +61,14 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             // To use a specific font, you need to hold a handle on it.
             // This is why we added the `FiraMediumHolder` resource earlier,
             // otherwise, the font doesn't show up.
-            "FPS: {font:fonts/FiraMono-Medium.ttf,color:gold|{}}",
+            "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold|{}}",
             TextStyle {
                 font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                 font_size: 60.0,
                 color: Color::WHITE,
             },
-        ),
+        )
+        .unwrap(),
         FpsText,
     ));
 }
@@ -89,7 +91,7 @@ fn text_color_system(
             alpha: 1.0,
         };
         text.set_typed(new_color).unwrap();
-        if at_interval(3.0) {
+        if at_interval(1.3) {
             *current_guest = (*current_guest + 1) % GUESTS.len();
             text.set_content(None, &GUESTS[*current_guest]).unwrap();
         }
