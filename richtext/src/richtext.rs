@@ -52,7 +52,7 @@ impl RichTextBuilder {
     }
     /// Default cuicui rich text parser, [see the syntax].
     ///
-    /// [see the syntax]: https://github.com/devildahu/bevy_mod_cuicui/blob/main/design_doc/richtext/informal_grammar.md
+    /// [see the syntax]: https://github.com/nicopap/cuicui/blob/main/design_doc/richtext/informal_grammar.md
     pub fn build(self) -> Result<(RichText, Vec<Tracker>), AnyError> {
         let Self { format_string, context, formatters } = self;
         let mut partial = RichTextPartial {

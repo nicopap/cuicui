@@ -1,6 +1,6 @@
 //! Parse rich text according to spec
 //!
-//! See the grammar at <https://github.com/devildahu/bevy_mod_cuicui/blob/main/design_doc/richtext/informal_grammar.md>
+//! See the grammar at <https://github.com/nicopap/cuicui/blob/main/design_doc/richtext/informal_grammar.md>
 //! or the file at `design_doc/richtext/informal_grammar.md` from the root of
 //! the git repository.
 //!

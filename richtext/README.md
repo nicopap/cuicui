@@ -395,7 +395,7 @@ impl IntoModify for UserColor {
 [bui_bits]: https://github.com/septum/bevy_ui_bits
 [`fmt`]: https://doc.rust-lang.org/stable/std/fmt/index.html
 [`Color`]: https://docs.rs/bevy/latest/bevy/prelude/enum.Color.html
-[fs-grammar]: https://github.com/devildahu/bevy_mod_cuicui/blob/main/design_doc/richtext/informal_grammar.md
+[fs-grammar]: https://github.com/nicopap/cuicui/blob/main/design_doc/richtext/informal_grammar.md
 [docsrs-root]: https://docs.rs/cuicui_richtext/latest/cuicui_richtext/
 
 ## TODO

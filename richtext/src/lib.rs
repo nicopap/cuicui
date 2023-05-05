@@ -99,7 +99,7 @@
 //! }
 //! ```
 //!
-//! [the README]: https://github.com/devildahu/bevy_mod_cuicui/tree/main/richtext
+//! [the README]: https://github.com/nicopap/cuicui/tree/main/richtext
 
 mod gold_hash;
 pub mod modifiers;
