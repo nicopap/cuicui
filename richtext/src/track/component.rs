@@ -180,8 +180,6 @@ impl<T: Component> Tracked<T> {
         let proto_fetch: ProtoFetch = |entity| Some(entity.get::<T>()?.clone().into_modify());
         Self { t, tracker: Tracker { binding_name, proto_fetch } }
     }
-    // TODO(feat): a `Tracked` that accepts a Reflect + Path, as it allows tracking
-    // stuff like `Transform` positions.
 }
 
 pub fn update_tracked_components(world: &mut World, mut entities: Local<Vec<Entity>>) {

@@ -2,10 +2,11 @@
 use std::{any::Any, any::TypeId, borrow::Cow, fmt};
 
 use anyhow::Error as AnyError;
-use bevy::prelude::{FromReflect, Reflect, TextSection};
+use bevy::prelude::{trace, FromReflect, Reflect, TextSection};
 use bevy::reflect::ReflectFromReflect;
 use thiserror::Error;
 
+use crate::show::RuntimeFormat;
 use crate::{modify::Context, IntoModify, Modify, ModifyBox};
 
 macro_rules! common_modify_methods {
@@ -46,6 +47,8 @@ enum Errors {
         but it isn't bound in the given context."
     )]
     BindingTypeNotInContext(String),
+    #[error("The `Format` modifier should be removed before interpreting the format string")]
+    ModifyFormat,
 }
 
 /// A file path to a font, loaded through other means.
@@ -117,7 +120,7 @@ impl IntoModify for bevy::prelude::Color {
 pub struct Content(pub Cow<'static, str>);
 impl Modify for Content {
     fn apply(&self, _ctx: &Context, text: &mut TextSection) -> Result<(), AnyError> {
-        // println!("Apply new content: {:?}", self.0);
+        trace!("Apply new content: {:?}", self.0);
         text.value.clear();
         text.value.push_str(&self.0);
         Ok(())
@@ -136,6 +139,7 @@ impl<T: fmt::Display> From<T> for Content {
     }
 }
 
+// TODO(clean): Combine `Format` with dynamic
 // TODO(perf): most likely could use interning for Dynamic section text name.
 // this would involve replacing Strings with an enum String|Interned, or private
 // background components, otherwise API seems impossible.
@@ -193,6 +197,31 @@ impl Modify for () {
         Self: Sized,
     {
         None
+    }
+    common_modify_methods! {}
+}
+
+// TODO(clean): Remove this and replace with design_doc/richtext/dynamic_format.md design
+/// User-defined formatting device.
+#[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
+#[reflect(FromReflect)]
+pub enum Format {
+    Name(String),
+    Format(RuntimeFormat),
+}
+impl Modify for Format {
+    fn apply(&self, _ctx: &Context, _text: &mut TextSection) -> Result<(), AnyError> {
+        Err(Errors::ModifyFormat.into())
+    }
+    fn parse(input: &str) -> Result<ModifyBox, AnyError>
+    where
+        Self: Sized,
+    {
+        if let Some(format) = RuntimeFormat::parse(input) {
+            Ok(Box::new(Format::Format(format)))
+        } else {
+            Ok(Box::new(Format::Name(input.to_string())))
+        }
     }
     common_modify_methods! {}
 }

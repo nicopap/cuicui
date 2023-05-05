@@ -22,8 +22,6 @@ bare_content = open_subsection [close_section open_subsection]*
 rich_text = open_section [close_section open_section]*
 ```
 
-TODO(feat): `balanced_text` should support quoting, for format strings.
-
 Rich text is composed of N sections.
 Sections are a collection of metadatas plus some content.
 Metadatas are values associated with some `key`.

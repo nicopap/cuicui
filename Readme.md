@@ -54,7 +54,7 @@ See [`cuicui_richtext`'s README](./richtext).
 ## Short term roadmap
 
 0. [X] Fix panic on modifier parsing in richtext
-0. [ ] Enable usage with `Reflect` resources
+0. [X] Enable usage with `Reflect` resources
 1. [ ] Publish richtext
 1. [ ] Implement change detection
 2. [X] Study documentation, best way of presenting the crate

@@ -8,9 +8,15 @@ use cuicui_richtext::{RichTextBundle, RichTextData, RichTextPlugin};
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(bevy::log::LogPlugin {
+            level: bevy::log::Level::DEBUG,
+            filter: "wgpu=warn,bevy_ecs=info,naga=info".to_string(),
+            ..default()
+        }))
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(RichTextPlugin)
+        .init_resource::<Fps>()
+        .register_type::<Fps>()
         .add_startup_system(setup)
         .add_system(text_update_system)
         .add_system(text_color_system)
@@ -18,8 +24,11 @@ fn main() {
 }
 
 // A unit struct to help identify the FPS UI component, since there may be many Text components
-#[derive(Component)]
-struct FpsText;
+#[derive(Resource, Default, Reflect)]
+#[reflect(Resource)]
+struct Fps {
+    fps: f64,
+}
 
 // A unit struct to help identify the color-changing Text component
 #[derive(Component)]
@@ -56,12 +65,12 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.insert_resource(FiraMediumHolder(
         asset_server.load("fonts/FiraMono-Medium.ttf"),
     ));
-    commands.spawn((
+    commands.spawn(
         RichTextBundle::parse(
             // To use a specific font, you need to hold a handle on it.
             // This is why we added the `FiraMediumHolder` resource earlier,
             // otherwise, the font doesn't show up.
-            "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold|{}}",
+            "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold, Content:$Res.Fps.fps, Format:{:.3}}",
             TextStyle {
                 font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                 font_size: 60.0,
@@ -69,8 +78,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             },
         )
         .unwrap(),
-        FpsText,
-    ));
+    );
 }
 
 const GUESTS: &[&str] = &["bevy", "boovy", "noovy", "groovy", "bavy", "cuicui"];
@@ -98,15 +106,10 @@ fn text_color_system(
     }
 }
 
-fn text_update_system(
-    diagnostics: Res<Diagnostics>,
-    mut query: Query<&mut RichTextData, With<FpsText>>,
-) {
-    for mut text in &mut query {
-        if let Some(fps) = diagnostics.get(FrameTimeDiagnosticsPlugin::FPS) {
-            if let Some(value) = fps.smoothed() {
-                text.set_content(None, &value).unwrap();
-            }
+fn text_update_system(diagnostics: Res<Diagnostics>, mut fps: ResMut<Fps>) {
+    if let Some(diag) = diagnostics.get(FrameTimeDiagnosticsPlugin::FPS) {
+        if let Some(value) = diag.smoothed() {
+            fps.fps = value;
         }
     }
 }

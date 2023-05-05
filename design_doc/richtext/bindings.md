@@ -218,6 +218,6 @@ let rich_text = RichText::parse(
 > TODO(feat): Consider a fallback when the `format` is not specified (like 
 > `Reflect::debug` or `Enum::name` etc.)
 
-[inspector_egui_impls]: https://github.com/jakobhellermann/bevy-inspector-egui/blob/main/crates/bevy-inspector-egui/src/inspector_egui_impls/mod.rs
+[`inspector_egui_impls`]: https://github.com/jakobhellermann/bevy-inspector-egui/blob/main/crates/bevy-inspector-egui/src/inspector_egui_impls/mod.rs
 [io-example]: https://github.com/jakobhellermann/bevy-inspector-egui/blob/main/crates/bevy-inspector-egui/examples/basic/inspector_options.rs
 [`bevy-inspector-egui`]: https://docs.rs/bevy-inspector-egui/0.16.0/bevy_inspector_egui/inspector_options/std_options/struct.NumberOptions.html

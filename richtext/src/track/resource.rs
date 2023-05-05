@@ -1,8 +1,8 @@
 use std::{fmt, marker::PhantomData};
 
-use bevy::{ecs::system::Command, prelude::*, reflect::Typed, utils::get_short_name};
+use bevy::{ecs::system::Command, prelude::*, reflect::Typed};
 
-use super::{some_content, FetchBox};
+use super::{some_content, FetchBox, Tracker};
 use crate::{plugin::WorldBindings, IntoModify};
 
 pub fn update_tracked_resources(world: &mut World) {
@@ -10,23 +10,11 @@ pub fn update_tracked_resources(world: &mut World) {
         world.resource_scope(|world, trackers: Mut<ResTrackers>| {
             for Tracker { binding_name, fetch } in &trackers.0 {
                 let Some(modify) = fetch(world) else { continue; };
+                trace!("Setting resource binding of {binding_name:?} to {modify:?}");
                 world_bindings.set(binding_name, modify);
             }
         })
     })
-}
-
-// TODO(feat): probably worthwhile to make this public
-struct Tracker {
-    binding_name: &'static str,
-    fetch: FetchBox,
-}
-impl Tracker {
-    fn new<R: Typed>(fetch: FetchBox) -> Self {
-        let binding_name = get_short_name(<R as Typed>::type_info().type_name()).into_boxed_str();
-        // TODO(perf): leaky
-        Self { binding_name: Box::leak(binding_name), fetch }
-    }
 }
 
 /// Keeps track of resources that should be tracked.
@@ -35,6 +23,11 @@ impl Tracker {
 /// content of tracked resources.
 #[derive(Resource, Default)]
 pub struct ResTrackers(Vec<Tracker>);
+impl ResTrackers {
+    pub fn extend(&mut self, iter: impl IntoIterator<Item = Tracker>) {
+        self.0.extend(iter)
+    }
+}
 
 struct SetupResTracker<R: Resource> {
     tracker: Tracker,

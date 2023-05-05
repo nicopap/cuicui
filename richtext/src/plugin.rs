@@ -8,7 +8,8 @@ use thiserror::Error;
 use crate::{
     modifiers::{self, Content},
     modify::{self, Bindings, TypeBindings},
-    track::{update_tracked_components, update_tracked_resources},
+    richtext::RichTextBuilder,
+    track::{update_tracked_components, update_tracked_resources, Tracker},
     AnyError, IntoModify, ModifyBox, ResTrackers, RichText,
 };
 
@@ -121,16 +122,33 @@ impl RichTextData {
     }
 }
 
+#[derive(Default, Component)]
+struct AddTrackers(Vec<Tracker>);
+
+fn add_resource_trackers(
+    mut cmds: Commands,
+    mut query: Query<(Entity, &mut AddTrackers)>,
+    mut res_trackers: ResMut<ResTrackers>,
+) {
+    for (entity, mut trackers) in &mut query {
+        res_trackers.extend(trackers.0.drain(..));
+        cmds.entity(entity).remove::<AddTrackers>();
+    }
+}
+
 // TODO(feat): generalize so that it works with Text2dBundle as well
 #[derive(Bundle)]
 pub struct RichTextBundle {
-    #[bundle]
     pub text: TextBundle,
     pub data: RichTextData,
+    add_trackers: AddTrackers,
 }
 impl RichTextBundle {
-    pub fn parse(input: &str, base_style: TextStyle) -> Result<Self, AnyError> {
-        Ok(Self::new(RichText::parse(input)?, base_style))
+    pub fn parse(input: impl Into<String>, base_style: TextStyle) -> Result<Self, AnyError> {
+        let (rich_text, trackers) = RichTextBuilder::new(input).build()?;
+        let mut ret = Self::new(rich_text, base_style);
+        ret.add_trackers.0 = trackers;
+        Ok(ret)
     }
     pub fn new(rich: RichText, base_style: TextStyle) -> Self {
         let data = RichTextData {
@@ -150,7 +168,7 @@ impl RichTextBundle {
             fonts: &|_| None,
         };
         data.text.update(&mut text.text, &ctx);
-        RichTextBundle { text, data }
+        RichTextBundle { text, data, add_trackers: AddTrackers::default() }
     }
 }
 /// Implementation of [`TextBundle`] delegate methods (ie: just pass the
@@ -193,9 +211,11 @@ pub fn update_text(
                 fonts: &|name| Some(fonts.get_handle(HandleId::from(name))),
             };
             rich.text.update(&mut text, &ctx);
-            global_context.has_changed = false;
             rich.has_changed = false;
         }
+    }
+    if global_context.has_changed {
+        global_context.has_changed = false;
     }
 }
 
@@ -208,13 +228,21 @@ impl Plugin for RichTextPlugin {
             .register_type::<modifiers::RelSize>()
             .register_type::<modifiers::Font>()
             .register_type::<modifiers::Color>()
+            .register_type::<modifiers::Format>()
             .init_resource::<WorldBindings>()
+            .init_resource::<ResTrackers>()
             .add_system(
                 update_tracked_resources
                     .in_base_set(CoreSet::PostUpdate)
                     .run_if(resource_exists::<ResTrackers>()),
             )
             .add_system(update_tracked_components.in_base_set(CoreSet::PostUpdate))
+            .add_system(
+                add_resource_trackers
+                    .in_base_set(CoreSet::PostUpdate)
+                    .before(update_text)
+                    .run_if(resource_exists::<ResTrackers>()),
+            )
             .add_system(update_text.in_base_set(CoreSet::PostUpdate));
     }
 }

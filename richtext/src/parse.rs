@@ -12,7 +12,6 @@ mod error;
 pub(crate) mod interpret;
 mod structs;
 
-use anyhow::Error as AnyError;
 use winnow::{
     ascii::{alpha1, alphanumeric1, escaped, multispace0},
     branch::alt,
@@ -23,12 +22,13 @@ use winnow::{
     Parser,
 };
 
-use crate::RichText;
+use crate::AnyError;
 use structs::{flatten_section, short_dynamic, Dyn, Modifier, Section, Sections};
 
 pub(crate) use color::parse as color;
 
 type IResult<'a, O> = winnow::IResult<&'a str, O>;
+type AnyResult<T> = Result<T, AnyError>;
 
 // How to read the following code:
 // Look at the variable names for match with the grammar, they are defined in the same order.
@@ -111,18 +111,17 @@ fn bare_content(input: &str) -> IResult<Sections> {
         .map(Sections::tail)
         .parse_next(input)
 }
-fn rich_text_inner(input: &str) -> IResult<Sections> {
+fn sections_inner(input: &str) -> IResult<Sections> {
     (open_section, repeat0((close_section, open_section)))
         .map(Sections::tail)
         .parse_next(input)
 }
-pub(super) fn rich_text(ctx: interpret::Context, input: &str) -> Result<RichText, AnyError> {
-    let parsed = rich_text_inner.parse(input).map_err(|e| e.into_owned())?;
+pub(super) fn sections(ctx: interpret::Context, input: &str) -> AnyResult<Vec<crate::Section>> {
+    let parsed = sections_inner.parse(input).map_err(|e| e.into_owned())?;
     let parsed = parsed.0.into_iter();
-    let sections = parsed
+    parsed
         .map(|s| interpret::section(&ctx, s))
-        .collect::<Result<_, _>>()?;
-    Ok(RichText { sections })
+        .collect::<Result<_, _>>()
 }
 
 #[cfg(test)]
@@ -136,7 +135,7 @@ mod tests {
     use winnow::Parser;
 
     use super::super::{modifiers, Modifiers};
-    use super::{balanced_text, bare_content, close_section, closed_element, interpret, rich_text};
+    use super::{balanced_text, bare_content, close_section, closed_element, interpret, sections};
 
     use crate::Section;
 
@@ -316,9 +315,7 @@ mod tests {
     //        test rich_text parsing
     // ---------------------------------
     fn parse(input: &str) -> Result<Vec<Section>, String> {
-        rich_text(interpret::Context::richtext_defaults(), input)
-            .map_err(|err| err.to_string())
-            .map(|rt| rt.sections)
+        sections(interpret::Context::richtext_defaults(), input).map_err(|err| err.to_string())
     }
     #[test]
     fn plain_text() {

@@ -54,6 +54,7 @@ impl Context {
         ret.insert::<modifiers::RelSize>();
         ret.insert::<modifiers::Font>();
         ret.insert::<modifiers::Color>();
+        ret.insert::<modifiers::Format>();
         ret
     }
 }

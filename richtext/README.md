@@ -432,13 +432,18 @@ impl IntoModify for UserColor {
   - [X] `DebugTracked`
   - [X] resource tracker
 - [ ] Reflection handling
-    - [ ] "Pull bindings" format string decides what to read rather than `tracker`s
-    - [ ] namespaced binding -> Require update to grammar.
-    - [ ] Reflection for user-defined display options.
+    - [ ] `Format` cleanup as described in design_doc/richtext/dynamic_format.md
+    - [ ] An `$Entity."Name".Component.path.to.field` path specifier.
+    - [X] "Pull bindings" format string decides what to read rather than `tracker`s
+    - [X] namespaced binding -> Require update to grammar.
+    - [X] Reflection for user-defined display options.
     - [X] Design a reflection-based format system.
     - [X] Prepare code for pull formatting
         - [X] Separate `RichText` from datastructures used for parsing
         - [X] Custom `Modify`, registration, name, parse
+- [ ] Lean on reflection for Resource modifiers
+    - [ ] Allow arbitrary modifiers from `Format`
+    - [ ] Remove `ResourceTrackerExt`
 - [X] Refactor
   - [X] extract richtext into separate crate
   - [X] Reorganize modules: `trackers`, `modify` (trait) `modifiers` (impls)

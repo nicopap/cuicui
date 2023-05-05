@@ -2,15 +2,35 @@
 //! into rich text modifiers.
 
 mod component;
+mod pull;
+mod reflect;
 mod resource;
+
+use bevy::{log::trace, prelude::World, reflect::Typed, utils::get_short_name};
 
 use crate::ModifyBox;
 
-type FetchBox = Box<dyn Fn(&bevy::prelude::World) -> Option<ModifyBox> + Send + Sync + 'static>;
+pub(crate) type FetchBox = Box<dyn Fn(&World) -> Option<ModifyBox> + Send + Sync + 'static>;
 
 fn some_content(input: impl std::fmt::Display) -> Option<ModifyBox> {
-    Some(Box::new(crate::modifiers::Content::from(input)))
+    let content = crate::modifiers::Content::from(input);
+    trace!("Content of {content:?}");
+    Some(Box::new(content))
 }
 
 pub use component::{update_tracked_components, Tracked};
+pub(crate) use pull::Target;
+pub(crate) use reflect::make_tracker;
 pub use resource::{update_tracked_resources, ResTrackers, ResourceTrackerExt};
+
+pub struct Tracker {
+    pub(crate) binding_name: &'static str,
+    fetch: FetchBox,
+}
+impl Tracker {
+    pub(crate) fn new<R: Typed>(fetch: FetchBox) -> Self {
+        let binding_name = get_short_name(<R as Typed>::type_info().type_name()).into_boxed_str();
+        // TODO(perf): leaky
+        Self { binding_name: Box::leak(binding_name), fetch }
+    }
+}
