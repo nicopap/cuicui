@@ -1,4 +1,4 @@
-# Beyv Cuicui
+# Cuicui framework
 
 | ❗ **THIS IS A WIP, MOST FEATURES ARE NOT IMPLEMENTED YET, SEE TODO** ❗ |
 |--------------------------------------------------------------------------|
