@@ -29,8 +29,7 @@ pub(super) struct Full<'a>(Vec<Section<'a>>);
 pub(super) struct Sections<'a>(pub(super) Vec<Section<'a>>);
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub(super) enum Format<'a> {
-    None,
+pub enum Format<'a> {
     UserDefined(&'a str),
     Fmt(RuntimeFormat),
 }
@@ -44,13 +43,14 @@ pub(super) enum Access<'a> {
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub(super) struct Dynamic<'a> {
-    format: Format<'a>,
-    access: Access<'a>,
+    pub(super) format: Option<Format<'a>>,
+    pub(super) access: Access<'a>,
 }
 
 impl<'a> Dynamic<'a> {
-    pub(super) fn new((access, format): (Access<'a>, Option<Format<'a>>)) -> Self {
-        Dynamic { access, format: format.unwrap_or(Format::None) }
+    pub(super) fn new((access, format): (Access<'a>, Option<Option<Format<'a>>>)) -> Self {
+        println!("WEOSDAFFSDF: {access:?} ######## {format:?}");
+        Dynamic { access, format: format.flatten() }
     }
 }
 
@@ -95,26 +95,22 @@ impl<'a> Section<'a> {
         Some(Section { content: Dyn::Static(input), modifiers: Vec::new() })
     }
     /// A delimited section (ie between {}).
-    pub(super) fn format(input: Dynamic) -> Vec<Self> {
+    pub(super) fn format(input: Dynamic<'a>) -> Vec<Self> {
         vec![Section { modifiers: vec![], content: Dyn::Dynamic(input) }]
     }
 }
 pub(super) fn flatten_section<'a>(
-    (mut modifiers, content): (Vec<Modifier<'a>>, Option<Sections<'a>>),
+    (modifiers, Sections(mut sections)): (Vec<Modifier<'a>>, Sections<'a>),
 ) -> Vec<Section<'a>> {
-    let content_name = <modifiers::Content as Modify>::name().unwrap();
+    let content_name = <modifiers::Content as Modify>::name();
 
-    // Either we have a `content` metadata or we re-use section
-    let Some(Sections(mut sections)) = content else {
-        // TODO(err): might be worth providing an error here
-        return match modifiers.iter().position(|m| m.name == content_name) {
-            None => vec![],
-            Some(index) => {
-                let content = modifiers.swap_remove(index).value;
-                vec![Section { modifiers, content }]
-            }
-        }
-    };
+    let has_content = modifiers.iter().find(|m| m.name == content_name).is_some();
+    if has_content {
+        panic!(
+            "TODO(err): Gracefully handle when user provides a manual \
+            Content section, which is not supporter"
+        );
+    }
     // TODO(err)TODO(perf): deduplicate here
     for section in &mut sections {
         section.modifiers.extend(modifiers.clone());

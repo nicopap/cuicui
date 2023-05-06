@@ -7,8 +7,8 @@ use bevy::{
 };
 
 use crate::{
-    modifiers::Dynamic, modifiers::Format, modify, parse, parse::interpret, show, show::ShowBox,
-    track::make_tracker, track::Target, AnyError, Modifiers, Tracker,
+    gold_hash::GoldMap, modifiers::Dynamic, modify, parse, parse::interpret, parse::Format, show,
+    show::ShowBox, track::make_tracker, track::Target, AnyError, Modifiers, Tracker,
 };
 
 // TODO(perf): See design_doc/richtext/better_section_impl.md
@@ -55,7 +55,7 @@ impl RichTextBuilder {
     }
     pub fn build(self) -> Result<(RichText, Vec<Tracker>), AnyError> {
         let Self { format_string, context, formatters } = self;
-        let (sections, trackers) = parse::richtext(context, &format_string)?;
+        let sections = parse::richtext(context, &format_string)?;
         let mut partial = RichTextPartial { sections, formatters };
 
         debug!("Making RichText: {format_string:?}");
@@ -69,17 +69,19 @@ impl RichTextBuilder {
     }
 }
 
-struct RichTextPartial {
-    sections: Vec<Section>,
+struct RichTextPartial<'a> {
+    // TODO(clean)
+    sections: Vec<(Section, GoldMap<TypeId, Format<'a>>)>,
     // TODO(perf): This sucks, the `FetchBox`, which we are using this for, is
     // calling itself the `ShowBox` impl. Instead of storing formatters, we should
     // directly construct the `FetchBox` when it is added
     formatters: HashMap<&'static str, ShowBox>,
 }
 
-impl RichTextPartial {
+impl RichTextPartial<'_> {
     fn consume(self) -> RichText {
-        RichText { sections: self.sections }
+        let sections = self.sections.into_iter().map(|s| s.0).collect();
+        RichText { sections }
     }
     fn print_bindings(&self) {
         debug!("Bindings are:");
@@ -89,7 +91,7 @@ impl RichTextPartial {
     }
     fn dynamic_binding_names(&self) -> impl Iterator<Item = &str> {
         self.sections.iter().flat_map(|section| {
-            let values = || section.modifiers.values();
+            let values = || section.0.modifiers.values();
             if let Some(Dynamic::ByName(name)) = values().find_map(|m| m.as_any().downcast_ref()) {
                 Some(name.as_str())
             } else {
@@ -104,9 +106,13 @@ impl RichTextPartial {
     // effect of parsing instead.
     fn formatted_dynamic_bindings(&self) -> impl Iterator<Item = (&Dynamic, &Format)> {
         self.sections.iter().flat_map(|section| {
-            let values = || section.modifiers.values();
-            let dynamic = values().find_map(|m| m.as_any().downcast_ref())?;
-            let format = values().find_map(|m| m.as_any().downcast_ref())?;
+            // TODO(clean)
+            let (type_id, dynamic) = section
+                .0
+                .modifiers
+                .iter()
+                .find_map(|(t, m)| m.as_any().downcast_ref().map(|m| (t, m)))?;
+            let format = section.1.get(type_id)?;
             Some((dynamic, format))
         })
     }
@@ -127,16 +133,16 @@ impl RichTextPartial {
     fn pull_fetchs(&self) -> impl Iterator<Item = Tracker> + '_ {
         self.pull_targets().map(|(binding_name, target, format)| {
             let show = match format {
-                Format::Name(name) => self.formatters.get(name.as_str()).unwrap().dyn_clone(),
-                Format::Format(format) => Box::new(*format),
+                Format::UserDefined(name) => self.formatters.get(name).unwrap().dyn_clone(),
+                Format::Fmt(format) => Box::new(*format),
             };
             debug!("\t{binding_name}: {format:?}");
             make_tracker(binding_name, target, show)
         })
     }
     fn purge_format(&mut self) {
-        for section in &mut self.sections {
-            section.modifiers.retain(|_, v| !v.as_any().is::<Format>())
+        for secti in &mut self.sections {
+            secti.0.modifiers.retain(|_, v| !v.as_any().is::<Format>())
         }
     }
 }

@@ -100,6 +100,7 @@
 //! ```
 //!
 //! [the README]: https://github.com/nicopap/cuicui/tree/main/richtext
+#![allow(clippy::unnecessary_lazy_evaluations)]
 
 mod gold_hash;
 // mod hlist_madness;

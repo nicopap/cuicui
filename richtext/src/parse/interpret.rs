@@ -7,8 +7,11 @@ use anyhow::Error as AnyError;
 use bevy::utils::HashMap;
 use thiserror::Error;
 
-use super::structs::{Dyn, Modifier, Section as ParseSection};
-use crate::{modifiers::Content, modifiers::Dynamic, Modifiers, Modify, ModifyBox, Section};
+use super::structs::{Access, Dyn, Format, Modifier, Section as ParseSection};
+use crate::{
+    gold_hash::GoldMap, modifiers::Content, modifiers::Dynamic, Modifiers, Modify, ModifyBox,
+    Section,
+};
 
 #[derive(Error, Debug)]
 pub(super) enum Error {
@@ -40,10 +43,8 @@ pub(crate) struct Context {
 }
 impl Context {
     pub(crate) fn insert<T: Any + Modify>(&mut self) {
-        if let Some(name) = T::name() {
-            self.modify_builders
-                .insert(name, (TypeId::of::<T>(), |i| T::parse(&i)));
-        }
+        self.modify_builders
+            .insert(T::name(), (TypeId::of::<T>(), |i| T::parse(&i)));
     }
     pub(crate) fn richtext_defaults() -> Self {
         use crate::modifiers;
@@ -58,10 +59,25 @@ impl Context {
 }
 /// Turn a [`ParseSection`], a simple textual representation, into a [`Section`],
 /// a collection of trait objects used for formatting.
-pub(super) fn section(ctx: &Context, input: ParseSection) -> AnyResult<Section> {
-    let parse_modify_value = |type_id, value, parse: MakeModifyBox| match value {
-        Dyn::Format(Some(name)) => Ok::<ModifyBox, _>(Box::new(Dynamic::ByName(name.to_string()))),
-        Dyn::Format(None) => Ok::<ModifyBox, _>(Box::new(Dynamic::ByType(type_id))),
+pub(super) fn section<'a>(
+    ctx: &Context,
+    input: ParseSection<'a>,
+) -> AnyResult<(Section, GoldMap<TypeId, Format<'a>>)> {
+    let mut formats = GoldMap::default();
+
+    let boxdyn = |d: Dynamic| -> Result<ModifyBox, _> { Ok(Box::new(d)) };
+
+    let mut parse_modify_value = |type_id, value, parse: MakeModifyBox| match value {
+        Dyn::Dynamic(dynamic) => {
+            if let Some(format) = dynamic.format {
+                formats.insert(type_id, format);
+            }
+            match dynamic.access {
+                Access::TypeBound => boxdyn(Dynamic::ByType(type_id)),
+                Access::Bound(name) => boxdyn(Dynamic::ByName(name.to_string())),
+                Access::AtPath(name) => boxdyn(Dynamic::ByName(name.to_string())),
+            }
+        }
         Dyn::Static(value) => {
             let mut value: Cow<'static, str> = value.to_owned().into();
             escape_backslashes(&mut value);
@@ -80,11 +96,9 @@ pub(super) fn section(ctx: &Context, input: ParseSection) -> AnyResult<Section> 
         .map(parse_modify)
         .collect::<AnyResult<Modifiers>>()?;
 
-    // TODO(feat): combine Content & Format.
-
     let content_id = TypeId::of::<Content>();
     let content_value = parse_modify_value(content_id, input.content, |i| Ok(Box::new(Content(i))));
     modifiers.insert(content_id, content_value?);
 
-    Ok(Section { modifiers })
+    Ok((Section { modifiers }, formats))
 }

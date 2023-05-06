@@ -2,6 +2,6 @@ check:
 	cargo clippy --examples --workspace --all-targets --all-features
 run:
 	# cargo run --package cuicui_richtext --example richtext
-	cargo run --package cuicui_richtext --example breakout
+	# cargo run --package cuicui_richtext --example breakout
 	# cargo test --workspace --features winnow/debug
-	# cargo test --workspace
+	cargo test --workspace --features winnow/debug parse::tests::all_dynamic_content_declarations

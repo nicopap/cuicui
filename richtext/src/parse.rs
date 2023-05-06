@@ -12,6 +12,8 @@ mod error;
 pub(crate) mod interpret;
 mod structs;
 
+use std::any::TypeId;
+
 use winnow::{
     ascii::{alpha1, alphanumeric1, digit1, escaped, multispace0},
     branch::alt,
@@ -22,11 +24,14 @@ use winnow::{
     Parser,
 };
 
-use crate::show::RuntimeFormat;
 use crate::AnyError;
-use structs::{flatten_section, Access, Dyn, Dynamic, Format, Modifier, Section, Sections};
+use crate::{gold_hash::GoldMap, show::RuntimeFormat};
+use structs::{flatten_section, Access, Dyn, Dynamic, Modifier, Section, Sections};
 
 pub(crate) use color::parse as color;
+
+// TODO(clean): This is a mess
+pub(crate) use structs::Format;
 
 type IResult<'a, O> = winnow::IResult<&'a str, O>;
 type AnyResult<T> = Result<T, AnyError>;
@@ -69,9 +74,9 @@ fn format(input: &str) -> IResult<Dynamic> {
         debug: type_.is_some(),
     });
     let format_spec = alt((
-        peek("}").map(|_| Format::None),
-        ident.map(Format::UserDefined),
-        format_spec.map(Format::Fmt),
+        peek("}").map(|_| None),
+        ident.map(Format::UserDefined).map(Some),
+        format_spec.map(Format::Fmt).map(Some),
     ));
     let path = take_while1(('a'..='z', 'A'..='Z', '0'..='9', "_."));
     let access = alt((
@@ -79,7 +84,7 @@ fn format(input: &str) -> IResult<Dynamic> {
         preceded("Res", path).map(Access::AtPath),
         ident.map(Access::Bound),
     ));
-    (access, opt(preceded(':', format_spec)))
+    delimited('{', (access, opt(preceded(':', format_spec))), '}')
         .context("format")
         .map(Dynamic::new)
         .parse_next(input)
@@ -134,17 +139,20 @@ fn open_section(input: &str) -> IResult<Option<Section>> {
 }
 fn close_section(input: &str) -> IResult<Vec<Section>> {
     let full_list = (
-        separated1(closed_element, ws(',')),
-        opt(preceded(ws('|'), bare_content)),
+        separated1(ws(closed_element), ','),
+        preceded('|', bare_content),
     );
-    let closed = alt((format.map(Section::format), full_list.map(flatten_section)));
-    delimited('{', ws(closed.context("closed")), '}').parse_next(input)
+    let mut closed = alt((
+        format.map(Section::format),
+        delimited('{', full_list.map(flatten_section), '}').context("list"),
+    ));
+    closed.parse_next(input)
 }
 fn closed_element(input: &str) -> IResult<Modifier> {
     let key = ident.context("key");
 
     let metadata = alt((
-        delimited('{', format, '}').map(Dyn::Dynamic),
+        format.map(Dyn::Dynamic),
         balanced_text.context("metadata value").map(Dyn::Static),
     ));
     separated_pair(key, ws(':'), metadata)
@@ -163,15 +171,18 @@ fn sections_inner(input: &str) -> IResult<Sections> {
         .map(Sections::tail)
         .parse_next(input)
 }
-pub(super) fn richtext(ctx: interpret::Context, input: &str) -> AnyResult<Vec<crate::Section>> {
+pub(super) fn richtext(
+    ctx: interpret::Context,
+    input: &str,
+) -> AnyResult<Vec<(crate::Section, GoldMap<TypeId, Format>)>> {
     let parsed = sections_inner.parse(input).map_err(|e| e.into_owned())?;
     let parsed = parsed.0.into_iter();
     parsed
         .map(|s| interpret::section(&ctx, s))
-        .collect::<Result<_, _>>()
+        .collect::<Result<Vec<_>, _>>()
 }
 
-#[cfg(never)]
+#[cfg(test)]
 mod tests {
     use std::any::{Any, TypeId};
     use std::fmt;
@@ -182,7 +193,7 @@ mod tests {
     use winnow::Parser;
 
     use super::super::{modifiers, Modifiers};
-    use super::{balanced_text, bare_content, close_section, closed_element, interpret, sections};
+    use super::{balanced_text, bare_content, close_section, closed_element, interpret, richtext};
 
     use crate::Section;
 
@@ -247,7 +258,7 @@ mod tests {
             "{}baz",
             "{}foo{}",
             "{}{}",
-            "foo{content:test}bar",
+            "foo{Res.input:.3}bar",
             "foo{color:blue |green}bar",
             "foo{color:blue |hi{hello_world}hi}bar",
         ];
@@ -337,14 +348,14 @@ mod tests {
     fn closed_complete() {
         let parse = |input| parse_fn(close_section, input);
         let complete = [
-            "{color: blue}",
+            "{color: blue|}",
             "{}",
             "{some_dynamic_content}",
-            "{  color: blue  }",
-            "{color: {fnoo}}",
-            "{color  : {}}",
-            "{color:{}}",
-            "{color: purple, font: blar}",
+            "{  color: blue  |}",
+            "{color: {fnoo}|}",
+            "{color  : {}|}",
+            "{color:{}|}",
+            "{color: purple, font: blar|}",
             "{color: cyan, font: bar | dolore abdicum}",
             "{color:orange |lorem ipsum}",
         ];
@@ -362,7 +373,9 @@ mod tests {
     //        test rich_text parsing
     // ---------------------------------
     fn parse(input: &str) -> Result<Vec<Section>, String> {
-        sections(interpret::Context::richtext_defaults(), input).map_err(|err| err.to_string())
+        richtext(interpret::Context::richtext_defaults(), input)
+            .map(|res| res.into_iter().map(|t| t.0).collect())
+            .map_err(|err| err.to_string())
     }
     #[test]
     fn plain_text() {
@@ -400,10 +413,9 @@ mod tests {
         assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
-    fn closed_explicit_content_escape_comma() {
+    fn no_closed_explicit_content_escape_comma() {
         let input = r#"{Content: This may also work\, but commas need to be escaped}"#;
-        let expected = sections!["This may also work, but commas need to be escaped"];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        assert!(parse(input).is_err());
     }
     #[test]
     fn outer_dynamic_shorthand() {
@@ -546,18 +558,14 @@ mod tests {
         assert_eq_sorted!(Ok(expected), parse(input));
     }
     #[test]
-    fn implicit_dynamic_content_mod() {
+    fn no_implicit_dynamic_content_mod() {
         let input = "can also use a single elided content if you want: {Content:{}}";
-        let expected = sections![
-            "can also use a single elided content if you want: ",
-            {(fn Content) Dynamic::ByType: id::<modifiers::Content>()},
-        ];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        assert!(parse(input).is_err());
     }
     #[test]
     fn all_dynamic_content_declarations() {
         let input =
-            "{Content:{ident}} is equivalent to {ident} also {Color:white| {ident}} and {  ident  } and {Color:white|{ident}}.";
+            "{|{ident}} is equivalent to {ident} also {Color:white| {ident}} and {  ident  } and {Color:white|{ident}}.";
         let expected = sections![
             {(fn Content) Dynamic::new: s("ident")},
             " is equivalent to ",
@@ -576,8 +584,8 @@ mod tests {
     fn real_world_usecase() {
         let input =
             "Score: {Font: fonts/FiraMono-Medium.ttf, Color: rgb(1.0, 0.5, 0.5), RelSize: 1.5, Content: {Score}}\n\
-            {Color: rgb(1.0, 0.2, 0.2), Content: {Deaths}}\n\
-            Paddle hits: {Color: pink, Content: {paddle_hits}}\n\
+            {Color: rgb(1.0, 0.2, 0.2), | {Deaths}}\n\
+            Paddle hits: {Color: pink, | {paddle_hits}}\n\
             Ball position: {Font: fonts/FiraMono-Medium.ttf, Color: pink|\\{x: {ball_x}, y: {ball_y}\\}}";
         let expected = sections![
             "Score: ",

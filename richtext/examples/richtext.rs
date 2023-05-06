@@ -11,7 +11,6 @@ fn main() {
         .add_plugins(DefaultPlugins.set(bevy::log::LogPlugin {
             level: bevy::log::Level::DEBUG,
             filter: "wgpu=warn,bevy_ecs=info,naga=info".to_string(),
-            ..default()
         }))
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(RichTextPlugin)

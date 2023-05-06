@@ -228,7 +228,6 @@ impl Plugin for RichTextPlugin {
             .register_type::<modifiers::RelSize>()
             .register_type::<modifiers::Font>()
             .register_type::<modifiers::Color>()
-            .register_type::<modifiers::Format>()
             .init_resource::<WorldBindings>()
             .init_resource::<ResTrackers>()
             .add_system(
