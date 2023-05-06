@@ -35,9 +35,8 @@ pub(crate) type MakeModifyBox = fn(Cow<'static, str>) -> Result<ModifyBox, AnyEr
 
 #[derive(Default)]
 pub(crate) struct Context {
-    // TODO(err): error handling here
+    // TODO(perf) see design_docs/richtext/hlist_interpreting.md
     pub(crate) modify_builders: HashMap<&'static str, (TypeId, MakeModifyBox)>,
-    // TODO(feat): formatters
 }
 impl Context {
     pub(crate) fn insert<T: Any + Modify>(&mut self) {

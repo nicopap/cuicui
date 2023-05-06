@@ -179,23 +179,11 @@ impl Modify for Dynamic {
         };
         modifier?.apply(ctx, text)
     }
-    fn name() -> Option<&'static str>
-    where
-        Self: Sized,
-    {
-        None
-    }
     common_modify_methods! {}
 }
 impl Modify for () {
     fn apply(&self, _: &Context, _: &mut TextSection) -> Result<(), AnyError> {
         Ok(())
-    }
-    fn name() -> Option<&'static str>
-    where
-        Self: Sized,
-    {
-        None
     }
     common_modify_methods! {}
 }

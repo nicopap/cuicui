@@ -90,7 +90,9 @@ pub trait Modify: Any {
     /// [`RichText`]: crate::RichText
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError>;
 
-    // TODO(perf): See design_doc/richtext/better_section_impl.md.
+    // TODO(perf)TODO(clean): See design_doc/richtext/better_section_impl.md.
+    // Note: we already don't use this, check if true by removing the impl Clone for ModifyBox
+    // block
     fn clone_dyn(&self) -> ModifyBox;
     fn as_any(&self) -> &dyn Any;
     fn eq_dyn(&self, other: &dyn Modify) -> bool;
@@ -114,11 +116,11 @@ pub trait Modify: Any {
     /// You may overwrite this method regardless, as long as the return value
     /// is an identifier.
     #[inline]
-    fn name() -> Option<&'static str>
+    fn name() -> &'static str
     where
         Self: Sized,
     {
-        Some(short_name(type_name::<Self>()))
+        short_name(type_name::<Self>())
     }
     /// Parse from the string representation of the `metadata` value section
     /// of the format string.
@@ -132,14 +134,7 @@ pub trait Modify: Any {
     where
         Self: Sized,
     {
-        match Self::name() {
-            Some(name) => Err(ParserUnimplemented(name).into()),
-            None => unreachable!(
-                "Parsers without names cannot be called, \
-                in fact if the rust compiler is intelligent enough, this string \
-                shouldn't be in your final binary."
-            ),
-        }
+        Err(ParserUnimplemented(Self::name()).into())
     }
 }
 impl PartialEq for dyn Modify {
