@@ -1,6 +1,6 @@
 //! Intermediate parsing representation.
 
-use crate::{modifiers, Modify};
+use crate::{modifiers, show::RuntimeFormat, Modify};
 
 use winnow::stream::Accumulate;
 
@@ -9,21 +9,50 @@ pub(super) struct Modifier<'a> {
     pub(super) name: &'a str,
     pub(super) value: Dyn<'a>,
 }
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub(super) enum Dyn<'a> {
-    ByRef(Option<&'a str>),
+    Dynamic(Dynamic<'a>),
     Static(&'a str),
 }
+
 #[derive(Debug, PartialEq, Clone)]
 pub(super) struct Section<'a> {
     pub(super) modifiers: Vec<Modifier<'a>>,
     pub(super) content: Dyn<'a>,
 }
+
 #[derive(Debug, PartialEq, Clone)]
 pub(super) struct Full<'a>(Vec<Section<'a>>);
 
 #[derive(Debug, PartialEq, Clone)]
 pub(super) struct Sections<'a>(pub(super) Vec<Section<'a>>);
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub(super) enum Format<'a> {
+    None,
+    UserDefined(&'a str),
+    Fmt(RuntimeFormat),
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub(super) enum Access<'a> {
+    TypeBound,
+    Bound(&'a str),
+    AtPath(&'a str),
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub(super) struct Dynamic<'a> {
+    format: Format<'a>,
+    access: Access<'a>,
+}
+
+impl<'a> Dynamic<'a> {
+    pub(super) fn new((access, format): (Access<'a>, Option<Format<'a>>)) -> Self {
+        Dynamic { access, format: format.unwrap_or(Format::None) }
+    }
+}
 
 impl<'a> Sections<'a> {
     pub(super) fn tail((head, mut tail): (Option<Section<'a>>, Self)) -> Self {
@@ -57,15 +86,18 @@ impl<'a> Modifier<'a> {
     }
 }
 impl<'a> Section<'a> {
-    pub(super) fn opt_from(input: &'a str) -> Option<Self> {
+    /// A section built from plain text. If the text is empty, then there is
+    /// no section.
+    pub(super) fn free(input: &'a str) -> Option<Self> {
         if input.is_empty() {
             return None;
         }
         Some(Section { content: Dyn::Static(input), modifiers: Vec::new() })
     }
-}
-pub(super) fn short_dynamic(input: Option<&str>) -> Vec<Section> {
-    vec![Section { modifiers: vec![], content: Dyn::ByRef(input) }]
+    /// A delimited section (ie between {}).
+    pub(super) fn format(input: Dynamic) -> Vec<Self> {
+        vec![Section { modifiers: vec![], content: Dyn::Dynamic(input) }]
+    }
 }
 pub(super) fn flatten_section<'a>(
     (mut modifiers, content): (Vec<Modifier<'a>>, Option<Sections<'a>>),

@@ -32,6 +32,9 @@ impl RichTextBuilder {
             formatters: HashMap::default(),
         }
     }
+    /// Default cuicui rich text parser, [see the syntax].
+    ///
+    /// [see the syntax]: https://github.com/nicopap/cuicui/blob/main/design_doc/richtext/informal_grammar.md
     pub fn new(format_string: impl Into<String>) -> Self {
         RichTextBuilder {
             format_string: format_string.into(),
@@ -50,15 +53,10 @@ impl RichTextBuilder {
             .insert(name, show::Convert::<I, O, F>::new(convert));
         self
     }
-    /// Default cuicui rich text parser, [see the syntax].
-    ///
-    /// [see the syntax]: https://github.com/nicopap/cuicui/blob/main/design_doc/richtext/informal_grammar.md
     pub fn build(self) -> Result<(RichText, Vec<Tracker>), AnyError> {
         let Self { format_string, context, formatters } = self;
-        let mut partial = RichTextPartial {
-            sections: parse::sections(context, &format_string)?,
-            formatters,
-        };
+        let (sections, trackers) = parse::richtext(context, &format_string)?;
+        let mut partial = RichTextPartial { sections, formatters };
 
         debug!("Making RichText: {format_string:?}");
         partial.print_bindings();

@@ -10,14 +10,17 @@ inner = semi_exposed [scope semi_exposed]*
 exposed = <text∌([{}|,>
 balanced_text = exposed [scope exposed]*
 
-path = [:alphanum:_.]+
+format_spec = <https://doc.rust-lang.org/stable/std/fmt/index.html#syntax>
+format = [path]? [':' format_spec]?
+
+path = [:alphanum:_."]+
 key = <ident>
 open_subsection = <text∌{}>
 open_section = <text∌{>
 close_section = '{' closed '}'
 closed_element = key ':' metadata
-closed = <ident> | [closed_element],* ['|' bare_content]?
-metadata = '$' [path]? | balanced_text
+closed = format | [closed_element],* ['|' bare_content]?
+metadata = '{' format '}' | balanced_text
 bare_content = open_subsection [close_section open_subsection]*
 rich_text = open_section [close_section open_section]*
 ```
@@ -27,7 +30,8 @@ Sections are a collection of metadatas plus some content.
 Metadatas are values associated with some `key`.
 If the section is just an identifer between braces (`{like_this}`),
 then it is *dynamic* `Content`.
-If the metadata value is a `$` followed by an identifer, then it is *dynamic*.
+
+If the metadata value is between braces (`{like_this}`), then it is *dynamic*.
 *Dynamic* metadata can be set and updated at runtime by the user.
 
 A section may end by a `|` followed by text. This represents the text content
@@ -42,7 +46,7 @@ checking for those delimiter, escape them with `\\`.
 
 Since metadata elements are separated by a comma, the `metadata` text must also
 escape `,`, otherwise it is considered the end of the value,
-unless there is an unclosed open parenthesis.
+unless there is an unclosed open parenthesis or braces.
 
 ### Examples
 
@@ -51,7 +55,7 @@ Each line of the following code block represents a valid rich text string.
 ```
 This is some text, it is just a single content section
 This one contains a single {dynamic_content} that can be replaced at runtime
-{Color:$|This is also just some non-dynamic text, commas need not be escaped}
+{Color:{}|This is also just some non-dynamic text, commas need not be escaped}
 {Content: This may also work\, but commas need to be escaped}
 {dynamic_content}
 {}
@@ -63,19 +67,17 @@ An empty {} is equivalent to {name}, but referred by typeid instead of name
 {Color:rgb(12, 34, 50),Font:bold.ttf|metadata values} can contain commas within parenthesis or square brackets
 You can escape \{ curly brackets \}.
 {Color: pink| even inside \{ a closed section \}}.
-{Color: $relevant_color | Not only Content can be dynamic, also value of other metadata}
-{Color: $ |If the identifier of a dynamic metadata value is elided, then the typeid of the rust type is used}
-can also use a single elided Content if you want: {Content:$}
-{Content:$ident} is equivalent to {ident} also {  ident  }.
+{Color: {relevant_color} | Not only Content can be dynamic, also value of other metadata}
+{Color: {} |If the identifier of a dynamic metadata value is elided, then the typeid of the rust type is used}
+can also use a single elided Content if you want: {Content:{}}
+{Content:{ident}} is equivalent to {ident} also {  ident  }.
 ```
 
 Note that spaces surrounding metadata delimiters are trimmed from the output.
 
-- right side of `{`
-- left side of `}`
-- both sides of `|`
-- both sides of `,`
-- right side of `:`
+- after `{`
+- after `|`
+- after `,`
 
 ### Counter examples
 

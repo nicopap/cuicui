@@ -1,6 +1,4 @@
 //! Get a string from reflection.
-mod parse;
-
 use std::{fmt, marker::PhantomData};
 
 use bevy::{
@@ -54,11 +52,6 @@ pub struct RuntimeFormat {
     pub prec: usize,
     pub sign: bool,
     pub debug: bool,
-}
-impl RuntimeFormat {
-    pub fn parse(input: &str) -> Option<Self> {
-        parse::format(input)
-    }
 }
 impl Show for RuntimeFormat {
     fn format(&self, input: &dyn Reflect, f: &mut fmt::Formatter<'_>) -> Result<(), Error> {

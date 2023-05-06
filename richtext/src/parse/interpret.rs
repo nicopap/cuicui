@@ -54,7 +54,6 @@ impl Context {
         ret.insert::<modifiers::RelSize>();
         ret.insert::<modifiers::Font>();
         ret.insert::<modifiers::Color>();
-        ret.insert::<modifiers::Format>();
         ret
     }
 }
@@ -62,8 +61,8 @@ impl Context {
 /// a collection of trait objects used for formatting.
 pub(super) fn section(ctx: &Context, input: ParseSection) -> AnyResult<Section> {
     let parse_modify_value = |type_id, value, parse: MakeModifyBox| match value {
-        Dyn::ByRef(Some(name)) => Ok::<ModifyBox, _>(Box::new(Dynamic::ByName(name.to_string()))),
-        Dyn::ByRef(None) => Ok::<ModifyBox, _>(Box::new(Dynamic::ByType(type_id))),
+        Dyn::Format(Some(name)) => Ok::<ModifyBox, _>(Box::new(Dynamic::ByName(name.to_string()))),
+        Dyn::Format(None) => Ok::<ModifyBox, _>(Box::new(Dynamic::ByType(type_id))),
         Dyn::Static(value) => {
             let mut value: Cow<'static, str> = value.to_owned().into();
             escape_backslashes(&mut value);

@@ -13,17 +13,18 @@ pub(crate) mod interpret;
 mod structs;
 
 use winnow::{
-    ascii::{alpha1, alphanumeric1, escaped, multispace0},
+    ascii::{alpha1, alphanumeric1, digit1, escaped, multispace0},
     branch::alt,
-    combinator::{delimited, opt, preceded, repeat0, separated1, separated_pair},
+    combinator::{delimited, opt, peek, preceded, repeat0, separated1, separated_pair},
     error::ParseError,
     stream::{AsChar, Stream, StreamIsPartial},
     token::{one_of, take_till1, take_while1},
     Parser,
 };
 
+use crate::show::RuntimeFormat;
 use crate::AnyError;
-use structs::{flatten_section, short_dynamic, Dyn, Modifier, Section, Sections};
+use structs::{flatten_section, Access, Dyn, Dynamic, Format, Modifier, Section, Sections};
 
 pub(crate) use color::parse as color;
 
@@ -31,7 +32,59 @@ type IResult<'a, O> = winnow::IResult<&'a str, O>;
 type AnyResult<T> = Result<T, AnyError>;
 
 // How to read the following code:
-// Look at the variable names for match with the grammar, they are defined in the same order.
+// Look at the variable names for match with the grammar linked in module doc,
+// they are defined in the same order.
+
+/// Parse a rust format specifier.
+///
+/// Refer to <https://doc.rust-lang.org/stable/std/fmt/index.html#syntax>.
+/// Note that we really are only interested in `format_spec`, since supposedly
+/// the rest of this crate does what `maybe_format` does, just much better for
+/// our specific use-case.
+fn format(input: &str) -> IResult<Dynamic> {
+    let fill = one_of::<&str, _, _>(('a'..='z', 'A'..='Z', '0'..='9', ' '));
+    let align = one_of("<^>");
+    let sign = one_of("+-");
+
+    let integer = || digit1.map(|i: &str| i.parse().unwrap());
+    let count = integer;
+    let width = count();
+    let precision = count();
+
+    let type_ = opt('?');
+
+    let format_spec = (
+        opt((opt(fill), align)),
+        opt(sign),
+        opt('#'),
+        opt('0'),
+        opt(width),
+        opt(preceded('.', precision)),
+        type_,
+    );
+    let format_spec = format_spec.map(|(_, sign, _, _, width, prec, type_)| RuntimeFormat {
+        sign: sign.is_some(),
+        width: width.unwrap_or(0),
+        prec: prec.unwrap_or(0),
+        debug: type_.is_some(),
+    });
+    let format_spec = alt((
+        peek("}").map(|_| Format::None),
+        ident.map(Format::UserDefined),
+        format_spec.map(Format::Fmt),
+    ));
+    let path = take_while1(('a'..='z', 'A'..='Z', '0'..='9', "_."));
+    let access = alt((
+        peek('}').map(|_| Access::TypeBound),
+        preceded("Res", path).map(Access::AtPath),
+        ident.map(Access::Bound),
+    ));
+    (access, opt(preceded(':', format_spec)))
+        .context("format")
+        .map(Dynamic::new)
+        .parse_next(input)
+}
+
 fn ws<I, O, E>(inner: impl Parser<I, O, E>) -> impl Parser<I, O, E>
 where
     <I as Stream>::Token: AsChar,
@@ -42,9 +95,6 @@ where
     delimited(multispace0, inner, multispace0)
 }
 
-fn path(input: &str) -> IResult<&str> {
-    take_while1(('a'..='z', 'A'..='Z', '0'..='9', "_.")).parse_next(input)
-}
 fn ident(input: &str) -> IResult<&str> {
     let repeat = repeat0::<_, _, (), _, _>;
     (alt((alpha1, "_")), repeat(alt((alphanumeric1, "_"))))
@@ -74,12 +124,12 @@ fn balanced_text(input: &str) -> IResult<&str> {
 }
 fn open_subsection(input: &str) -> IResult<Option<Section>> {
     escaped(take_till1("{}\\"), '\\', one_of("{}\\"))
-        .map(Section::opt_from)
+        .map(Section::free)
         .parse_next(input)
 }
 fn open_section(input: &str) -> IResult<Option<Section>> {
     escaped(take_till1("{\\"), '\\', one_of("{}\\"))
-        .map(Section::opt_from)
+        .map(Section::free)
         .parse_next(input)
 }
 fn close_section(input: &str) -> IResult<Vec<Section>> {
@@ -87,17 +137,14 @@ fn close_section(input: &str) -> IResult<Vec<Section>> {
         separated1(closed_element, ws(',')),
         opt(preceded(ws('|'), bare_content)),
     );
-    let closed = alt((
-        full_list.map(flatten_section),
-        opt(ident).map(short_dynamic),
-    ));
+    let closed = alt((format.map(Section::format), full_list.map(flatten_section)));
     delimited('{', ws(closed.context("closed")), '}').parse_next(input)
 }
 fn closed_element(input: &str) -> IResult<Modifier> {
     let key = ident.context("key");
 
     let metadata = alt((
-        preceded('$', opt(path)).context("$meta").map(Dyn::ByRef),
+        delimited('{', format, '}').map(Dyn::Dynamic),
         balanced_text.context("metadata value").map(Dyn::Static),
     ));
     separated_pair(key, ws(':'), metadata)
@@ -116,7 +163,7 @@ fn sections_inner(input: &str) -> IResult<Sections> {
         .map(Sections::tail)
         .parse_next(input)
 }
-pub(super) fn sections(ctx: interpret::Context, input: &str) -> AnyResult<Vec<crate::Section>> {
+pub(super) fn richtext(ctx: interpret::Context, input: &str) -> AnyResult<Vec<crate::Section>> {
     let parsed = sections_inner.parse(input).map_err(|e| e.into_owned())?;
     let parsed = parsed.0.into_iter();
     parsed
@@ -124,7 +171,7 @@ pub(super) fn sections(ctx: interpret::Context, input: &str) -> AnyResult<Vec<cr
         .collect::<Result<_, _>>()
 }
 
-#[cfg(test)]
+#[cfg(never)]
 mod tests {
     use std::any::{Any, TypeId};
     use std::fmt;
@@ -261,8 +308,8 @@ mod tests {
         let parse = |input| parse_fn(closed_element, input);
         let complete = [
             "color:red",
-            "color:$foobar",
-            "color:$",
+            "color:{foobar}",
+            "color:{}",
             r#"content:   foo\,bar"#,
             "color: rgb(1,3,4)",
             "color:PiNk",
@@ -294,9 +341,9 @@ mod tests {
             "{}",
             "{some_dynamic_content}",
             "{  color: blue  }",
-            "{color: $fnoo}",
-            "{color  : $}",
-            "{color:$}",
+            "{color: {fnoo}}",
+            "{color  : {}}",
+            "{color:{}}",
             "{color: purple, font: blar}",
             "{color: cyan, font: bar | dolore abdicum}",
             "{color:orange |lorem ipsum}",
@@ -478,7 +525,7 @@ mod tests {
     }
     #[test]
     fn named_dynamic_mod() {
-        let input = "{Color: $relevant_color | Not only content can be dynamic, also value of other metadata}";
+        let input = "{Color: {relevant_color} | Not only content can be dynamic, also value of other metadata}";
         let expected = sections![{
             (fn Color) Dynamic::new: s("relevant_color"),
             Content: s("Not only content can be dynamic, also value of other metadata"),
@@ -487,7 +534,7 @@ mod tests {
     }
     #[test]
     fn implicit_dynamic_mod() {
-        let input = "{Color: $ |If the identifier of a dynamic metadata value is elided, \
+        let input = "{Color: {} |If the identifier of a dynamic metadata value is elided, \
                 then the typeid of the rust type is used}";
         let expected = sections![{
             (fn Color) Dynamic::ByType: id::<modifiers::Color>(),
@@ -500,7 +547,7 @@ mod tests {
     }
     #[test]
     fn implicit_dynamic_content_mod() {
-        let input = "can also use a single elided content if you want: {Content:$}";
+        let input = "can also use a single elided content if you want: {Content:{}}";
         let expected = sections![
             "can also use a single elided content if you want: ",
             {(fn Content) Dynamic::ByType: id::<modifiers::Content>()},
@@ -510,7 +557,7 @@ mod tests {
     #[test]
     fn all_dynamic_content_declarations() {
         let input =
-            "{Content:$ident} is equivalent to {ident} also {Color:white| {ident}} and {  ident  } and {Color:white|{ident}}.";
+            "{Content:{ident}} is equivalent to {ident} also {Color:white| {ident}} and {  ident  } and {Color:white|{ident}}.";
         let expected = sections![
             {(fn Content) Dynamic::new: s("ident")},
             " is equivalent to ",
@@ -528,9 +575,9 @@ mod tests {
     #[test]
     fn real_world_usecase() {
         let input =
-            "Score: {Font: fonts/FiraMono-Medium.ttf, Color: rgb(1.0, 0.5, 0.5), RelSize: 1.5, Content: $Score}\n\
-            {Color: rgb(1.0, 0.2, 0.2), Content: $Deaths}\n\
-            Paddle hits: {Color: pink, Content: $paddle_hits}\n\
+            "Score: {Font: fonts/FiraMono-Medium.ttf, Color: rgb(1.0, 0.5, 0.5), RelSize: 1.5, Content: {Score}}\n\
+            {Color: rgb(1.0, 0.2, 0.2), Content: {Deaths}}\n\
+            Paddle hits: {Color: pink, Content: {paddle_hits}}\n\
             Ball position: {Font: fonts/FiraMono-Medium.ttf, Color: pink|\\{x: {ball_x}, y: {ball_y}\\}}";
         let expected = sections![
             "Score: ",

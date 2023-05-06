@@ -94,3 +94,14 @@ I'm not sure what is the best approach. Let's weight the two sides:
 - It does look like a section, but isn't really one
 - It might be difficult to parse in a way that allows discriminating with a
   section.
+
+**Idea**: What about _forcing_ a space between `:` and the metadata value in
+sections, so that it's always clearly distinct from formats
+
+## Implementation
+
+Making `Dynamic` a struct with a `format` and `access` field doesn't work. As
+`Dynamic` **only** accesses bindings by name at runtime (in fact we could
+change this to access by an interned ID of sort).
+
+What we really want is a way to say to `RichTextPartial` to register some trackers.

@@ -6,7 +6,6 @@ use bevy::prelude::{trace, FromReflect, Reflect, TextSection};
 use bevy::reflect::ReflectFromReflect;
 use thiserror::Error;
 
-use crate::show::RuntimeFormat;
 use crate::{modify::Context, IntoModify, Modify, ModifyBox};
 
 macro_rules! common_modify_methods {
@@ -197,31 +196,6 @@ impl Modify for () {
         Self: Sized,
     {
         None
-    }
-    common_modify_methods! {}
-}
-
-// TODO(clean): Remove this and replace with design_doc/richtext/dynamic_format.md design
-/// User-defined formatting device.
-#[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
-#[reflect(FromReflect)]
-pub enum Format {
-    Name(String),
-    Format(RuntimeFormat),
-}
-impl Modify for Format {
-    fn apply(&self, _ctx: &Context, _text: &mut TextSection) -> Result<(), AnyError> {
-        Err(Errors::ModifyFormat.into())
-    }
-    fn parse(input: &str) -> Result<ModifyBox, AnyError>
-    where
-        Self: Sized,
-    {
-        if let Some(format) = RuntimeFormat::parse(input) {
-            Ok(Box::new(Format::Format(format)))
-        } else {
-            Ok(Box::new(Format::Name(input.to_string())))
-        }
     }
     common_modify_methods! {}
 }
