@@ -227,9 +227,9 @@ fn setup(
     // Score
     commands.spawn(
         RichTextBundle::parse(
-            "Score: {Font: fonts/FiraMono-Medium.ttf, Color: rgb(1.0, 0.5, 0.5), RelSize: 1.5, Content: $Score}\n\
-            {Color: rgb(1.0, 0.2, 0.2), Content: $Deaths}\n\
-            Paddle hits: {Color: pink, Content: $paddle_hits}\n\
+            "Score: {Font: fonts/FiraMono-Medium.ttf, Color: rgb(1.0, 0.5, 0.5), RelSize: 1.5, Content: {Score}}\n\
+            {Color: rgb(1.0, 0.2, 0.2), Content: {Deaths}}\n\
+            Paddle hits: {Color: pink, Content: {paddle_hits}}\n\
             Ball position: {Font: fonts/FiraMono-Medium.ttf, Color: pink|\\{x: {ball_x}, y: {ball_y}\\}}",
                 TextStyle {
                     font: asset_server.load("fonts/FiraSans-Bold.ttf"),

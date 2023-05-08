@@ -12,7 +12,7 @@ pub(super) struct Modifier<'a> {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub(super) enum Dyn<'a> {
-    Dynamic(Dynamic<'a>),
+    Dynamic(Binding<'a>),
     Static(&'a str),
 }
 
@@ -30,27 +30,19 @@ pub(super) struct Sections<'a>(pub(super) Vec<Section<'a>>);
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub(super) enum Format<'a> {
-    None,
     UserDefined(&'a str),
     Fmt(RuntimeFormat),
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub(super) enum Access<'a> {
-    TypeBound,
-    Bound(&'a str),
-    AtPath(&'a str),
+pub(super) enum Binding<'a> {
+    Type,
+    Name(&'a str),
+    Format { path: &'a str, format: Format<'a> },
 }
-
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub(super) struct Dynamic<'a> {
-    format: Format<'a>,
-    access: Access<'a>,
-}
-
-impl<'a> Dynamic<'a> {
-    pub(super) fn new((access, format): (Access<'a>, Option<Format<'a>>)) -> Self {
-        Dynamic { access, format: format.unwrap_or(Format::None) }
+impl<'a> Binding<'a> {
+    pub(super) fn format((path, format): (&'a str, Format<'a>)) -> Self {
+        Binding::Format { path, format }
     }
 }
 
@@ -95,14 +87,14 @@ impl<'a> Section<'a> {
         Some(Section { content: Dyn::Static(input), modifiers: Vec::new() })
     }
     /// A delimited section (ie between {}).
-    pub(super) fn format(input: Dynamic) -> Vec<Self> {
+    pub(super) fn format(input: Binding<'a>) -> Vec<Self> {
         vec![Section { modifiers: vec![], content: Dyn::Dynamic(input) }]
     }
 }
 pub(super) fn flatten_section<'a>(
     (mut modifiers, content): (Vec<Modifier<'a>>, Option<Sections<'a>>),
 ) -> Vec<Section<'a>> {
-    let content_name = <modifiers::Content as Modify>::name().unwrap();
+    let content_name = <modifiers::Content as Modify>::name();
 
     // Either we have a `content` metadata or we re-use section
     let Some(Sections(mut sections)) = content else {

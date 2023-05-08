@@ -1,6 +1,7 @@
 //! Declare from format string what resource and components to read
 
-use std::str::FromStr;
+use std::ops::Deref;
+use std::{borrow::Cow, str::FromStr};
 
 use bevy::prelude::{AppTypeRegistry, ReflectResource, World};
 use bevy::reflect::{GetPath, Reflect};
@@ -18,21 +19,25 @@ impl FromStr for Namespace {
         (s == "Res").then_some(Namespace::Res).ok_or(())
     }
 }
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 struct Path<'a> {
-    path: &'a str,
+    path: Cow<'a, str>,
 }
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct Target<'a> {
     _namespace: Namespace,
     path: Path<'a>,
 }
-impl<'a> Target<'a> {
-    pub(crate) fn parse(input: &'a str) -> Option<Self> {
-        let (namespace, path) = input.split_once('.')?;
-        let _namespace = namespace.parse().ok()?;
-        Some(Target { _namespace, path: Path { path } })
+impl Target<'static> {
+    pub(crate) fn statik(mut input: String) -> Option<Self> {
+        let split_index = input.find('.')?;
+        let path = input.split_off(split_index + 1);
+        let _namespace = input.strip_suffix('.')?.parse().ok()?;
+
+        Some(Target { _namespace, path: Path { path: path.into() } })
     }
+}
+impl<'a> Target<'a> {
     // TODO(err): cleaner error handling here, need to distinguish between:
     // - `reflect_path` gets a bad value
     // - `world` has no type regsitry
@@ -40,8 +45,8 @@ impl<'a> Target<'a> {
     // - can't extract resource from world
     // - The resource hasn't changed since last frame.
     pub(crate) fn get<'b>(&self, world: &'b World) -> Option<&'b dyn Reflect> {
-        let Path { path, .. } = self.path;
-        let type_name = path.split_once('.').map_or(path, |p| p.0);
+        let Path { path, .. } = &self.path;
+        let type_name = path.split_once('.').map_or(path.deref(), |p| p.0);
 
         // SAFETY: `type_name` is at most the same length as `path`.
         let path = unsafe { path.get_unchecked(type_name.len()..) };

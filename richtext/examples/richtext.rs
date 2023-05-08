@@ -11,7 +11,6 @@ fn main() {
         .add_plugins(DefaultPlugins.set(bevy::log::LogPlugin {
             level: bevy::log::Level::DEBUG,
             filter: "wgpu=warn,bevy_ecs=info,naga=info".to_string(),
-            ..default()
         }))
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(RichTextPlugin)
@@ -39,7 +38,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2dBundle::default());
     commands.spawn((
         RichTextBundle::parse(
-            "{Color:$|hello\n{}!}",
+            "{Color:{}|hello\n{}!}",
             TextStyle {
                 font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                 font_size: 100.0,
@@ -70,7 +69,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             // To use a specific font, you need to hold a handle on it.
             // This is why we added the `FiraMediumHolder` resource earlier,
             // otherwise, the font doesn't show up.
-            "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold, Content:$Res.Fps.fps, Format:{:.3}}",
+            "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold, Content:{fmt:Res.Fps.fps:.1}}",
             TextStyle {
                 font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                 font_size: 60.0,

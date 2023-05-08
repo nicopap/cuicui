@@ -98,6 +98,11 @@ I'm not sure what is the best approach. Let's weight the two sides:
 **Idea**: What about _forcing_ a space between `:` and the metadata value in
 sections, so that it's always clearly distinct from formats
 
+**Idea 2**: It causes too many parsing woes. I opted to prefix bindings + formats
+by `fmt:`, this way the grammar is unambiguous, although weird for users, and
+misleading because now we use "format string" both for the whole text and the
+special case of bindings that have formatting applied to them.
+
 ## Implementation
 
 Making `Dynamic` a struct with a `format` and `access` field doesn't work. As
@@ -105,3 +110,11 @@ Making `Dynamic` a struct with a `format` and `access` field doesn't work. As
 change this to access by an interned ID of sort).
 
 What we really want is a way to say to `RichTextPartial` to register some trackers.
+
+We have things:
+
+- The binding name in `RichText`, it is as before, `modifiers::Dynamic::ByName`.
+- A `Tracker` the datastructure that reads from `&World` and updates `modify::Bindings`.
+
+`RichText` builder should return both. Then, the user of `RichText` can add
+themselves the tracker to the ECS.

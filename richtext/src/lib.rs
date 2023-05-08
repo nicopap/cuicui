@@ -4,11 +4,11 @@
 //!
 //! - [ ] Add [`RichTextPlugin`] to your app
 //! - [ ] Create a [`RichText`] using [`RichTextBundle`] and add it to your UI.
-//!       See [`RichText::parse`] for a primer on the format string syntax.
 //! - [ ] Update the [`RichText`]'s context. There is actually multiple approaches:
 //!     - Use the [`track!`] macro to make [`RichText`] binding's follow the value
 //!       of components you added to the ECS.
 //!     - Use the [`ResourceTrackerExt`] methods to track some [`Resource`]s.
+//!     - Use `fmt:` reflection (TODO(doc): explain).
 //!     - Manually use the [`RichTextData::set`],
 //!       [`set_typed`](RichTextData::set_typed) or [`set_content`](RichTextData::set_content)
 //!       to update a specific [`RichText`] context.
@@ -88,7 +88,7 @@
 //!
 //!     // Rich text will automatically be updated.
 //!     commands.spawn(RichTextBundle::parse(
-//!         "{Color:$DeathLineColor|Death count: {DeathCount}}\n\
+//!         "{Color:{DeathLineColor}|Death count: {DeathCount}}\n\
 //!         slider1 value: {slider1}\n\
 //!         slider2 debug text: {slider2}",
 //!         TextStyle {
@@ -100,6 +100,7 @@
 //! ```
 //!
 //! [the README]: https://github.com/nicopap/cuicui/tree/main/richtext
+//! [`Resource`]: bevy::prelude::Resource
 
 mod gold_hash;
 // mod hlist_madness;

@@ -24,13 +24,12 @@ pub(crate) use reflect::make_tracker;
 pub use resource::{update_tracked_resources, ResTrackers, ResourceTrackerExt};
 
 pub struct Tracker {
-    pub(crate) binding_name: &'static str,
-    fetch: FetchBox,
+    pub(crate) binding_name: String,
+    pub(crate) fetch: FetchBox,
 }
 impl Tracker {
     pub(crate) fn new<R: Typed>(fetch: FetchBox) -> Self {
-        let binding_name = get_short_name(<R as Typed>::type_info().type_name()).into_boxed_str();
-        // TODO(perf): leaky
-        Self { binding_name: Box::leak(binding_name), fetch }
+        let binding_name = get_short_name(<R as Typed>::type_info().type_name());
+        Self { binding_name, fetch }
     }
 }

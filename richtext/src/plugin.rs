@@ -17,7 +17,7 @@ use crate::{
 #[derive(Error, Debug)]
 pub enum BindingError {
     #[error("Innexisting name binding \"{key}\" for given type {id:?}")]
-    NoKey { key: &'static str, id: TypeId },
+    NoKey { key: String, id: TypeId },
     #[error("Innexisting type: \"{key:?}\"")]
     NoType { key: TypeId },
 }
@@ -33,22 +33,27 @@ pub struct WorldBindings {
     has_changed: bool,
 }
 impl WorldBindings {
-    fn insert(&mut self, key: &'static str, value: ModifyBox) {
+    fn insert(&mut self, key: &str, value: ModifyBox) {
         self.has_changed = true;
-        self.bindings.insert(key, value);
+        match self.bindings.get_mut(key) {
+            Some(old_value) => *old_value = value,
+            None => {
+                self.bindings.insert(key.to_string(), value);
+            }
+        };
     }
     /// Set a named modifier binding.
     ///
     /// Unlike [`RichTextData`] this doesn't check that the key exists or that
     /// `value` is of the right type.
-    pub fn set(&mut self, key: &'static str, value: impl IntoModify) {
+    pub fn set(&mut self, key: &str, value: impl IntoModify) {
         self.insert(key, value.into_modify())
     }
     /// Set a named content binding.
     ///
     /// Unlike [`RichTextData`] this doesn't check that the key exists or that
     /// `value` is of the right type.
-    pub fn set_content(&mut self, key: &'static str, value: &impl fmt::Display) {
+    pub fn set_content(&mut self, key: &str, value: &impl fmt::Display) {
         self.insert(key, Box::new(Content::from(value)))
     }
 }
@@ -84,21 +89,21 @@ impl RichTextData {
             Err(BindingError::NoType { key })
         }
     }
-    fn insert_binding_checked(
-        &mut self,
-        key: &'static str,
-        id: TypeId,
-        value: ModifyBox,
-    ) -> BindingResult {
+    fn insert_binding_checked(&mut self, key: &str, id: TypeId, value: ModifyBox) -> BindingResult {
         if self.text.has_binding(key, id) {
             self.has_changed = true;
-            self.bindings.insert(key, value);
+            match self.bindings.get_mut(key) {
+                Some(old_value) => *old_value = value,
+                None => {
+                    self.bindings.insert(key.to_string(), value);
+                }
+            }
             Ok(())
         } else {
-            Err(BindingError::NoKey { key, id })
+            Err(BindingError::NoKey { key: key.to_string(), id })
         }
     }
-    pub fn set(&mut self, key: &'static str, value: impl IntoModify) -> BindingResult {
+    pub fn set(&mut self, key: &str, value: impl IntoModify) -> BindingResult {
         let modifier = value.into_modify();
         let type_id = modifier.as_any().type_id();
         self.insert_binding_checked(key, type_id, modifier)
@@ -108,11 +113,7 @@ impl RichTextData {
         let type_id = modifier.as_any().type_id();
         self.insert_type_binding_checked(type_id, modifier)
     }
-    pub fn set_content(
-        &mut self,
-        key: Option<&'static str>,
-        value: &impl fmt::Display,
-    ) -> BindingResult {
+    pub fn set_content(&mut self, key: Option<&str>, value: &impl fmt::Display) -> BindingResult {
         let value = Box::new(Content::from(value));
         let id = TypeId::of::<Content>();
         match key {
@@ -228,7 +229,6 @@ impl Plugin for RichTextPlugin {
             .register_type::<modifiers::RelSize>()
             .register_type::<modifiers::Font>()
             .register_type::<modifiers::Color>()
-            .register_type::<modifiers::Format>()
             .init_resource::<WorldBindings>()
             .init_resource::<ResTrackers>()
             .add_system(

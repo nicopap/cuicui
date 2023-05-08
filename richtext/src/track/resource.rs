@@ -1,5 +1,7 @@
 use std::{fmt, marker::PhantomData};
 
+#[cfg(doc)]
+use bevy::utils::get_short_name;
 use bevy::{ecs::system::Command, prelude::*, reflect::Typed};
 
 use super::{some_content, FetchBox, Tracker};

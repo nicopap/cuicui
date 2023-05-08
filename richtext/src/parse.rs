@@ -15,16 +15,16 @@ mod structs;
 use winnow::{
     ascii::{alpha1, alphanumeric1, digit1, escaped, multispace0},
     branch::alt,
-    combinator::{delimited, opt, peek, preceded, repeat0, separated1, separated_pair},
+    combinator::{delimited, opt, peek, preceded, repeat0, separated1, separated_pair, terminated},
     error::ParseError,
     stream::{AsChar, Stream, StreamIsPartial},
     token::{one_of, take_till1, take_while1},
     Parser,
 };
 
-use crate::show::RuntimeFormat;
 use crate::AnyError;
-use structs::{flatten_section, Access, Dyn, Dynamic, Format, Modifier, Section, Sections};
+use crate::{show::RuntimeFormat, track::Tracker};
+use structs::{flatten_section, Binding, Dyn, Format, Modifier, Section, Sections};
 
 pub(crate) use color::parse as color;
 
@@ -41,7 +41,7 @@ type AnyResult<T> = Result<T, AnyError>;
 /// Note that we really are only interested in `format_spec`, since supposedly
 /// the rest of this crate does what `maybe_format` does, just much better for
 /// our specific use-case.
-fn format(input: &str) -> IResult<Dynamic> {
+fn binding(input: &str) -> IResult<Binding> {
     let fill = one_of::<&str, _, _>(('a'..='z', 'A'..='Z', '0'..='9', ' '));
     let align = one_of("<^>");
     let sign = one_of("+-");
@@ -68,21 +68,15 @@ fn format(input: &str) -> IResult<Dynamic> {
         prec: prec.unwrap_or(0),
         debug: type_.is_some(),
     });
-    let format_spec = alt((
-        peek("}").map(|_| Format::None),
-        ident.map(Format::UserDefined),
-        format_spec.map(Format::Fmt),
-    ));
+    let format_spec = alt((ident.map(Format::UserDefined), format_spec.map(Format::Fmt)));
     let path = take_while1(('a'..='z', 'A'..='Z', '0'..='9', "_."));
-    let access = alt((
-        peek('}').map(|_| Access::TypeBound),
-        preceded("Res", path).map(Access::AtPath),
-        ident.map(Access::Bound),
+    let format = separated_pair(path, ':', format_spec);
+    let format = alt((
+        peek('}').map(|_| Binding::Type),
+        preceded(("fmt:", multispace0), format).map(Binding::format),
+        terminated(ident, peek('}')).map(Binding::Name),
     ));
-    (access, opt(preceded(':', format_spec)))
-        .context("format")
-        .map(Dynamic::new)
-        .parse_next(input)
+    format.context("format").parse_next(input)
 }
 
 fn ws<I, O, E>(inner: impl Parser<I, O, E>) -> impl Parser<I, O, E>
@@ -137,14 +131,17 @@ fn close_section(input: &str) -> IResult<Vec<Section>> {
         separated1(closed_element, ws(',')),
         opt(preceded(ws('|'), bare_content)),
     );
-    let closed = alt((format.map(Section::format), full_list.map(flatten_section)));
-    delimited('{', ws(closed.context("closed")), '}').parse_next(input)
+    let closed = alt((
+        binding.map(Section::format),
+        full_list.map(flatten_section).context("meta list"),
+    ));
+    delimited('{', ws(closed), '}').parse_next(input)
 }
 fn closed_element(input: &str) -> IResult<Modifier> {
     let key = ident.context("key");
 
     let metadata = alt((
-        delimited('{', format, '}').map(Dyn::Dynamic),
+        delimited('{', binding, '}').map(Dyn::Dynamic),
         balanced_text.context("metadata value").map(Dyn::Static),
     ));
     separated_pair(key, ws(':'), metadata)
@@ -163,15 +160,19 @@ fn sections_inner(input: &str) -> IResult<Sections> {
         .map(Sections::tail)
         .parse_next(input)
 }
-pub(super) fn richtext(ctx: interpret::Context, input: &str) -> AnyResult<Vec<crate::Section>> {
+pub(super) fn richtext(
+    ctx: interpret::Context,
+    input: &str,
+    trackers: &mut Vec<Tracker>,
+) -> AnyResult<Vec<crate::Section>> {
     let parsed = sections_inner.parse(input).map_err(|e| e.into_owned())?;
     let parsed = parsed.0.into_iter();
     parsed
-        .map(|s| interpret::section(&ctx, s))
+        .map(|s| interpret::section(s, &ctx, trackers))
         .collect::<Result<_, _>>()
 }
 
-#[cfg(never)]
+#[cfg(test)]
 mod tests {
     use std::any::{Any, TypeId};
     use std::fmt;
@@ -182,7 +183,7 @@ mod tests {
     use winnow::Parser;
 
     use super::super::{modifiers, Modifiers};
-    use super::{balanced_text, bare_content, close_section, closed_element, interpret, sections};
+    use super::{balanced_text, bare_content, close_section, closed_element, interpret, richtext};
 
     use crate::Section;
 
@@ -362,7 +363,9 @@ mod tests {
     //        test rich_text parsing
     // ---------------------------------
     fn parse(input: &str) -> Result<Vec<Section>, String> {
-        sections(interpret::Context::richtext_defaults(), input).map_err(|err| err.to_string())
+        let mut discard = Vec::new();
+        richtext(interpret::Context::richtext_defaults(), input, &mut discard)
+            .map_err(|err| err.to_string())
     }
     #[test]
     fn plain_text() {
@@ -557,15 +560,13 @@ mod tests {
     #[test]
     fn all_dynamic_content_declarations() {
         let input =
-            "{Content:{ident}} is equivalent to {ident} also {Color:white| {ident}} and {  ident  } and {Color:white|{ident}}.";
+            "{Content:{ident}} is equivalent to {ident} also {Color:white| {ident}} and {Color:white|{ident}}.";
         let expected = sections![
             {(fn Content) Dynamic::new: s("ident")},
             " is equivalent to ",
             {(fn Content) Dynamic::new: s("ident")},
             " also ",
             {Color: Col::WHITE, (fn Content) Dynamic::new: s("ident")},
-            " and ",
-            {(fn Content) Dynamic::new: s("ident")},
             " and ",
             {Color: Col::WHITE, (fn Content) Dynamic::new: s("ident")},
             ".",

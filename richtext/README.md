@@ -1,6 +1,6 @@
 # Rich text
 
-Idea: It's unpleasant to work with bevy's `Text` component because of having
+It's unpleasant to work with bevy's `Text` component because of having
 to individually separate sections and manually update content.
 
 Ideally we should be using a "template string" both to specify the style and
@@ -120,11 +120,11 @@ The previous section describes how to specify final modifier values in the forma
 
 To update modifier values **at runtime**, you would use a *dynamic modifier*.
 
-Instead of specifying a value in _`value`_ position, you use a _`$`_,
+Instead of specifying a value in _`value`_ position, you use _`{}`_,
 you can then refer to it from your bevy app.
 
 ```
-Illustration: "{Color:$|This color is runtime-updated}"
+Illustration: "{Color:{}|This color is runtime-updated}"
 ```
 
 ```rust
@@ -132,11 +132,11 @@ let new_color: Color;
 rich_text.set_typed(new_color);
 ```
 
-You can also use _`$identifier`_ to give a name to your modifier,
+You can also use _`{identifier}`_ to give a name to your modifier,
 so you can refer to it later.
 
 ```
-Illustration: "{Color:$color1|This color}{Color:$color2|is runtime-updated}"
+Illustration: "{Color:{color1}|This color}{Color:{color2}|is runtime-updated}"
 ```
 
 ```rust
@@ -169,7 +169,7 @@ Some text {Color: GREEN, Content:of the green color}.
 Similarly to other `Modify`s, you can set text content dynamically:
 
 ```
-Some text {Color: GREEN, Content:$my_content}.
+Some text {Color: GREEN, Content:{my_content}}.
 ```
 
 ```rust
@@ -188,7 +188,7 @@ Finally, content can be bound by type, same as other modifiers:
 
 ```
 Some text {} et voilà.
-Some text {Color: GREEN, Content:$} et voilà.
+Some text {Color: GREEN, Content:{}} et voilà.
 ```
 
 ### Nested text segments
@@ -279,7 +279,7 @@ definition of the `RichText`, they must be taking it from somewhere else. Where,
 you ask? The bindings! Let's take a look at their definition:
 
 ```rust
-pub type Bindings = HashMap<&'static str, Box<dyn Modify>>;
+pub type Bindings = HashMap<String, Box<dyn Modify>>;
 ```
 
 It's just a map from names to `Modify`. `RichText`, instead of using a
@@ -348,10 +348,10 @@ fn setup(mut commands: Commands) {
 
     // Rich text will automatically be updated.
     commands.spawn(RichTextBundle::parse(
-        "Player count: {$PlayerCount}\n\
-        {Color:$snd_line_color|slider value for name: {named_slider_value}}\n\
+        "Player count: {PlayerCount}\n\
+        {Color:{snd_line_color}|slider value for name: {named_slider_value}}\n\
         slider value for entity: {entity_slider_value}\n\
-        {Color:$LineColor|slider value for from DebugTracked: {debug_tracked_slider_value}}\n\
+        {Color:{LineColor}|slider value for from DebugTracked: {debug_tracked_slider_value}}\n\
         slider from tracked: {tracked_slider_value}",
         TextStyle {
             font: asset_server.load("fonts/FiraSans-Bold.ttf"),
@@ -432,18 +432,20 @@ impl IntoModify for UserColor {
   - [X] `DebugTracked`
   - [X] resource tracker
 - [ ] Reflection handling
-    - [ ] `Format` cleanup as described in design_doc/richtext/dynamic_format.md
-    - [ ] An `$Entity."Name".Component.path.to.field` path specifier.
+    - [X] `Format` cleanup as described in design_doc/richtext/dynamic_format.md
+    - [ ] An `{fmt:Named(Name).Component.path.to.field` path specifier.
     - [X] "Pull bindings" format string decides what to read rather than `tracker`s
     - [X] namespaced binding -> Require update to grammar.
-    - [X] Reflection for user-defined display options.
     - [X] Design a reflection-based format system.
     - [X] Prepare code for pull formatting
         - [X] Separate `RichText` from datastructures used for parsing
         - [X] Custom `Modify`, registration, name, parse
 - [ ] Lean on reflection for Resource modifiers
     - [ ] Allow arbitrary modifiers from `Format`
+    - [ ] Allow user-defined `Format`s
     - [ ] Remove `ResourceTrackerExt`
+    - [ ] Consider using "starting by 'Res'" or "format applies to everything"
+          in order to avoid `fmt:` prefix
 - [X] Refactor
   - [X] extract richtext into separate crate
   - [X] Reorganize modules: `trackers`, `modify` (trait) `modifiers` (impls)

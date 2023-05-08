@@ -51,6 +51,12 @@ cuicui defines a `RichText` component.
 
 See [`cuicui_richtext`'s README](./richtext).
 
+## Widges
+
+cuicui defines a bunch of widges **NOT**.
+
+See [`cuicui_widges`'s README for the list of innexisting widges](./widges)
+
 ## Short term roadmap
 
 0. [X] Fix panic on modifier parsing in richtext

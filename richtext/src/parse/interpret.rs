@@ -7,8 +7,11 @@ use anyhow::Error as AnyError;
 use bevy::utils::HashMap;
 use thiserror::Error;
 
-use super::structs::{Dyn, Modifier, Section as ParseSection};
-use crate::{modifiers::Content, modifiers::Dynamic, Modifiers, Modify, ModifyBox, Section};
+use super::structs::{Binding, Dyn, Format, Modifier, Section as ParseSection};
+use crate::{
+    modifiers::Content, modifiers::Dynamic, track::make_tracker, track::Tracker, Modifiers, Modify,
+    ModifyBox, Section,
+};
 
 #[derive(Error, Debug)]
 pub(super) enum Error {
@@ -40,10 +43,8 @@ pub(crate) struct Context {
 }
 impl Context {
     pub(crate) fn insert<T: Any + Modify>(&mut self) {
-        if let Some(name) = T::name() {
-            self.modify_builders
-                .insert(name, (TypeId::of::<T>(), |i| T::parse(&i)));
-        }
+        self.modify_builders
+            .insert(T::name(), (TypeId::of::<T>(), |i| T::parse(&i)));
     }
     pub(crate) fn richtext_defaults() -> Self {
         use crate::modifiers;
@@ -58,10 +59,25 @@ impl Context {
 }
 /// Turn a [`ParseSection`], a simple textual representation, into a [`Section`],
 /// a collection of trait objects used for formatting.
-pub(super) fn section(ctx: &Context, input: ParseSection) -> AnyResult<Section> {
-    let parse_modify_value = |type_id, value, parse: MakeModifyBox| match value {
-        Dyn::Format(Some(name)) => Ok::<ModifyBox, _>(Box::new(Dynamic::ByName(name.to_string()))),
-        Dyn::Format(None) => Ok::<ModifyBox, _>(Box::new(Dynamic::ByType(type_id))),
+pub(super) fn section(
+    input: ParseSection,
+    ctx: &Context,
+    trackers: &mut Vec<Tracker>,
+) -> AnyResult<Section> {
+    let dynbox = |d: Dynamic| -> AnyResult<ModifyBox> { Ok(Box::new(d)) };
+    let mut parse_modify_value = |type_id, value, parse: MakeModifyBox| match value {
+        Dyn::Dynamic(Binding::Type) => dynbox(Dynamic::ByType(type_id)),
+        Dyn::Dynamic(Binding::Name(name)) => dynbox(Dynamic::ByName(name.to_string())),
+        Dyn::Dynamic(Binding::Format { path, format }) => {
+            let show = match format {
+                Format::UserDefined(_) => todo!("TODO(feat): user-specified formatters"),
+                Format::Fmt(format) => Box::new(format),
+            };
+            // TODO(err): unwrap
+            let tracker = make_tracker(path.to_string(), path, show).unwrap();
+            trackers.push(tracker);
+            dynbox(Dynamic::ByName(path.to_string()))
+        }
         Dyn::Static(value) => {
             let mut value: Cow<'static, str> = value.to_owned().into();
             escape_backslashes(&mut value);

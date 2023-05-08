@@ -100,12 +100,12 @@ pub trait Modify: Any {
 
     // TODO(clean): Drop the Option: if not meant to be parsed, then user
     // shouldn't add to `RichText` parser builder.
-    /// The name to use when parsing metadata in [`RichText::parse`].
+    /// The name to use when parsing metadata in the format string.
     ///
     /// `None` when this isn't supposed to be parsed.
     ///
     /// **This must be formatted as an identifier** (ie: `[:alpha:_][:alphanum:_]*`).
-    /// Otherwise, the [`RichText::parse`]-ing will not pick up your modifier.
+    /// Otherwise, this won't be parsed correctly.
     ///
     /// By default, this is the name of your type.
     ///
@@ -167,7 +167,7 @@ impl Clone for ModifyBox {
 // TODO(perf): use interning or phf. see http://0x80.pl/notesen/2023-04-30-lookup-in-strings.html
 // TODO(arch): This &'static str can be a limitation, thought not too bad, since
 // bindings mostly happen at startup and we can deal with some box leaking.
-pub type Bindings = HashMap<&'static str, ModifyBox>;
+pub type Bindings = HashMap<String, ModifyBox>;
 pub type TypeBindings = GoldMap<TypeId, ModifyBox>;
 
 // TODO(doc): more details, explain bidings.
