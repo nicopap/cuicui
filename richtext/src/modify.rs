@@ -98,11 +98,7 @@ pub trait Modify: Any {
     fn eq_dyn(&self, other: &dyn Modify) -> bool;
     fn debug_dyn(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
 
-    // TODO(clean): Drop the Option: if not meant to be parsed, then user
-    // shouldn't add to `RichText` parser builder.
     /// The name to use when parsing metadata in the format string.
-    ///
-    /// `None` when this isn't supposed to be parsed.
     ///
     /// **This must be formatted as an identifier** (ie: `[:alpha:_][:alphanum:_]*`).
     /// Otherwise, this won't be parsed correctly.
@@ -165,8 +161,6 @@ impl Clone for ModifyBox {
 
 // TODO(arch): Maybe merge Bindings and TypeBindings into HashMap<(TypeId, Option<&str>), ModifyBox>
 // TODO(perf): use interning or phf. see http://0x80.pl/notesen/2023-04-30-lookup-in-strings.html
-// TODO(arch): This &'static str can be a limitation, thought not too bad, since
-// bindings mostly happen at startup and we can deal with some box leaking.
 pub type Bindings = HashMap<String, ModifyBox>;
 pub type TypeBindings = GoldMap<TypeId, ModifyBox>;
 
