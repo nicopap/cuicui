@@ -24,3 +24,10 @@ a specialized datastructure.
   is equivalent to the naive `clone_dyn`-based implementation.
   The only worry here is to make sure the `Ptr` variants are dropped at the same time
   as the Box, (at least I think?)
+
+## `Modify`
+
+Do I need to store the `dyn Modify` that are not `modifiers::Dynamic`? Non-dynamic
+modifiers only need to be aplied once right?
+
+Counter example: `RelSize`, if we update the parent size, we should also re-run it.
