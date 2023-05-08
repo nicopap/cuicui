@@ -1,0 +1,20 @@
+[package]
+name = "cuicui_widges"
+authors = ["Nicola Papale"]
+description = "Collection of widgets (widges) for bevy"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["bevy", "ui"]
+categories = ["game-development", "gui"]
+repository = "https://github.com/nicopap/cuicui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = { version = "0.10", default-features = false, features = ["bevy_render", "bevy_core_pipeline", "bevy_text", "bevy_ui"] }
+bevy-ui-navigation = { version = "0.24.0", default-features = false }
+bevy_mod_sysfail = "2"
+
+[dev-dependencies]
+bevy-inspector-egui = "0.18.3"
+bevy = { version = "0.10", features = ["png", "x11", "bevy_asset", "bevy_render" ] }

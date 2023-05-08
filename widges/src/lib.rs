@@ -1,5 +1,3 @@
-#![allow(clippy::manual_range_contains)]
-
 pub mod activation;
 pub mod from_world_entity;
 pub mod prefab;
