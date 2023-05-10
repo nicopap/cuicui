@@ -26,7 +26,7 @@
 //! # use std::fmt;
 //! use bevy::prelude::*;
 //! use cuicui_richtext::{
-//!     track, RichTextBundle, IntoModify, ModifyBox,
+//!     track, MakeRichTextBundle, IntoModify, ModifyBox,
 //!     modifiers, ResourceTrackerExt,
 //! };
 //! # #[derive(Component, Default)]
@@ -87,34 +87,36 @@
 //!     commands.insert_modify_resource(DeathLineColor(Color::RED));
 //!
 //!     // Rich text will automatically be updated.
-//!     commands.spawn(RichTextBundle::parse(
-//!         "{Color:{DeathLineColor}|Death count: {DeathCount}}\n\
-//!         slider1 value: {slider1}\n\
-//!         slider2 debug text: {slider2}",
-//!         TextStyle {
+//!     commands.spawn(
+//!         MakeRichTextBundle::new(
+//!             "{Color:{DeathLineColor}|Death count: {DeathCount}}\n\
+//!          slider1 value: {slider1}\n\
+//!          slider2 debug text: {slider2}",
+//!         )
+//!         .with_text_style(TextStyle {
 //!             font: asset_server.load("fonts/FiraSans-Bold.ttf"),
 //!             ..default()
-//!         },
-//!     ).unwrap());
+//!         }),
+//!     );
 //! }
 //! ```
 //!
 //! [the README]: https://github.com/nicopap/cuicui/tree/main/richtext
 //! [`Resource`]: bevy::prelude::Resource
 
-mod gold_hash;
 // mod hlist_madness;
+mod binding;
+mod joined_sort;
 pub mod modifiers;
 pub mod modify;
 mod parse;
 mod plugin;
-mod richtext;
-mod short_name;
 pub mod show;
 pub mod track;
 
-pub use modify::{AnyError, IntoModify, Modifiers, Modify, ModifyBox};
-pub use plugin::{RichTextBundle, RichTextData, RichTextPlugin, WorldBindings};
-pub use richtext::{RichText, RichTextBuilder, Section};
-pub(crate) use track::Tracker;
+pub use binding::{BindingsView, LocalBindings, RichText, RichTextBuilder};
+pub use modify::{AnyError, IntoModify, Modify, ModifyBox};
+pub use plugin::{
+    make_rich, MakeRichText, MakeRichTextBundle, RichTextData, RichTextPlugin, WorldBindings,
+};
 pub use track::{ResTrackers, ResourceTrackerExt, Tracked};

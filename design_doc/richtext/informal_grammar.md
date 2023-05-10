@@ -12,7 +12,7 @@ balanced_text = exposed [scope exposed]*
 
 format_spec = <https://doc.rust-lang.org/stable/std/fmt/index.html#syntax>
 format = path ':' format_spec
-binding = 'fmt:' format | path | ''
+binding = 'fmt:' format | path
 
 path = [:alphanum:_."]+
 key = <ident>
@@ -56,11 +56,9 @@ Each line of the following code block represents a valid rich text string.
 ```
 This is some text, it is just a single content section
 This one contains a single {dynamic_content} that can be replaced at runtime
-{Color:{}|This is also just some non-dynamic text, commas need not be escaped}
+{Color:{color}|This is also just some non-dynamic text, commas need not be escaped}
 {Content: This may also work\, but commas need to be escaped}
 {dynamic_content}
-{}
-An empty {} is equivalent to {name}, but referred by typeid instead of name
 {Color: Blue | This text is blue}
 {Color: Blue | {dynamic_blue_content}}
 {Color: Blue | This is non-bold text: {Font:bold.ttf|now it is bold, you may also use {RelSize:1.3|{deeply_nested}} sections}, not anymore {b:_|yet again}!}
@@ -69,8 +67,6 @@ An empty {} is equivalent to {name}, but referred by typeid instead of name
 You can escape \{ curly brackets \}.
 {Color: pink| even inside \{ a closed section \}}.
 {Color: {relevant_color} | Not only Content can be dynamic, also value of other metadata}
-{Color: {} |If the identifier of a dynamic metadata value is elided, then the typeid of the rust type is used}
-can also use a single elided Content if you want: {Content:{}}
 {Content:{ident}} is equivalent to {ident} also {  ident  }.
 ```
 

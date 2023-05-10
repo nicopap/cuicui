@@ -54,6 +54,7 @@ pub struct RuntimeFormat {
     pub debug: bool,
 }
 impl Show for RuntimeFormat {
+    // TODO(clean): consider strfmt
     fn format(&self, input: &dyn Reflect, f: &mut fmt::Formatter<'_>) -> Result<(), Error> {
         macro_rules! try_format_tys {
             (@format $v:ident) => {

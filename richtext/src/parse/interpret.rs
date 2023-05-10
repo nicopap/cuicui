@@ -1,16 +1,13 @@
-use std::{
-    any::{Any, TypeId},
-    borrow::Cow,
-};
+use std::{any::Any, borrow::Cow};
 
 use anyhow::Error as AnyError;
 use bevy::utils::HashMap;
 use thiserror::Error;
 
-use super::structs::{Binding, Dyn, Format, Modifier, Section as ParseSection};
+use super::structs::{Binding, Dyn, Format, Modifier as ParseModifier, Section as ParseSection};
 use crate::{
-    modifiers::Content, modifiers::Dynamic, track::make_tracker, track::Tracker, Modifiers, Modify,
-    ModifyBox, Section,
+    binding::Modifier, binding::WorldBindings, modifiers::Dynamic, modify, track::make_tracker,
+    track::Tracker, ModifyBox,
 };
 
 #[derive(Error, Debug)]
@@ -36,38 +33,43 @@ fn escape_backslashes(input: &mut Cow<str>) {
 type AnyResult<T> = Result<T, AnyError>;
 pub(crate) type MakeModifyBox = fn(Cow<'static, str>) -> Result<ModifyBox, AnyError>;
 
-#[derive(Default)]
-pub(crate) struct Context {
-    // TODO(perf) see design_docs/richtext/hlist_interpreting.md
-    pub(crate) modify_builders: HashMap<&'static str, (TypeId, MakeModifyBox)>,
+pub(crate) struct Context<'a> {
+    // TODO(perf) see design_docs/richtext/hlist_interpreting.md + consider interning
+    modify_builders: HashMap<&'static str, MakeModifyBox>,
+    bindings: &'a mut WorldBindings,
 }
-impl Context {
-    pub(crate) fn insert<T: Any + Modify>(&mut self) {
-        self.modify_builders
-            .insert(T::name(), (TypeId::of::<T>(), |i| T::parse(&i)));
+impl<'a> Context<'a> {
+    fn insert<T: Any + modify::Parse>(&mut self) {
+        self.modify_builders.insert(T::NAME, |i| T::parse(&i));
     }
-    pub(crate) fn richtext_defaults() -> Self {
+    pub(crate) fn new(bindings: &'a mut WorldBindings) -> Self {
+        Self { modify_builders: HashMap::default(), bindings }
+    }
+    pub(crate) fn with_defaults(mut self) -> Self {
         use crate::modifiers;
 
-        let mut ret = Self::default();
-        ret.insert::<modifiers::Content>();
-        ret.insert::<modifiers::RelSize>();
-        ret.insert::<modifiers::Font>();
-        ret.insert::<modifiers::Color>();
-        ret
+        self.insert::<modifiers::Content>();
+        self.insert::<modifiers::RelSize>();
+        self.insert::<modifiers::Font>();
+        self.insert::<modifiers::Color>();
+
+        self
     }
 }
-/// Turn a [`ParseSection`], a simple textual representation, into a [`Section`],
-/// a collection of trait objects used for formatting.
+/// Add modifiers from [`ParseSection`], a simple textual representation,
+/// to `modifiers` the list of `Modifier`s for a entire `RichText`.
 pub(super) fn section(
+    section_index: usize,
     input: ParseSection,
-    ctx: &Context,
+    ctx: &mut Context,
     trackers: &mut Vec<Tracker>,
-) -> AnyResult<Section> {
-    let dynbox = |d: Dynamic| -> AnyResult<ModifyBox> { Ok(Box::new(d)) };
-    let mut parse_modify_value = |type_id, value, parse: MakeModifyBox| match value {
-        Dyn::Dynamic(Binding::Type) => dynbox(Dynamic::ByType(type_id)),
-        Dyn::Dynamic(Binding::Name(name)) => dynbox(Dynamic::ByName(name.to_string())),
+    modifiers: &mut Vec<Modifier>,
+) -> AnyResult<()> {
+    let mut dynbox = |name: &str| -> AnyResult<ModifyBox> {
+        Ok(Box::new(Dynamic(ctx.bindings.get_or_add(name))))
+    };
+    let mut parse_modify_value = |value, parse: MakeModifyBox| match value {
+        Dyn::Dynamic(Binding::Name(name)) => dynbox(name),
         Dyn::Dynamic(Binding::Format { path, format }) => {
             let show = match format {
                 Format::UserDefined(_) => todo!("TODO(feat): user-specified formatters"),
@@ -76,7 +78,7 @@ pub(super) fn section(
             // TODO(err): unwrap
             let tracker = make_tracker(path.to_string(), path, show).unwrap();
             trackers.push(tracker);
-            dynbox(Dynamic::ByName(path.to_string()))
+            dynbox(path)
         }
         Dyn::Static(value) => {
             let mut value: Cow<'static, str> = value.to_owned().into();
@@ -84,23 +86,27 @@ pub(super) fn section(
             parse(value)
         }
     };
-    let parse_modify = |Modifier { name, value }| {
+    let parse_modify = |ParseModifier { name, value, subsection_count }| {
         let err = || Error::UnknownModifier(name.to_string());
-        let (type_id, parse) = ctx.modify_builders.get(name).ok_or_else(err)?;
-        let modify = parse_modify_value(*type_id, value, *parse)?;
-        Ok((*type_id, modify))
+        let parse = ctx.modify_builders.get(name).ok_or_else(err)?;
+        let try_u32 = u32::try_from;
+        let modifier = Modifier {
+            modify: parse_modify_value(value, *parse)?,
+            range: try_u32(section_index)?..try_u32(section_index + subsection_count)?,
+        };
+        Ok(modifier)
     };
-    let mut modifiers = input
-        .modifiers
-        .into_iter()
-        .map(parse_modify)
-        .collect::<AnyResult<Modifiers>>()?;
-
-    // TODO(feat): combine Content & Format.
-
-    let content_id = TypeId::of::<Content>();
-    let content_value = parse_modify_value(content_id, input.content, |i| Ok(Box::new(Content(i))));
-    modifiers.insert(content_id, content_value?);
-
-    Ok(Section { modifiers })
+    modifiers.extend(
+        input
+            .modifiers
+            .into_iter()
+            // NOTE: `ParseModifier` are sorted in ascending order (most specific
+            // to most general), but we want the reverse, most general to most specific,
+            // so that, when we iterate through it, we can apply general, the specific etc.
+            .rev()
+            .map(parse_modify)
+            // TODO(clean): Is it even possible to do this without the Vec?
+            .collect::<AnyResult<Vec<_>>>()?,
+    );
+    Ok(())
 }

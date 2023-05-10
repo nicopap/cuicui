@@ -1,13 +1,21 @@
 //! Intermediate parsing representation.
 
-use crate::{modifiers, show::RuntimeFormat, Modify};
+use crate::{modifiers, show::RuntimeFormat, modify};
 
 use winnow::stream::Accumulate;
+
+const CONTENT_NAME: &str = <modifiers::Content as modify::Parse>::NAME;
+
+#[derive(Debug, PartialEq, Clone)]
+pub(super) struct Section<'a> {
+    pub(super) modifiers: Vec<Modifier<'a>>,
+}
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub(super) struct Modifier<'a> {
     pub(super) name: &'a str,
     pub(super) value: Dyn<'a>,
+    pub(super) subsection_count: usize,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -16,17 +24,11 @@ pub(super) enum Dyn<'a> {
     Static(&'a str),
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub(super) struct Section<'a> {
-    pub(super) modifiers: Vec<Modifier<'a>>,
-    pub(super) content: Dyn<'a>,
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub(super) enum Binding<'a> {
+    Name(&'a str),
+    Format { path: &'a str, format: Format<'a> },
 }
-
-#[derive(Debug, PartialEq, Clone)]
-pub(super) struct Full<'a>(Vec<Section<'a>>);
-
-#[derive(Debug, PartialEq, Clone)]
-pub(super) struct Sections<'a>(pub(super) Vec<Section<'a>>);
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub(super) enum Format<'a> {
@@ -34,18 +36,9 @@ pub(super) enum Format<'a> {
     Fmt(RuntimeFormat),
 }
 
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub(super) enum Binding<'a> {
-    Type,
-    Name(&'a str),
-    Format { path: &'a str, format: Format<'a> },
-}
-impl<'a> Binding<'a> {
-    pub(super) fn format((path, format): (&'a str, Format<'a>)) -> Self {
-        Binding::Format { path, format }
-    }
-}
-
+/// Accumulate many sections.
+#[derive(Debug, PartialEq, Clone)]
+pub(super) struct Sections<'a>(pub(super) Vec<Section<'a>>);
 impl<'a> Sections<'a> {
     pub(super) fn tail((head, mut tail): (Option<Section<'a>>, Self)) -> Self {
         if let Some(head) = head {
@@ -72,44 +65,52 @@ impl<'a> Accumulate<(Vec<Section<'a>>, Option<Section<'a>>)> for Sections<'a> {
     }
 }
 
-impl<'a> Modifier<'a> {
-    pub(super) fn new((name, value): (&'a str, Dyn<'a>)) -> Self {
-        Self { name, value }
-    }
-}
 impl<'a> Section<'a> {
-    /// A section built from plain text. If the text is empty, then there is
-    /// no section.
     pub(super) fn free(input: &'a str) -> Option<Self> {
         if input.is_empty() {
             return None;
         }
-        Some(Section { content: Dyn::Static(input), modifiers: Vec::new() })
+        let modifier = Modifier::new((CONTENT_NAME, Dyn::Static(input)));
+        Some(Section { modifiers: vec![modifier] })
     }
     /// A delimited section (ie between {}).
     pub(super) fn format(input: Binding<'a>) -> Vec<Self> {
-        vec![Section { modifiers: vec![], content: Dyn::Dynamic(input) }]
+        let modifier = Modifier::new((CONTENT_NAME, Dyn::Dynamic(input)));
+        vec![Section { modifiers: vec![modifier] }]
     }
 }
+
+impl<'a> Modifier<'a> {
+    pub(super) fn new((name, value): (&'a str, Dyn<'a>)) -> Self {
+        Self { name, value, subsection_count: 1 }
+    }
+}
+
+impl<'a> Binding<'a> {
+    pub(super) fn format((path, format): (&'a str, Format<'a>)) -> Self {
+        Binding::Format { path, format }
+    }
+}
+
 pub(super) fn flatten_section<'a>(
     (mut modifiers, content): (Vec<Modifier<'a>>, Option<Sections<'a>>),
 ) -> Vec<Section<'a>> {
-    let content_name = <modifiers::Content as Modify>::name();
-
     // Either we have a `content` metadata or we re-use section
     let Some(Sections(mut sections)) = content else {
-        // TODO(err): might be worth providing an error here
-        return match modifiers.iter().position(|m| m.name == content_name) {
+        return match modifiers.iter().find(|m| m.name == CONTENT_NAME) {
+            // TODO(err): should error here, we have metadata and no content
             None => vec![],
-            Some(index) => {
-                let content = modifiers.swap_remove(index).value;
-                vec![Section { modifiers, content }]
-            }
+            Some(_) => vec![Section { modifiers }],
+            
         }
     };
-    // TODO(err)TODO(perf): deduplicate here
-    for section in &mut sections {
-        section.modifiers.extend(modifiers.clone());
+    let subsection_count = sections.len();
+
+    // TODO(err): verify that we never have duplicate CONTENT_NAME
+    if let Some(first_section) = sections.get_mut(0) {
+        let extended_modifiers = modifiers.drain(..).map(|m| Modifier { subsection_count,..m});
+        first_section.modifiers.extend(extended_modifiers);
     }
     sections
 }
+

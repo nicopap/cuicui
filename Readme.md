@@ -14,7 +14,7 @@ A quick and dirty UI lib for bevy built on bevy's excellent 2d primitives.
   - You want to add particles? [Go ahead][bevy_hanabi].
   - You want UI element outlines? [Go ahead][bevy_2d_outline].
   - May be interested in the beta branch of [`bevy_mod_picking`]
-- cuicui is built on top of a composable `Prefab` system.
+- cuicui is built on top of a composable `Modify` system, acting like prefabs/blueprints.
 - There is a few widgets I ABSOLUTELY NEED for my game, and `bevy_ui` has
   nothing more than buttons (yikes!!)
 - Oh god I expected this list to only have two items
@@ -42,7 +42,7 @@ See [`cuicui_richtext`'s README](./richtext).
 0. [X] Fix panic on modifier parsing in richtext
 0. [X] Enable usage with `Reflect` resources
 1. [ ] Publish richtext
-1. [ ] Implement change detection
+1. [X] Implement change detection
 2. [X] Study documentation, best way of presenting the crate
 3. [ ] Advertise to bevy community richtext and potential for `Modify` trait
 4. [ ] Abstract `Modify`, Create a `cuicui_fab` crate, dedicated to `Modify`.

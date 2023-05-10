@@ -1,12 +1,14 @@
 //! Provided implementations for the [`Modify`] trait for cuicui.
-use std::{any::Any, any::TypeId, borrow::Cow, fmt};
+use std::{any::Any, borrow::Cow, fmt};
 
 use anyhow::Error as AnyError;
 use bevy::prelude::{trace, FromReflect, Reflect, TextSection};
 use bevy::reflect::ReflectFromReflect;
 use thiserror::Error;
 
-use crate::{modify::Context, IntoModify, Modify, ModifyBox};
+use crate::{
+    modify, modify::BindingId, modify::Context, modify::DependsOn, IntoModify, Modify, ModifyBox,
+};
 
 macro_rules! common_modify_methods {
     () => {
@@ -36,18 +38,6 @@ enum Errors {
         The font in question: \"{0}\""
     )]
     FontNotLoaded(String),
-    #[error(
-        "A format string requires a dynamic binding named \"{0}\", \
-        but it isn't bound in the given context."
-    )]
-    BindingNotInContext(String),
-    #[error(
-        "A format string requires a dynamic type binding of \"{0}\", \
-        but it isn't bound in the given context."
-    )]
-    BindingTypeNotInContext(String),
-    #[error("The `Format` modifier should be removed before interpreting the format string")]
-    ModifyFormat,
 }
 
 /// A file path to a font, loaded through other means.
@@ -61,13 +51,17 @@ impl Modify for Font {
         text.style.font = (ctx.fonts)(&self.0).ok_or_else(err)?;
         Ok(())
     }
-    fn parse(input: &str) -> Result<ModifyBox, AnyError>
-    where
-        Self: Sized,
-    {
-        Ok(Box::new(Font(input.to_string())))
+    fn depends_on(&self) -> Vec<DependsOn> {
+        vec![DependsOn::Fonts]
     }
     common_modify_methods! {}
+}
+impl modify::Parse for Font {
+    const NAME: &'static str = "Font";
+
+    fn parse(input: &str) -> Result<ModifyBox, AnyError> {
+        Ok(Box::new(Font(input.to_string())))
+    }
 }
 
 /// Size relative to global text size.
@@ -80,13 +74,16 @@ impl Modify for RelSize {
         text.style.font_size = ctx.parent_style.font_size * self.0;
         Ok(())
     }
-    fn parse(input: &str) -> Result<ModifyBox, AnyError>
-    where
-        Self: Sized,
-    {
-        Ok(Box::new(RelSize(input.parse()?)))
+    fn depends_on(&self) -> Vec<DependsOn> {
+        vec![DependsOn::StyleFontSize]
     }
     common_modify_methods! {}
+}
+impl modify::Parse for RelSize {
+    const NAME: &'static str = "RelSize";
+    fn parse(input: &str) -> Result<ModifyBox, AnyError> {
+        Ok(Box::new(RelSize(input.parse()?)))
+    }
 }
 
 /// Color.
@@ -99,13 +96,16 @@ impl Modify for Color {
         text.style.color = self.0;
         Ok(())
     }
-    fn parse(input: &str) -> Result<ModifyBox, AnyError>
-    where
-        Self: Sized,
-    {
-        Ok(Box::new(Color(crate::parse::color(input)?)))
+    fn depends_on(&self) -> Vec<DependsOn> {
+        Vec::new()
     }
     common_modify_methods! {}
+}
+impl modify::Parse for Color {
+    const NAME: &'static str = "Color";
+    fn parse(input: &str) -> Result<ModifyBox, AnyError> {
+        Ok(Box::new(Color(crate::parse::color(input)?)))
+    }
 }
 impl IntoModify for bevy::prelude::Color {
     fn into_modify(self) -> ModifyBox {
@@ -124,13 +124,16 @@ impl Modify for Content {
         text.value.push_str(&self.0);
         Ok(())
     }
-    fn parse(input: &str) -> Result<ModifyBox, AnyError>
-    where
-        Self: Sized,
-    {
-        Ok(Box::new(Content(input.to_string().into())))
+    fn depends_on(&self) -> Vec<DependsOn> {
+        Vec::new()
     }
     common_modify_methods! {}
+}
+impl modify::Parse for Content {
+    const NAME: &'static str = "Content";
+    fn parse(input: &str) -> Result<ModifyBox, AnyError> {
+        Ok(Box::new(Content(input.to_string().into())))
+    }
 }
 impl<T: fmt::Display> From<T> for Content {
     fn from(value: T) -> Self {
@@ -138,52 +141,27 @@ impl<T: fmt::Display> From<T> for Content {
     }
 }
 
-// TODO(clean): Combine `Format` with dynamic
-// TODO(perf): most likely could use interning for Dynamic section text name.
-// this would involve replacing Strings with an enum String|Interned, or private
-// background components, otherwise API seems impossible.
 /// An [`Modify`] that takes it value from [`Context::bindings`].
-#[derive(PartialEq, Debug, Clone)]
-pub enum Dynamic {
-    ByName(String),
-    // TODO(clean): remove `TypeId` here, since it is necessarily associated
-    // with a `TypeId` when inserted into the `Modifiers` map.
-    // Probably need to add the `TypeId` to `Context`.
-    ByType(TypeId),
-}
-impl Dynamic {
-    pub fn new(name: String) -> Self {
-        Dynamic::ByName(name)
-    }
-}
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct Dynamic(pub(crate) BindingId);
 impl Modify for Dynamic {
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError> {
         // println!("Get value from binding: {:?}", self.name);
-        let modifier = match self {
-            Dynamic::ByType(type_id) => {
-                let ty_name = || {
-                    let info = ctx.registry?.get_type_info(*type_id)?;
-                    Some(info.type_name().to_string())
-                };
-                let ty_badname = || format!("Unregistered type: {type_id:?}");
-                let err = || Errors::BindingTypeNotInContext(ty_name().unwrap_or_else(ty_badname));
-                let run = || ctx.type_bindings?.get(type_id);
-                run().ok_or_else(err)
-            }
-            Dynamic::ByName(name) => {
-                let local_binding = || ctx.bindings?.get(&**name);
-                let world_binding = || ctx.world_bindings?.get(&**name);
-                let err = || Errors::BindingNotInContext(name.clone());
-                local_binding().or_else(world_binding).ok_or_else(err)
-            }
-        };
-        modifier?.apply(ctx, text)
+        let Some(modifier) = ctx.get_binding(self.0) else { return Ok(()) };
+        modifier.apply(ctx, text)
+    }
+    fn depends_on(&self) -> Vec<modify::DependsOn> {
+        // TODO(bug): problem: this also depends on the dependencies of the `Modify` this resolves to.
+        vec![DependsOn::Binding(self.0)]
     }
     common_modify_methods! {}
 }
 impl Modify for () {
     fn apply(&self, _: &Context, _: &mut TextSection) -> Result<(), AnyError> {
         Ok(())
+    }
+    fn depends_on(&self) -> Vec<modify::DependsOn> {
+        Vec::new()
     }
     common_modify_methods! {}
 }

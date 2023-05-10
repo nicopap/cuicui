@@ -1,15 +1,10 @@
 //! Traits and structs related to the [`Modify`] trait.
 
-use std::{any::type_name, any::Any, any::TypeId, fmt};
+use std::{any::Any, fmt};
 
-use bevy::{
-    prelude::{Font, Handle, TextSection, TextStyle},
-    reflect::TypeRegistryInternal as TypeRegistry,
-    utils::HashMap,
-};
-use thiserror::Error;
+use bevy::prelude::{Font, Handle, TextSection, TextStyle};
 
-use crate::{gold_hash::GoldMap, short_name::short_name};
+use crate::binding::BindingsView;
 
 pub use anyhow::Error as AnyError;
 
@@ -19,7 +14,6 @@ pub use anyhow::Error as AnyError;
 /// [`Resource`]: bevy::prelude::Resource
 /// [`Component`]: bevy::prelude::Component
 pub type ModifyBox = Box<dyn Modify + Send + Sync + 'static>;
-pub type Modifiers = GoldMap<TypeId, ModifyBox>;
 
 /// Turn a type into a boxed [`Modify`] trait object.
 pub trait IntoModify {
@@ -35,10 +29,6 @@ impl IntoModify for ModifyBox {
         self
     }
 }
-
-#[derive(Error, Debug)]
-#[error("The modify type for {0} is not implemented")]
-struct ParserUnimplemented(&'static str);
 
 /// A [`TextSection`] modifier.
 ///
@@ -56,7 +46,7 @@ struct ParserUnimplemented(&'static str);
 /// ```rust
 /// use std::{any::Any, fmt};
 /// use bevy::prelude::*;
-/// use cuicui_richtext::modify::{Modify, Context, ModifyBox, AnyError};
+/// use cuicui_richtext::modify::{Modify, Context, ModifyBox, AnyError, DependsOn};
 ///
 /// #[derive(Debug, PartialEq, Clone, Copy)]
 /// struct SetExactFontSize(f32);
@@ -67,6 +57,10 @@ struct ParserUnimplemented(&'static str);
 ///     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError> {
 ///         text.style.font_size = self.0;
 ///         Ok(())
+///     }
+///     /// Declare when to update the text section.
+///     fn depends_on(&self) -> Vec<DependsOn> {
+///         vec![] // We depend on nothing.
 ///     }
 ///     fn clone_dyn(&self) -> ModifyBox { Box::new(self.clone()) }
 ///     fn as_any(&self) -> &dyn Any { self }
@@ -90,6 +84,9 @@ pub trait Modify: Any {
     /// [`RichText`]: crate::RichText
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError>;
 
+    /// On what data does this modifier depends?
+    fn depends_on(&self) -> Vec<DependsOn>;
+
     // TODO(perf)TODO(clean): See design_doc/richtext/better_section_impl.md.
     // Note: we already don't use this, check if true by removing the impl Clone for ModifyBox
     // block
@@ -97,7 +94,8 @@ pub trait Modify: Any {
     fn as_any(&self) -> &dyn Any;
     fn eq_dyn(&self, other: &dyn Modify) -> bool;
     fn debug_dyn(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
-
+}
+pub trait Parse: Modify {
     /// The name to use when parsing metadata in the format string.
     ///
     /// **This must be formatted as an identifier** (ie: `[:alpha:_][:alphanum:_]*`).
@@ -111,27 +109,14 @@ pub trait Modify: Any {
     ///
     /// You may overwrite this method regardless, as long as the return value
     /// is an identifier.
-    #[inline]
-    fn name() -> &'static str
-    where
-        Self: Sized,
-    {
-        short_name(type_name::<Self>())
-    }
+    const NAME: &'static str;
+
     /// Parse from the string representation of the `metadata` value section
     /// of the format string.
     ///
     /// When parsing a format string, we call `Modify::parse` of registered
     /// `Modify` types which name we encounter in the `key` metadata position.
-    ///
-    /// By default, this returns a `ParserUnimplemented` error. Make sure to
-    /// impelment it yourself if you intend on parsing metadata.
-    fn parse(_input: &str) -> Result<ModifyBox, AnyError>
-    where
-        Self: Sized,
-    {
-        Err(ParserUnimplemented(Self::name()).into())
-    }
+    fn parse(input: &str) -> Result<ModifyBox, AnyError>;
 }
 impl PartialEq for dyn Modify {
     fn eq(&self, other: &Self) -> bool {
@@ -159,20 +144,11 @@ impl Clone for ModifyBox {
     }
 }
 
-// TODO(arch): Maybe merge Bindings and TypeBindings into HashMap<(TypeId, Option<&str>), ModifyBox>
-// TODO(perf): use interning or phf. see http://0x80.pl/notesen/2023-04-30-lookup-in-strings.html
-pub type Bindings = HashMap<String, ModifyBox>;
-pub type TypeBindings = GoldMap<TypeId, ModifyBox>;
-
 // TODO(doc): more details, explain bidings.
 /// The context used in [`Modify`].
-#[derive(Clone, Copy)]
-pub struct Context<'a, 'b> {
-    pub registry: Option<&'b TypeRegistry>,
-    pub bindings: Option<&'b Bindings>,
-    pub world_bindings: Option<&'b Bindings>,
-    pub type_bindings: Option<&'b TypeBindings>,
-    pub parent_style: &'b TextStyle,
+pub struct Context<'a> {
+    pub bindings: BindingsView<'a>,
+    pub parent_style: &'a TextStyle,
     // NOTE: we use a `&'a dyn` here instead of a type parameter because we intend
     // for `Context` to be a parameter for a trait object method. If `Context` had
     // a non-lifetime type parameter, it would require that method to have a type
@@ -180,15 +156,28 @@ pub struct Context<'a, 'b> {
     // on trait object.
     pub fonts: &'a dyn Fn(&str) -> Option<Handle<Font>>,
 }
-impl<'a, 'b> Context<'a, 'b> {
-    pub fn from_style(parent_style: &'b TextStyle) -> Self {
-        Context {
-            registry: None,
-            bindings: None,
-            world_bindings: None,
-            type_bindings: None,
-            parent_style,
-            fonts: &|_| None,
-        }
+impl<'a> Context<'a> {
+    pub fn get_binding(&self, id: BindingId) -> Option<&'a (dyn Modify + Send + Sync)> {
+        self.bindings.get(id)
     }
+    pub fn changed(&self) -> impl Iterator<Item = DependsOn> + '_ {
+        use DependsOn::*;
+        self.bindings
+            .changed()
+            .map(Binding)
+            .chain([Fonts, StyleFontSize, StyleFont, StyleColor])
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct BindingId(pub(crate) u32);
+
+/// On what value in [`Context`] does this [`Modify`] depends on?
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DependsOn {
+    Binding(BindingId),
+    Fonts,
+    StyleFontSize,
+    StyleFont,
+    StyleColor,
 }

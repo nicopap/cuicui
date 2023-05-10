@@ -4,7 +4,7 @@ use bevy::{
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
-use cuicui_richtext::{RichTextBundle, RichTextData, RichTextPlugin};
+use cuicui_richtext::{modifiers, MakeRichTextBundle, RichTextData, RichTextPlugin};
 
 fn main() {
     App::new()
@@ -37,25 +37,22 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // UI camera
     commands.spawn(Camera2dBundle::default());
     commands.spawn((
-        RichTextBundle::parse(
-            "{Color:{}|hello\n{}!}",
-            TextStyle {
+        MakeRichTextBundle::new("{Color:{color}|hello\n{greeted}!}")
+            .with_text_style(TextStyle {
                 font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                 font_size: 100.0,
                 color: Color::WHITE,
-            },
-        )
-        .unwrap()
-        .with_text_alignment(TextAlignment::Center)
-        .with_style(Style {
-            position_type: PositionType::Absolute,
-            position: UiRect {
-                bottom: Val::Px(5.0),
-                right: Val::Px(15.0),
+            })
+            .with_text_alignment(TextAlignment::Center)
+            .with_style(Style {
+                position_type: PositionType::Absolute,
+                position: UiRect {
+                    bottom: Val::Px(5.0),
+                    right: Val::Px(15.0),
+                    ..default()
+                },
                 ..default()
-            },
-            ..default()
-        }),
+            }),
         ColorText,
     ));
 
@@ -65,18 +62,17 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         asset_server.load("fonts/FiraMono-Medium.ttf"),
     ));
     commands.spawn(
-        RichTextBundle::parse(
-            // To use a specific font, you need to hold a handle on it.
-            // This is why we added the `FiraMediumHolder` resource earlier,
-            // otherwise, the font doesn't show up.
+        // To use a specific font, you need to hold a handle on it.
+        // This is why we added the `FiraMediumHolder` resource earlier,
+        // otherwise, the font doesn't show up.
+        MakeRichTextBundle::new(
             "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold, Content:{fmt:Res.Fps.fps:.1}}",
-            TextStyle {
-                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                font_size: 60.0,
-                color: Color::WHITE,
-            },
         )
-        .unwrap(),
+        .with_text_style(TextStyle {
+            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+            font_size: 60.0,
+            color: Color::WHITE,
+        }),
     );
 }
 
@@ -97,10 +93,11 @@ fn text_color_system(
             blue: (0.50 * seconds).sin() / 2.0 + 0.5,
             alpha: 1.0,
         };
-        text.set_typed(new_color).unwrap();
+        text.set("color", new_color);
         if at_interval(1.3) {
             *current_guest = (*current_guest + 1) % GUESTS.len();
-            text.set_content(None, &GUESTS[*current_guest]).unwrap();
+            let new_content = modifiers::Content::from(&GUESTS[*current_guest]);
+            text.set("greeted", new_content);
         }
     }
 }

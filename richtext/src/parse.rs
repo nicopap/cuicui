@@ -22,6 +22,7 @@ use winnow::{
     Parser,
 };
 
+use crate::binding::Modifiers;
 use crate::AnyError;
 use crate::{show::RuntimeFormat, track::Tracker};
 use structs::{flatten_section, Binding, Dyn, Format, Modifier, Section, Sections};
@@ -72,7 +73,6 @@ fn binding(input: &str) -> IResult<Binding> {
     let path = take_while1(('a'..='z', 'A'..='Z', '0'..='9', "_."));
     let format = separated_pair(path, ':', format_spec);
     let format = alt((
-        peek('}').map(|_| Binding::Type),
         preceded(("fmt:", multispace0), format).map(Binding::format),
         terminated(ident, peek('}')).map(Binding::Name),
     ));
@@ -161,60 +161,75 @@ fn sections_inner(input: &str) -> IResult<Sections> {
         .parse_next(input)
 }
 pub(super) fn richtext(
-    ctx: interpret::Context,
+    mut ctx: interpret::Context,
     input: &str,
     trackers: &mut Vec<Tracker>,
-) -> AnyResult<Vec<crate::Section>> {
+) -> AnyResult<Modifiers> {
     let parsed = sections_inner.parse(input).map_err(|e| e.into_owned())?;
-    let parsed = parsed.0.into_iter();
-    parsed
-        .map(|s| interpret::section(s, &ctx, trackers))
-        .collect::<Result<_, _>>()
+
+    let mut modifiers = Vec::with_capacity(parsed.0.len() * 2);
+
+    for (i, sec) in parsed.0.into_iter().enumerate() {
+        interpret::section(i, sec, &mut ctx, trackers, &mut modifiers)?;
+    }
+    Ok(Modifiers(modifiers.into()))
 }
 
 #[cfg(test)]
 mod tests {
-    use std::any::{Any, TypeId};
     use std::fmt;
 
-    use bevy::prelude::Color as Col;
-    use pretty_assertions_sorted::assert_eq_sorted;
+    use pretty_assertions::assert_eq;
     use winnow::error::ParseError;
     use winnow::Parser;
 
-    use super::super::{modifiers, Modifiers};
-    use super::{balanced_text, bare_content, close_section, closed_element, interpret, richtext};
-
-    use crate::Section;
+    use super::{
+        balanced_text, bare_content, close_section, closed_element, sections_inner, structs,
+    };
 
     macro_rules! sections {
-        (@type_id $actual:ident $($_:tt)*) => {
-                TypeId::of::<modifiers::$actual>()
+        (@modifier {$binding:ident}) => {
+            structs::Modifier {
+                name: "Content",
+                value: structs::Dyn::Dynamic(structs::Binding::Name(stringify!($binding))),
+                subsection_count: 1,
+            }
         };
-        (@modifiers $( $((fn $id:ident))? $($modifier:ident)::* ( $value:expr ) ),* $(,)? ) => {{
-            let mut modifiers = Modifiers::default();
-            $(
-                let id = sections!(@type_id $($id)? $($modifier)*);
-                let value = modifiers::$($modifier)::*( $value );
-                modifiers.insert(id, Box::new(value));
-            )*
-            Section { modifiers }
-        }};
-        (@item $text:literal) => {
-            sections!(@modifiers Content($text.to_owned().into()))
+        (@modifier $value:literal) => {
+            structs::Modifier {
+                name: "Content",
+                value: structs::Dyn::Static($value),
+                subsection_count: 1,
+            }
         };
-        (@item {$( $(( fn $type_id:ident ))? $($modifier:ident )::* : $value:expr ),* $(,)? }) => {
-            sections!(@modifiers $( $((fn $type_id))? $($modifier)::*($value) ),*)
+        (@modifier ( $name:ident $subsection_count:literal static $value:literal )) => {
+            structs::Modifier {
+                name: stringify!($name),
+                value: structs::Dyn::Static($value),
+                subsection_count: $subsection_count,
+            }
         };
-        ($( $item:tt ),* $(,)?) => {
-            vec![ $( sections!(@item $item) ),* ]
+        (@modifier ( $name:ident $subsection_count:literal { $binding:ident } )) => {
+            structs::Modifier {
+                name: stringify!($name),
+                value: structs::Dyn::Dynamic(structs::Binding::Name(stringify!($binding))),
+                subsection_count: $subsection_count,
+            }
+        };
+        (@section {$binding:ident}) => {
+            structs::Section { modifiers: vec![ sections!(@modifier (Content 1 {$binding}) ) ] }
+        };
+        (@section $plain:literal) => {
+            structs::Section { modifiers: vec![ sections!(@modifier $plain) ] }
+        };
+        (@section [ $( $modifier:tt ),* $(,)? ]) => {
+            structs::Section {
+                modifiers: vec![ $( sections!(@modifier $modifier) ),* ],
+            }
+        };
+        ( $( $section:tt ),* $(,)? ) => {
+            vec![ $( sections!(@section $section) ),* ]
         }
-    }
-    fn s<'a, T: From<&'a str>>(input: &'a str) -> T {
-        input.into()
-    }
-    fn id<T: Any>() -> TypeId {
-        TypeId::of::<T>()
     }
     fn parse_fn<'a, T, E: fmt::Display + fmt::Debug + ParseError<&'a str>>(
         parser: impl Parser<&'a str, T, E>,
@@ -243,11 +258,11 @@ mod tests {
         let complete = [
             "foo",
             r#"foo\}bar"#,
-            "foo{}",
-            "foo{}baz",
-            "{}baz",
-            "{}foo{}",
-            "{}{}",
+            "foo{x}",
+            "foo{x}baz",
+            "{x}baz",
+            "{x}foo{x}",
+            "{x}{x}",
             "foo{content:test}bar",
             "foo{color:blue |green}bar",
             "foo{color:blue |hi{hello_world}hi}bar",
@@ -300,7 +315,7 @@ mod tests {
             (r#"foo \( , \) bar"#, r#", \) bar"#),
         ];
         for (input, remaining) in &incomplete {
-            assert_eq_sorted!(parse(input), Ok(*remaining));
+            assert_eq!(parse(input), Ok(*remaining));
         }
     }
 
@@ -310,7 +325,6 @@ mod tests {
         let complete = [
             "color:red",
             "color:{foobar}",
-            "color:{}",
             r#"content:   foo\,bar"#,
             "color: rgb(1,3,4)",
             "color:PiNk",
@@ -325,13 +339,12 @@ mod tests {
     #[test]
     fn closed_element_incomplete() {
         let parse = |input| parse_bad(closed_element, input);
-        // TODO(test): error on "", "mahagony: expensive", "kouglov", "darth Mouse:"
         let incomplete = [
             ("color:green, fancy", ", fancy"),
             ("content: foo | fancy", "| fancy"),
         ];
         for (input, remaining) in &incomplete {
-            assert_eq_sorted!(parse(input), Ok(*remaining));
+            assert_eq!(parse(input), Ok(*remaining));
         }
     }
     #[test]
@@ -339,12 +352,9 @@ mod tests {
         let parse = |input| parse_fn(close_section, input);
         let complete = [
             "{color: blue}",
-            "{}",
             "{some_dynamic_content}",
             "{  color: blue  }",
             "{color: {fnoo}}",
-            "{color  : {}}",
-            "{color:{}}",
             "{color: purple, font: blar}",
             "{color: cyan, font: bar | dolore abdicum}",
             "{color:orange |lorem ipsum}",
@@ -362,216 +372,167 @@ mod tests {
     // ---------------------------------
     //        test rich_text parsing
     // ---------------------------------
-    fn parse(input: &str) -> Result<Vec<Section>, String> {
-        let mut discard = Vec::new();
-        richtext(interpret::Context::richtext_defaults(), input, &mut discard)
+    fn parse(input: &str) -> Result<Vec<structs::Section>, String> {
+        sections_inner
+            .parse(input)
+            .map(|s| s.0)
             .map_err(|err| err.to_string())
     }
     #[test]
     fn plain_text() {
         let input = "This is some text, it is just a single content section";
         let expected = sections!["This is some text, it is just a single content section"];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn single_dynamic_shorthand() {
         let input = "This one contains a single {dynamic_content} that can be replaced at runtime";
         let expected = sections![
             "This one contains a single ",
-            {(fn Content) Dynamic::new : s("dynamic_content")},
+            { dynamic_content },
             " that can be replaced at runtime",
         ];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn single_no_escape_closed_content() {
         let input = "{Color:white|This just has a single metadata}";
-        let expected = sections![{
-            Color: Col::WHITE,
-            Content: s("This just has a single metadata"),
-        }];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        let expected = sections![[
+            "This just has a single metadata",
+            (Color 1 static "white"),
+        ]];
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn single_closed_content() {
         let input =
             "{Color:white|This is also just some non-dynamic text, commas need not be escaped}";
-        let expected = sections![{
-            Color: Col::WHITE,
-            Content: s("This is also just some non-dynamic text, commas need not be escaped"),
-        }];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        let expected = sections![[
+            "This is also just some non-dynamic text, commas need not be escaped",
+            (Color 1 static "white"),
+        ]];
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn closed_explicit_content_escape_comma() {
         let input = r#"{Content: This may also work\, but commas need to be escaped}"#;
-        let expected = sections!["This may also work, but commas need to be escaped"];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        let expected = sections![r#"This may also work\, but commas need to be escaped"#];
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn outer_dynamic_shorthand() {
         let input = "{dynamic_content}";
-        let expected = sections![{(fn Content) Dynamic::new : s("dynamic_content")}];
-        assert_eq_sorted!(Ok(expected), parse(input));
-    }
-    #[test]
-    fn outer_dynamic_content_implicit() {
-        let input = "{}";
-        let expected = sections![{(fn Content) Dynamic::ByType : id::<modifiers::Content>()}];
-        assert_eq_sorted!(Ok(expected), parse(input));
-    }
-    #[test]
-    fn dynamic_content_implicit() {
-        let input = "An empty {} is equivalent to {name}, but referred by typeid instead of name";
-        let expected = sections![
-            "An empty ",
-            {(fn Content) Dynamic::ByType : id::<modifiers::Content>()},
-            " is equivalent to ",
-            {(fn Content) Dynamic::new : s("name")},
-            ", but referred by typeid instead of name"
-        ];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        let expected = sections![{ dynamic_content }];
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn outer_color_mod() {
         let input = "{Color: Blue | This text is blue}";
         let expected = sections![
-            {Color: Col::BLUE, Content: s("This text is blue")},
+            [ "This text is blue",  (Color 1 static "Blue ") ]
         ];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn nested_dynamic_shorthand() {
         let input = "{Color: Blue | {dynamic_blue_content}}";
-        let expected = sections![{
-            Color: Col::BLUE,
-            (fn Content) Dynamic::new: s("dynamic_blue_content"),
-        }];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        let expected = sections![[
+            {dynamic_blue_content},
+            (Color 1 static "Blue "),
+        ]];
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn deep_nesting() {
         let input = "{Color: Blue | This is non-bold text: {Font:b|now it is bold, \
                 you may also use {RelSize:1.3|{deeply_nested}} sections}, not anymore {Font:i|yet again}!}";
         let expected = sections![
-            { Color: Col::BLUE, Content: s("This is non-bold text: ") },
-            { Color: Col::BLUE, Font: s("b"), Content: s("now it is bold, you may also use ") },
-            { Color: Col::BLUE, Font: s("b"), RelSize: 1.3, (fn Content) Dynamic::new: s("deeply_nested") },
-            { Color: Col::BLUE, Font: s("b"), Content: s(" sections") },
-            { Color: Col::BLUE, Content: s(", not anymore ") },
-            { Color: Col::BLUE, Font: s("i"), Content: s("yet again") },
-            { Color: Col::BLUE, Content: s("!") },
+            [ "This is non-bold text: " , (Color 7 static "Blue ") ],
+            [ "now it is bold, you may also use " , (Font 3 static "b") ],
+            [ {deeply_nested}, (RelSize 1 static "1.3") ],
+            " sections",
+            ", not anymore ",
+            [ "yet again" , (Font 1 static "i") ],
+            "!"
         ];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn multiple_mods() {
         let input =
             "{Color:Red| Some red text}, some default color {dynamic_name}. {Color:pink|And pink, why not?}";
         let expected = sections![
-            { Color: Col::RED, Content: s("Some red text") },
-            ", some default color ",
-            { (fn Content) Dynamic::new: s("dynamic_name") },
-            ". ",
-            { Color: Col::PINK, Content: s("And pink, why not?") },
+            [ "Some red text", (Color 1 static "Red") ],
+            ", some default color ", {dynamic_name}, ". ",
+            [ "And pink, why not?", (Color 1 static "pink") ],
         ];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn fancy_color_multiple_mods() {
         let input = "{Color:rgb(12, 34, 50),Font:bold.ttf|metadata values} can contain \
                 commas within parenthesis or square brackets";
         let expected = sections![
-            { Color: Col::rgb_u8(12,34,50), Font: s("bold.ttf"), Content: s("metadata values") },
+            [ "metadata values", (Color 1 static "rgb(12, 34, 50)"), (Font 1 static "bold.ttf") ],
             " can contain commas within parenthesis or square brackets",
         ];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn escape_curlies_outer() {
         let input = r#"You can escape \{ curly brackets \}."#;
-        let expected = sections!["You can escape { curly brackets }."];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        let expected = sections![r#"You can escape \{ curly brackets \}."#];
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn escape_backslash_outer() {
         let input = r#"Can also escape \\{Font:b|bold}"#;
         let expected = sections![
-            r#"Can also escape \"#,
-            { Font: s("b"), Content: s("bold") },
+            r#"Can also escape \\"#,
+            [ "bold" ,  (Font 1 static "b") ],
         ];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn escape_double_outer() {
         let input = r#"Can also escape \\\{}"#;
-        let expected = sections![r#"Can also escape \{}"#,];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        let expected = sections![r#"Can also escape \\\{}"#,];
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn escape_curlies_inner() {
         let input = r#"{Color: pink| even inside \{ a closed section \}}"#;
-        let expected = sections![{
-            Color: Col::PINK,
-            Content: s("even inside { a closed section }"),
-        }];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        let expected = sections![
+            [ r#"even inside \{ a closed section \}"# ,  (Color 1 static "pink") ],
+        ];
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn escape_backslash_inner() {
         let input = r#"{Color: pink| This is \\ escaped}"#;
-        let expected = sections![{
-            Color: Col::PINK,
-            Content: s(r#"This is \ escaped"#),
-        }];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        let expected = sections![
+            [ r#"This is \\ escaped"#,  (Color 1 static "pink") ],
+        ];
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn named_dynamic_mod() {
         let input = "{Color: {relevant_color} | Not only content can be dynamic, also value of other metadata}";
-        let expected = sections![{
-            (fn Color) Dynamic::new: s("relevant_color"),
-            Content: s("Not only content can be dynamic, also value of other metadata"),
-        }];
-        assert_eq_sorted!(Ok(expected), parse(input));
-    }
-    #[test]
-    fn implicit_dynamic_mod() {
-        let input = "{Color: {} |If the identifier of a dynamic metadata value is elided, \
-                then the typeid of the rust type is used}";
-        let expected = sections![{
-            (fn Color) Dynamic::ByType: id::<modifiers::Color>(),
-            Content: s(
-                "If the identifier of a dynamic metadata value is elided, \
-                then the typeid of the rust type is used"
-            ),
-        }];
-        assert_eq_sorted!(Ok(expected), parse(input));
-    }
-    #[test]
-    fn implicit_dynamic_content_mod() {
-        let input = "can also use a single elided content if you want: {Content:{}}";
         let expected = sections![
-            "can also use a single elided content if you want: ",
-            {(fn Content) Dynamic::ByType: id::<modifiers::Content>()},
+            [ "Not only content can be dynamic, also value of other metadata" ,  (Color 1 {relevant_color}) ],
         ];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn all_dynamic_content_declarations() {
         let input =
             "{Content:{ident}} is equivalent to {ident} also {Color:white| {ident}} and {Color:white|{ident}}.";
-        let expected = sections![
-            {(fn Content) Dynamic::new: s("ident")},
-            " is equivalent to ",
-            {(fn Content) Dynamic::new: s("ident")},
-            " also ",
-            {Color: Col::WHITE, (fn Content) Dynamic::new: s("ident")},
-            " and ",
-            {Color: Col::WHITE, (fn Content) Dynamic::new: s("ident")},
-            ".",
-        ];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        let expected =
+            sections![
+                {ident}, " is equivalent to ", {ident}, " also ",
+                [ {ident}, (Color 1 static "white") ], " and ", [ {ident}, (Color 1 static "white") ], ".",
+            ];
+        assert_eq!(Ok(expected), parse(input));
     }
     #[test]
     fn real_world_usecase() {
@@ -582,19 +543,21 @@ mod tests {
             Ball position: {Font: fonts/FiraMono-Medium.ttf, Color: pink|\\{x: {ball_x}, y: {ball_y}\\}}";
         let expected = sections![
             "Score: ",
-            {(fn Content) Dynamic::new: s("Score"), Color: Col::rgb(1.0,0.5,0.5), Font: s("fonts/FiraMono-Medium.ttf"), RelSize: 1.5},
+            [
+                (Font 1 static "fonts/FiraMono-Medium.ttf"),
+                (Color 1 static "rgb(1.0, 0.5, 0.5)"),
+                (RelSize 1 static "1.5"),
+                {Score},
+            ],
             "\n",
-            {(fn Content) Dynamic::new: s("Deaths"), Color: Col::rgb(1.0,0.2,0.2)},
+            [ (Color 1 static "rgb(1.0, 0.2, 0.2)"), {Deaths} ],
             "\nPaddle hits: ",
-            {(fn Content) Dynamic::new: s("paddle_hits"), Color: Col::PINK},
+            [ (Color 1 static "pink"), {paddle_hits} ],
             "\nBall position: ",
-            {Color: Col::PINK, Font: s("fonts/FiraMono-Medium.ttf"), Content: s("{x: ")},
-            {Color: Col::PINK, Font: s("fonts/FiraMono-Medium.ttf"), (fn Content) Dynamic::new: s("ball_x")},
-            {Color: Col::PINK, Font: s("fonts/FiraMono-Medium.ttf"), Content: s(", y: ")},
-            {Color: Col::PINK, Font: s("fonts/FiraMono-Medium.ttf"), (fn Content) Dynamic::new: s("ball_y")},
-            {Color: Col::PINK, Font: s("fonts/FiraMono-Medium.ttf"), Content: s("}")},
+            [ "\\{x: " ,  (Font 5 static "fonts/FiraMono-Medium.ttf"), (Color 5 static "pink") ],
+            {ball_x}, ", y: ", {ball_y}, "\\}",
         ];
-        assert_eq_sorted!(Ok(expected), parse(input));
+        assert_eq!(Ok(expected), parse(input));
     }
     // ---------------------------------
 }

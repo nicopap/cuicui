@@ -11,7 +11,9 @@ use bevy::{
     sprite::MaterialMesh2dBundle,
     utils::HashMap,
 };
-use cuicui_richtext::{track, ResourceTrackerExt, RichTextBundle, RichTextPlugin, WorldBindings};
+use cuicui_richtext::{
+    track, MakeRichTextBundle, ResourceTrackerExt, RichTextPlugin, WorldBindings,
+};
 
 const TIME_STEP: f32 = 1.0 / 60.0;
 
@@ -226,17 +228,19 @@ fn setup(
 
     // Score
     commands.spawn(
-        RichTextBundle::parse(
-            "Score: {Font: fonts/FiraMono-Medium.ttf, Color: rgb(1.0, 0.5, 0.5), RelSize: 1.5, Content: {Score}}\n\
+        MakeRichTextBundle::new(
+            "Score: {Font: fonts/FiraMono-Medium.ttf, Color: rgb(1.0, 0.5, 0.5), \
+            RelSize: 1.5, Content: {Score}}\n\
             {Color: rgb(1.0, 0.2, 0.2), Content: {Deaths}}\n\
             Paddle hits: {Color: pink, Content: {paddle_hits}}\n\
-            Ball position: {Font: fonts/FiraMono-Medium.ttf, Color: pink|\\{x: {ball_x}, y: {ball_y}\\}}",
-                TextStyle {
-                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                    font_size: SCOREBOARD_FONT_SIZE,
-                    color: TEXT_COLOR,
-                },
-        ).unwrap()
+            Ball position: {Font: fonts/FiraMono-Medium.ttf, Color: pink|\
+            \\{x: {ball_x}, y: {ball_y}\\}}",
+        )
+        .with_text_style(TextStyle {
+            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+            font_size: SCOREBOARD_FONT_SIZE,
+            color: TEXT_COLOR,
+        })
         .with_style(Style {
             position_type: PositionType::Absolute,
             position: UiRect {

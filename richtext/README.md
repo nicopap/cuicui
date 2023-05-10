@@ -452,13 +452,18 @@ impl IntoModify for UserColor {
         `parse`, `plugin`, `change_check`
   - [X] Replace hackish implementation of `Bundle` with simple macros
   - [X] Remove dead code (existed only so that it can be stored in git history for later retrieval)
+- [ ] Optimization: compare Target values _before_ formatting them
+- [ ] Optimization: do not create a string, but instead `clear` and `write!` to 
+      sections.
 - [ ] Way to avoid warnings when inserting the RichText
 - [ ] Better error model than `anyhow`
-- [ ] Limit amount of updating by implementing a finer-grained change
+- [X] Limit amount of updating by implementing a finer-grained change
       detection system in `RichTextData`
 - [ ] Optimization: update Cow instead of creating new one => no alloc
 - [ ] Extract `Modify<T>` to be generic over what it modifies
       + `Context` as associated type of `T` most likely.
+- [ ] `sort` type-safe slices for usage in `Modifiers` and `Dependencies` to
+      ensure we indeed sort our stuff correctly
 - [ ] (unsure) better format string error messages
 - [ ] (unsure) Allow compile-time verification of rich text spec through a
       proc macro
