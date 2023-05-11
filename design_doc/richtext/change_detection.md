@@ -29,6 +29,10 @@ Different kind of `Modify` depends on different inputs:
 `RichText` is immutable. But It is that which knows `Modify`es. Hence, this is
 who we ask to know what to update when something changes.
 
+### `update`-level detection
+
+See [./nested_modify.md]
+
 ## Interning
 
 `RichText` now contains `dependencies`. List of `DependsOn` to `Vec<index>` where
@@ -60,3 +64,4 @@ Problem: however, we typically want the same name used in two different RichText
 to be bound to the same value.
 
 We could force to use a global interner when parsing the format string.
+
