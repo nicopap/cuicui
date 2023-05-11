@@ -23,5 +23,6 @@ thiserror = "1"
 winnow = "0.4.4"
 
 [dev-dependencies]
-pretty_assertions = "1.3"
 bevy = { version = "0.10", features = ["png", "x11", "bevy_asset", "bevy_render" ] }
+bevy-inspector-egui = "0.18.3"
+pretty_assertions = "1.3"

@@ -3,7 +3,7 @@
 use std::{collections::BTreeMap, fmt, mem, ops::Range};
 
 use anyhow::anyhow;
-use bevy::{reflect::Reflect, reflect::Typed, text::Text, utils::HashMap};
+use bevy::{reflect::Reflect, reflect::Typed, text::Text, text::TextSection, utils::HashMap};
 use smallvec::SmallVec;
 use string_interner::{backend::StringBackend, StringInterner, Symbol};
 
@@ -173,8 +173,12 @@ impl RichText {
         let modifiers = self.modifiers.0.iter();
         let section_count = modifiers.map(|m| m.range.end).max().unwrap_or(0);
         let section_count = usize::try_from(section_count).unwrap();
+        let default_section = || TextSection {
+            value: "{}".to_string(),
+            style: ctx.parent_style.clone(),
+        };
         let mut text = Text {
-            sections: vec![Default::default(); section_count],
+            sections: vec![default_section(); section_count],
             ..Default::default()
         };
         self.modifiers.update_all(ctx, &mut text);

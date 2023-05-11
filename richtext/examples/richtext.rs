@@ -4,16 +4,18 @@ use bevy::{
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use cuicui_richtext::{modifiers, MakeRichTextBundle, RichTextData, RichTextPlugin};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(bevy::log::LogPlugin {
             level: bevy::log::Level::DEBUG,
-            filter: "wgpu=warn,bevy_ecs=info,naga=info".to_string(),
+            filter: "wgpu=warn,bevy_ecs=info,naga=info,bevy_app=info".to_string(),
         }))
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(RichTextPlugin)
+        .add_plugin(WorldInspectorPlugin::default())
         .init_resource::<Fps>()
         .register_type::<Fps>()
         .add_startup_system(setup)
@@ -54,6 +56,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 ..default()
             }),
         ColorText,
+        Name::new("Greet"),
     ));
 
     #[derive(Resource)]
@@ -61,7 +64,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.insert_resource(FiraMediumHolder(
         asset_server.load("fonts/FiraMono-Medium.ttf"),
     ));
-    commands.spawn(
+    commands.spawn((
         // To use a specific font, you need to hold a handle on it.
         // This is why we added the `FiraMediumHolder` resource earlier,
         // otherwise, the font doesn't show up.
@@ -73,7 +76,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             font_size: 60.0,
             color: Color::WHITE,
         }),
-    );
+        Name::new("Gold"),
+    ));
 }
 
 const GUESTS: &[&str] = &["bevy", "boovy", "noovy", "groovy", "bavy", "cuicui"];
