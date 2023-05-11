@@ -33,7 +33,7 @@ This in itself is costly, yet is not used most of the time
 
 So, on top of `depends_on`, a `Modify` should declare a `changes` method.
 Alternative: `apply` could return a list of things it changed.
-This way, we truly minimize change trigger.
+This way, we truly minimize change trigger. See [Dynamic Bindings](#dynamic-bindings)
 
 Then, we will use the list of changes + range of `Modify` in `update` to look up
 what other `Modify` in `Modifiers` to trigger, and trigger them.
@@ -137,3 +137,11 @@ I don't know if "ordered" trigger is enough to:
 
 The difficulty is compounded when considering that dependency types are
 intermixed in the algorithm.
+
+### Dynamic bindings
+
+Issue: `modifiers::Dynamic` can't know at compile-time its dependencies,
+and what it changes, it's behavior depends on what the user sets it to.
+
+Idea: store a `Vec<DependsOn>` or `PhantomData<T>` in `Dynamic`.
+This resolves the issue of dynamic binding type specification as well.
