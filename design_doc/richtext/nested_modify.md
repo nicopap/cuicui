@@ -20,6 +20,8 @@ Fun is important, we are making video games my dude!
 
 With the new changed dependency-driven update system it is already the case!
 
+See [./nested_dependency_implementation.md]
+
 
 ## Change detection
 
@@ -127,6 +129,8 @@ when ∄ _M_ such as _s_ ∈ _S(M)_ and _c_ ∈ _C(M)_.
 - s depends(Content) on a leaf `Modify` always
 - Content is always leaf.
 - dependencies of different c often do not interleave (ie: distinct trees)
+- `Modify`s that do not DependOn a Root (recursively) can be culled, as long
+  as we don't touch the final section component they Change.
 
 ### What proofs do I need?
 
