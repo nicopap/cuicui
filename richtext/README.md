@@ -453,6 +453,8 @@ impl IntoModify for UserColor {
         `parse`, `plugin`, `change_check`
   - [X] Replace hackish implementation of `Bundle` with simple macros
   - [X] Remove dead code (existed only so that it can be stored in git history for later retrieval)
+- [ ] Optimization: Early abort on resource extracted is not changed.
+- [ ] (unsure) Optimization: Consider `inplace_it` crate for some arrays.
 - [ ] Optimization: compare Target values _before_ formatting them
 - [ ] Optimization: do not create a string, but instead `clear` and `write!` to 
       sections.
@@ -463,8 +465,14 @@ impl IntoModify for UserColor {
 - [ ] Optimization: update Cow instead of creating new one => no alloc
 - [ ] Extract `Modify<T>` to be generic over what it modifies
       + `Context` as associated type of `T` most likely.
-- [ ] `sort` type-safe slices for usage in `Modifiers` and `Dependencies` to
-      ensure we indeed sort our stuff correctly
+    - [ ] Nested Modifiers
+        - [ ] Support downstream change trigger (`Modify::changes` method)
+        - [ ] Keep ordering of `Modify` that affect the same region
+    - [ ] Clean up `bindings.rs`
+        - [ ] A lot actually belong to `Modify`
+        - [ ] It should be generic over what is being modified
+        - [ ] `sort` type-safe slices for usage in `Modifiers` and `Dependencies`
+              to ensure we indeed sort our stuff correctly
 - [ ] (unsure) better format string error messages
 - [ ] (unsure) Allow compile-time verification of rich text spec through a
       proc macro

@@ -106,12 +106,14 @@
 
 // mod hlist_madness;
 mod binding;
+mod bitset;
 mod joined_sort;
 pub mod modifiers;
 pub mod modify;
 mod parse;
 mod plugin;
 pub mod show;
+mod store;
 pub mod track;
 
 pub use binding::{BindingsView, LocalBindings, RichText, RichTextBuilder};
