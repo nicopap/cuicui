@@ -12,9 +12,6 @@ use crate::{
 
 macro_rules! common_modify_methods {
     () => {
-        fn clone_dyn(&self) -> super::ModifyBox {
-            Box::new(self.clone())
-        }
         fn as_any(&self) -> &dyn Any {
             self
         }

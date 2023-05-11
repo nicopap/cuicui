@@ -37,7 +37,7 @@ impl IntoModify for ModifyBox {
 ///
 /// # Implementing `Modify`
 ///
-/// You can create your own modifiers, the `clone_dyn`, `as_any`, `eq_dyn` and
+/// You can create your own modifiers, the `as_any`, `eq_dyn` and
 /// `debug_dyn` cannot be implemented at the trait level due to rust's trait object
 /// rules, but they should all look similar.
 ///
@@ -62,7 +62,6 @@ impl IntoModify for ModifyBox {
 ///     fn depends_on(&self) -> Vec<DependsOn> {
 ///         vec![] // We depend on nothing.
 ///     }
-///     fn clone_dyn(&self) -> ModifyBox { Box::new(self.clone()) }
 ///     fn as_any(&self) -> &dyn Any { self }
 ///     fn debug_dyn(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{self:?}") }
 ///     fn eq_dyn(&self, other: &dyn Modify) -> bool {
@@ -87,10 +86,6 @@ pub trait Modify: Any {
     /// On what data does this modifier depends?
     fn depends_on(&self) -> Vec<DependsOn>;
 
-    // TODO(perf)TODO(clean): See design_doc/richtext/better_section_impl.md.
-    // Note: we already don't use this, check if true by removing the impl Clone for ModifyBox
-    // block
-    fn clone_dyn(&self) -> ModifyBox;
     fn as_any(&self) -> &dyn Any;
     fn eq_dyn(&self, other: &dyn Modify) -> bool;
     fn debug_dyn(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
@@ -138,13 +133,8 @@ impl fmt::Debug for ModifyBox {
         self.debug_dyn(f)
     }
 }
-impl Clone for ModifyBox {
-    fn clone(&self) -> Self {
-        self.clone_dyn()
-    }
-}
 
-// TODO(doc): more details, explain bidings.
+// TODO(doc): more details, explain bindings.
 /// The context used in [`Modify`].
 pub struct Context<'a> {
     pub bindings: BindingsView<'a>,
