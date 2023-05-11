@@ -15,10 +15,13 @@ mod structs;
 use winnow::{
     ascii::{alpha1, alphanumeric1, digit1, escaped, multispace0},
     branch::alt,
-    combinator::{delimited, opt, peek, preceded, repeat0, separated1, separated_pair, terminated},
+    combinator::{
+        delimited, fail, opt, peek, preceded, repeat0, separated1, separated_pair, terminated,
+    },
+    dispatch,
     error::ParseError,
     stream::{AsChar, Stream, StreamIsPartial},
-    token::{one_of, take_till1, take_while1},
+    token::{any, one_of, take_till1, take_while1},
     Parser,
 };
 
@@ -98,15 +101,14 @@ fn balanced_text(input: &str) -> IResult<&str> {
     fn scope(input: &str) -> IResult<&str> {
         let semi_exposed = || escaped(take_till1("()[]{}\\"), '\\', one_of("()[]{}|,\\"));
         let repeat = repeat0::<_, _, (), _, _>;
-        let inner = || (semi_exposed(), repeat((scope, semi_exposed())));
-        // TODO(perf): this is slow, need to replace with `dispatch!`
-        alt((
-            delimited('{', inner(), '}'),
-            delimited('[', inner(), ']'),
-            delimited('(', inner(), ')'),
-        ))
-        .recognize()
-        .parse_next(input)
+        let inner = move || (semi_exposed(), repeat((scope, semi_exposed())));
+        let dispatch = dispatch! {any;
+            '{' => terminated(inner(), '}'),
+            '[' => terminated(inner(), ']'),
+            '(' => terminated(inner(), ')'),
+            _ => fail,
+        };
+        dispatch.recognize().parse_next(input)
     }
     let exposed = || escaped(take_till1("([{}|,\\"), '\\', one_of("()[]{}|,\\"));
 
