@@ -433,7 +433,7 @@ impl IntoModify for UserColor {
   - [X] resource tracker
 - [ ] Reflection handling
     - [X] `Format` cleanup as described in design_doc/richtext/dynamic_format.md
-    - [ ] An `{fmt:Named(Name).Component.path.to.field` path specifier.
+    - [ ] An `{Named(Name).Component.path.to.field` path specifier.
     - [X] "Pull bindings" format string decides what to read rather than `tracker`s
     - [X] namespaced binding -> Require update to grammar.
     - [X] Design a reflection-based format system.
@@ -444,8 +444,9 @@ impl IntoModify for UserColor {
     - [ ] Allow arbitrary modifiers from `Format`
     - [ ] Allow user-defined `Format`s
     - [ ] Remove `ResourceTrackerExt`
-    - [ ] Consider using "starting by 'Res'" or "format applies to everything"
-          in order to avoid `fmt:` prefix
+    - [X] Consider using "starting by 'Res'" or "format applies to everything"
+          in order to avoid `fmt:` prefix → Actually checking for closing
+          delimiter is much easier.
 - [X] Refactor
   - [X] extract richtext into separate crate
   - [X] Reorganize modules: `trackers`, `modify` (trait) `modifiers` (impls)

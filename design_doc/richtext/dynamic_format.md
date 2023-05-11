@@ -103,6 +103,9 @@ by `fmt:`, this way the grammar is unambiguous, although weird for users, and
 misleading because now we use "format string" both for the whole text and the
 special case of bindings that have formatting applied to them.
 
+**Idea 3**: Just `peek`ing for `}` and only accepting if we close immediately.
+This fixes our parsing woes.
+
 ## Implementation
 
 Making `Dynamic` a struct with a `format` and `access` field doesn't work. As

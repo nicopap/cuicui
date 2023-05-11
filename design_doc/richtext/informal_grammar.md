@@ -12,7 +12,7 @@ balanced_text = exposed [scope exposed]*
 
 format_spec = <https://doc.rust-lang.org/stable/std/fmt/index.html#syntax>
 format = path ':' format_spec
-binding = 'fmt:' format | path
+binding = format | path
 
 path = [:alphanum:_."]+
 key = <ident>

@@ -72,11 +72,10 @@ fn binding(input: &str) -> IResult<Binding> {
     let format_spec = alt((ident.map(Format::UserDefined), format_spec.map(Format::Fmt)));
     let path = take_while1(('a'..='z', 'A'..='Z', '0'..='9', "_."));
     let format = separated_pair(path, ':', format_spec);
-    let format = alt((
-        preceded(("fmt:", multispace0), format).map(Binding::format),
-        terminated(ident, peek('}')).map(Binding::Name),
-    ));
-    format.context("format").parse_next(input)
+    let format = alt((format.map(Binding::format), ident.map(Binding::Name)));
+    terminated(format, peek('}'))
+        .context("format")
+        .parse_next(input)
 }
 
 fn ws<I, O, E>(inner: impl Parser<I, O, E>) -> impl Parser<I, O, E>
