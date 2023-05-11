@@ -47,7 +47,7 @@ pub struct Font(pub String);
 impl Modify for Font {
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError> {
         let err = || Errors::FontNotLoaded(self.0.clone());
-        // println!("Apply new font: {:?}", self.0);
+        trace!("Apply =Font=: {:?}", self.0);
         text.style.font = (ctx.fonts)(&self.0).ok_or_else(err)?;
         Ok(())
     }
@@ -70,7 +70,7 @@ impl modify::Parse for Font {
 pub struct RelSize(pub f32);
 impl Modify for RelSize {
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError> {
-        // println!("Apply new font size: {:?}", self.0);
+        trace!("Apply #RelSize#: {:?}", self.0);
         text.style.font_size = ctx.parent_style.font_size * self.0;
         Ok(())
     }
@@ -93,6 +93,7 @@ pub struct Color(pub bevy::prelude::Color);
 impl Modify for Color {
     fn apply(&self, _ctx: &Context, text: &mut TextSection) -> Result<(), AnyError> {
         // println!("Apply new color: {:?}", self.0);
+        trace!("Apply ~COLOR~: {:?}", self.0);
         text.style.color = self.0;
         Ok(())
     }
@@ -119,7 +120,7 @@ impl IntoModify for bevy::prelude::Color {
 pub struct Content(pub Cow<'static, str>);
 impl Modify for Content {
     fn apply(&self, _ctx: &Context, text: &mut TextSection) -> Result<(), AnyError> {
-        trace!("Apply new content: {:?}", self.0);
+        trace!("Apply $CONTENT$: {:?}", self.0);
         text.value.clear();
         text.value.push_str(&self.0);
         Ok(())
@@ -146,7 +147,7 @@ impl<T: fmt::Display> From<T> for Content {
 pub struct Dynamic(pub(crate) BindingId);
 impl Modify for Dynamic {
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError> {
-        // println!("Get value from binding: {:?}", self.name);
+        trace!("Apply -DYNAMIC-: {:?}", self.0);
         let Some(modifier) = ctx.get_binding(self.0) else { return Ok(()) };
         modifier.apply(ctx, text)
     }
