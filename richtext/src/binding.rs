@@ -108,12 +108,20 @@ impl WorldBindings {
     }
 }
 impl<'a> BindingsView<'a> {
-    pub(crate) fn changed(&self) -> impl Iterator<Item = BindingId> + '_ {
-        let id_changed = |(id, (changed, _)): (&_, &(bool, _))| changed.then_some(*id);
-        let overlay = self.overlay.iter().flat_map(|b| *b).filter_map(id_changed);
-        let root = self.root.iter().filter_map(id_changed);
+    pub(crate) fn changed(&self) -> impl Iterator<Item = (BindingId, &ModifyBox)> + '_ {
+        // Due to Rust's poor type inference on closures, I must write this inline
+        // let only_updated = |(id, (changed, modify))| changed.then_some((*id, modify));
+        let overlay = self
+            .overlay
+            .iter()
+            .flat_map(|b| *b)
+            .filter_map(|(id, (changed, m))| changed.then_some((*id, m)));
+        let root = self
+            .root
+            .iter()
+            .filter_map(|(id, (changed, m))| changed.then_some((*id, m)));
 
-        joined_sort(overlay, root, Ord::cmp).map(Ior::prefer_left)
+        joined_sort(overlay, root, |l, r| l.0.cmp(&r.0)).map(Ior::prefer_left)
     }
     pub fn get(&self, id: BindingId) -> Option<&'a (dyn Modify + Send + Sync)> {
         self.overlay

@@ -40,14 +40,14 @@ pub struct RichText {
     modify_deps: BitMultiMap<ModifyIndex, ModifyIndex>,
 
     // TODO(feat): Multiple bindings, see `nested_modify.md#bindings-representation`
-    /// `ModifyBox` that are dynamic (ie: controlled by `Dynamic`).
+    /// Binding ranges.
     ///
     /// Note that this prevents having 1 binding to N instances.
-    dynamic: Box<[(BindingId, ModifyIndex)]>,
+    bindings: Box<[(BindingId, Range<u32>)]>,
 
     /// The dependency mask for individual bindings.
     ///
-    /// Row `i` in `dynamic_mask` is the mask for binding at index `i` in `dynamic`.
+    /// Row `i` in `binding_mask` is the mask for binding at index `i` in `bindings`.
     /// When the row is empty, it means it affects the whole range.
     binding_masks: VarBitMatrix,
 
@@ -86,11 +86,23 @@ impl<'a> RichTextCtx<'a> {
             }
         }
     }
-    pub fn update(&mut self, changes: EnumSet<Change>, bindings: impl Iterator<Item = BindingId>) {
-        let bindings = bindings.filter_map(|binding| self.rich.binding_modify(binding));
-        for (i, index) in bindings {
-            let mask = || self.rich.binding_masks.row(i);
-            self.apply_modify_deps(index, mask);
+    pub fn update<'b>(
+        &mut self,
+        changes: EnumSet<Change>,
+        bindings: impl Iterator<Item = (BindingId, &'b ModifyBox)>,
+    ) {
+        for (id, modify) in bindings {
+            let Some((i, range)) = self.rich.binding_range(id) else {
+                continue;
+            };
+            let mask = self.rich.binding_masks.row(i);
+
+            for section in left_not_right(range, mask, Ord::cmp) {
+                let section = &mut self.to_update.sections[section as usize];
+                if let Err(err) = modify.apply(&self.ctx, section) {
+                    warn!("when applying {id:?}: {err}");
+                }
+            }
         }
         for index in self.rich.change_modifies(changes) {
             let Modifier { modify, range } = self.rich.modify_at(index);
@@ -100,11 +112,11 @@ impl<'a> RichTextCtx<'a> {
     }
 }
 impl RichText {
-    fn binding_modify(&self, binding: BindingId) -> Option<(usize, ModifyIndex)> {
+    fn binding_range(&self, binding: BindingId) -> Option<(usize, Range<u32>)> {
         // TODO(perf): binary search THE FIRST binding, then `intersected`
         // the slice from it to end of `dynamic` with the sorted Iterator of BindingId.
-        let index = self.dynamic.binary_search_by_key(&binding, |d| d.0).ok()?;
-        Some((index, self.dynamic[index].1))
+        let index = self.bindings.binary_search_by_key(&binding, |d| d.0).ok()?;
+        Some((index, self.bindings[index].1.clone()))
     }
     fn change_modifies(&self, changes: EnumSet<Change>) -> impl Iterator<Item = ModifyIndex> + '_ {
         self.direct_deps.all_rows(changes).copied()

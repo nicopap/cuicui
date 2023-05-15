@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
+    ops::Range,
 };
 
 use bevy::{log::trace, text::TextSection};
@@ -81,9 +82,7 @@ impl Make {
     // references, it is impossible to create an ad-hoc empty one.
     /// Apply all `Modify` that do depend on nothing and remove them from `modifiers`.
     fn purge_static(&mut self, ctx: &modify::Context) -> Vec<TextSection> {
-        let is_indy = |modify: &Modifier| {
-            modify.modify.depends() == EnumSet::EMPTY && modify.modify.binding().is_none()
-        };
+        let is_indy = |modify: &Modifier| modify.modify.depends() == EnumSet::EMPTY;
         let independents: BTreeSet<_> = self
             .modifiers
             .iter()
@@ -143,11 +142,6 @@ impl Make {
             (depends && !depends_on_parent).then_some(i)
         })
     }
-    fn direct_deps(&self) -> impl Iterator<Item = Idx> + '_ {
-        EnumSet::ALL
-            .iter()
-            .flat_map(|change| self.change_direct_deps(change))
-    }
 
     /// The list of `Modify`s that depend on other `Modify` for their value on `change` property.
     ///
@@ -185,10 +179,11 @@ impl Make {
             .iter()
             .flat_map(|change| self.change_modify_deps(change))
     }
-    /// `Modify` that depends on a
-    fn binding_deps(&self) -> impl Iterator<Item = (BindingId, Idx)> + '_ {
-        self.indices()
-            .filter_map(|(i, modify)| modify.modify.binding().map(|b| (b, i)))
+    /// `Modify` that depends on a binding.
+    fn binding_deps(&self) -> impl Iterator<Item = (BindingId, Range<u32>)> + '_ {
+        self.modifiers
+            .iter()
+            .filter_map(|m| m.modify.binding().map(|b| (b, m.range.clone())))
     }
     pub(super) fn build(mut self, ctx: &modify::Context) -> (Vec<TextSection>, RichText) {
         trace!("Building a RichText from {self:?}");
@@ -198,6 +193,8 @@ impl Make {
         trace!("Root mask is {root_mask:?}");
         let binding_masks = self.all_binding_masks();
         trace!("binding mask is {binding_masks:?}");
+
+        let bindings: Box<[_]> = self.binding_deps().collect();
 
         let sections = self.purge_static(ctx);
         let new_count = self.modifiers.len();
@@ -214,16 +211,15 @@ impl Make {
         let direct_deps = direct_deps.build().unwrap();
         trace!("c2m: {direct_deps:?}");
 
-        let dynamic: Box<[_]> = self.binding_deps().collect();
-        trace!("bindings: {dynamic:?}");
+        trace!("bindings: {bindings:?}");
         trace!("modifiers: {:?}", &self.modifiers);
 
-        let binding_iter = dynamic.iter().map(|b| b.0);
+        let binding_iter = bindings.iter().map(|b| b.0);
         let binding_masks = self.reorder_bindings(binding_iter, binding_masks);
         trace!("binding masks: {binding_masks:?}");
 
         let with_deps = RichText {
-            dynamic,
+            bindings,
             modify_deps,
             direct_deps,
             modifies: self.modifiers.into(),

@@ -7,7 +7,7 @@ use bevy::{
     text::TextStyle,
 };
 
-use crate::{binding::BindingsView, change_text::ChangeTextStyle};
+use crate::binding::BindingsView;
 
 pub use anyhow::Error as AnyError;
 pub use enumset::{EnumSet, EnumSetType};

@@ -480,6 +480,7 @@ impl IntoModify for UserColor {
     - [ ] Nested Modifiers
         - [X] Support downstream change trigger (`Modify::changes` method)
         - [X] Keep ordering of `Modify` that affect the same region
+        - [X] Remove need for `Dynamic` in `RichText`
         - [ ] Remove `Dynamic` as a modifier
         - [ ] Remove `Content` as a modifier
         - [ ] Complete implementation
