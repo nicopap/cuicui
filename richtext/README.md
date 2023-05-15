@@ -444,7 +444,7 @@ impl IntoModify for UserColor {
   - [X] resource tracker
 - [ ] Reflection handling
     - [X] `Format` cleanup as described in design_doc/richtext/dynamic_format.md
-    - [ ] An `{Named(Name).Component.path.to.field` path specifier.
+    - [ ] A `{Named(Name).Component.path.to.field}` path specifier.
     - [X] "Pull bindings" format string decides what to read rather than `tracker`s
     - [X] namespaced binding -> Require update to grammar.
     - [X] Design a reflection-based format system.
@@ -465,6 +465,7 @@ impl IntoModify for UserColor {
   - [X] Replace hackish implementation of `Bundle` with simple macros
   - [X] Remove dead code (existed only so that it can be stored in git history for later retrieval)
 - [ ] Optimization: Early abort on resource extracted is not changed.
+- [ ] Optimization: CRITICAL: fix bindng change bit not being reset after application.
 - [ ] (unsure) Optimization: Consider `inplace_it` crate for some arrays.
 - [ ] Optimization: compare Target values _before_ formatting them
 - [ ] Optimization: do not create a string, but instead `clear` and `write!` to 
@@ -477,11 +478,18 @@ impl IntoModify for UserColor {
 - [ ] Extract `Modify<T>` to be generic over what it modifies
       + `Context` as associated type of `T` most likely.
     - [ ] Nested Modifiers
-        - [ ] Support downstream change trigger (`Modify::changes` method)
-        - [ ] Keep ordering of `Modify` that affect the same region
+        - [X] Support downstream change trigger (`Modify::changes` method)
+        - [X] Keep ordering of `Modify` that affect the same region
         - [ ] Remove `Dynamic` as a modifier
         - [ ] Remove `Content` as a modifier
-    - [ ] Clean up `bindings.rs`
+        - [ ] Complete implementation
+            - [ ] RichText::root_mask_for
+            - [ ] RichText::binding_modify
+            - [ ] Make::purge_static
+            - [ ] Make::modify_deps
+            - [ ] Make::binding_mask
+    - [ ] extract `store` module into individual crate.
+    - [ ] Clean up `bindings.rs`, `richtext.rs`, `richtext/make.rs`, `modify.rs`
         - [ ] A lot actually belong to `Modify`
         - [ ] It should be generic over what is being modified
         - [ ] `sort` type-safe slices for usage in `Modifiers` and `Dependencies`
