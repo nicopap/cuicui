@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use super::structs::{Binding, Dyn, Format, Modifier as ParseModifier, Section as ParseSection};
 use crate::{
-    binding::Modifier, binding::WorldBindings, modifiers::Dynamic, modify, track::make_tracker,
+    binding::WorldBindings, modifiers::Dynamic, modify, richtext::Modifier, track::make_tracker,
     track::Tracker, ModifyBox,
 };
 
@@ -36,7 +36,7 @@ pub(crate) type MakeModifyBox = fn(Cow<'static, str>) -> Result<ModifyBox, AnyEr
 pub(crate) struct Context<'a> {
     // TODO(perf) see design_docs/richtext/hlist_interpreting.md + consider interning
     modify_builders: HashMap<&'static str, MakeModifyBox>,
-    bindings: &'a mut WorldBindings,
+    pub(crate) bindings: &'a mut WorldBindings,
 }
 impl<'a> Context<'a> {
     fn insert<T: Any + modify::Parse>(&mut self) {

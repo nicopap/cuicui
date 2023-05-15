@@ -2,11 +2,15 @@
 
 use std::{any::Any, fmt};
 
-use bevy::prelude::{Font, Handle, TextSection, TextStyle};
+use bevy::{
+    prelude::{Font, Handle, TextSection},
+    text::TextStyle,
+};
 
-use crate::binding::BindingsView;
+use crate::{binding::BindingsView, change_text::ChangeTextStyle};
 
 pub use anyhow::Error as AnyError;
+pub use enumset::{EnumSet, EnumSetType};
 
 /// A Boxed [`Modify`] trait object, with all necessary bounds to make it work
 /// with bevy's [`Resource`] and [`Component`] types.
@@ -46,7 +50,7 @@ impl IntoModify for ModifyBox {
 /// ```rust
 /// use std::{any::Any, fmt};
 /// use bevy::prelude::*;
-/// use cuicui_richtext::modify::{Modify, Context, ModifyBox, AnyError, DependsOn};
+/// use cuicui_richtext::modify::{Modify, Context, ModifyBox, AnyError, Change, EnumSet};
 ///
 /// #[derive(Debug, PartialEq, Clone, Copy)]
 /// struct SetExactFontSize(f32);
@@ -59,8 +63,12 @@ impl IntoModify for ModifyBox {
 ///         Ok(())
 ///     }
 ///     /// Declare when to update the text section.
-///     fn depends_on(&self) -> Vec<DependsOn> {
-///         vec![] // We depend on nothing.
+///     fn depends(&self) -> EnumSet<Change> {
+///         EnumSet::EMPTY // We depend on nothing.
+///     }
+///     /// Declare what `SetExactFontSize` changes.
+///     fn changes(&self) -> EnumSet<Change> {
+///         Change::FontSize.into()
 ///     }
 ///     fn as_any(&self) -> &dyn Any { self }
 ///     fn debug_dyn(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{self:?}") }
@@ -84,7 +92,16 @@ pub trait Modify: Any {
     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError>;
 
     /// On what data does this modifier depends?
-    fn depends_on(&self) -> Vec<DependsOn>;
+    fn depends(&self) -> EnumSet<Change>;
+
+    /// What data does this `Modify` changes?
+    fn changes(&self) -> EnumSet<Change>;
+
+    // TODO(feat): This should later be removed as `Dynamic` will not be a `Modify` anymore
+    /// Which binding does this `Modify` depends on?
+    fn binding(&self) -> Option<BindingId> {
+        None
+    }
 
     fn as_any(&self) -> &dyn Any;
     fn eq_dyn(&self, other: &dyn Modify) -> bool;
@@ -136,6 +153,7 @@ impl fmt::Debug for ModifyBox {
 
 // TODO(doc): more details, explain bindings.
 /// The context used in [`Modify`].
+#[derive(Clone, Copy)]
 pub struct Context<'a> {
     pub bindings: BindingsView<'a>,
     pub parent_style: &'a TextStyle,
@@ -150,24 +168,25 @@ impl<'a> Context<'a> {
     pub fn get_binding(&self, id: BindingId) -> Option<&'a (dyn Modify + Send + Sync)> {
         self.bindings.get(id)
     }
-    pub fn changed(&self) -> impl Iterator<Item = DependsOn> + '_ {
-        use DependsOn::*;
-        self.bindings
-            .changed()
-            .map(Binding)
-            .chain([Fonts, StyleFontSize, StyleFont, StyleColor])
-    }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BindingId(pub(crate) u32);
+impl fmt::Debug for BindingId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<B{}>", self.0)
+    }
+}
 
 /// On what value in [`Context`] does this [`Modify`] depends on?
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DependsOn {
     Binding(BindingId),
-    Fonts,
-    StyleFontSize,
-    StyleFont,
-    StyleColor,
+    Parent(Change),
+}
+#[derive(EnumSetType, Debug, PartialOrd, Ord)]
+pub enum Change {
+    FontSize,
+    Font,
+    Color,
 }

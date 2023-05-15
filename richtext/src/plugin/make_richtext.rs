@@ -1,8 +1,10 @@
 use std::mem;
 
-use bevy::{asset::HandleId, prelude::*, text::BreakLineOn};
+use bevy::{asset::HandleId, prelude::*, text::BreakLineOn, utils::HashMap};
 
-use crate::{modify, ResTrackers, RichTextData};
+use crate::{
+    change_text::ChangeTextStyle, parse::interpret, ResTrackers, RichTextBuilder, RichTextData,
+};
 
 use super::WorldBindings;
 
@@ -72,23 +74,22 @@ pub fn make_rich(
             format_string,
         } = &mut *make_rich;
         let format_string = mem::take(format_string);
-        let builder = world_bindings.0.richtext_builder(format_string);
+        let builder = RichTextBuilder {
+            format_string,
+            context: interpret::Context::new(&mut world_bindings.0).with_defaults(),
+            parent_style: style,
+            fonts: &|name| Some(fonts.get_handle(HandleId::from(name))),
+            alignment: *alignment,
+            linebreak_behaviour: *linebreak_behaviour,
+            formatters: HashMap::default(),
+        };
         match builder.build() {
-            Ok((text, mut trackers)) => {
+            Ok((default_text, text, mut trackers)) => {
                 res_trackers.extend(trackers.drain(..));
-
-                let ctx = modify::Context {
-                    bindings: world_bindings.0.view(),
-                    parent_style: &*style,
-                    fonts: &|name| Some(fonts.get_handle(HandleId::from(name))),
-                };
-                let mut default_text = text.default_text(&ctx);
-                default_text.alignment = *alignment;
-                default_text.linebreak_behaviour = *linebreak_behaviour;
 
                 let richtext_data = RichTextData {
                     text,
-                    base_style: mem::take(style),
+                    base_style: ChangeTextStyle::new(mem::take(style)),
                     bindings: default(),
                 };
                 cmds.entity(entity)

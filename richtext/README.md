@@ -1,17 +1,28 @@
 # Rich text
 
-It's unpleasant to work with bevy's `Text` component because of having
-to individually separate sections and manually update content.
+A rich text component for bevy.
 
-Ideally we should be using a "template string" both to specify the style and
-what to put in the content, ideally update it seemlessly.
+The current bevy `Text` component is [a misery to use][misery-bui].
+
+`RichText` "manages" `Text` sections,
+it associates section contents and styles to a "binding" (a name).
+As a user, you set the value of bindings through `richtext_data.set(&str, value)`.
+
+It's already much better than `Text`. It has some issues though:
+
+- It's still verbose to update text: add marker component,
+  query for it in a system, call the `set` method.
+- you can make typos.
+
+I don't have a solution for typos,
+but I can work around it by solving the other issue.
+
+Consider a game options menu.
+What an options menu does **in a bevy game**
+is usually set (and read) the values of some component or resource fields.
 
 | 📝 [Read a shorter intro][docsrs-root] | 
 |----------------------------------------|
-
-### Current
-
-https://github.com/bevyengine/bevy/blob/22121e69fb4a72bb514d43240df220b8938a1e13/examples/3d/shadow_biases.rs#L107-L141
 
 
 ### With cuicui_richtext
@@ -468,11 +479,16 @@ impl IntoModify for UserColor {
     - [ ] Nested Modifiers
         - [ ] Support downstream change trigger (`Modify::changes` method)
         - [ ] Keep ordering of `Modify` that affect the same region
+        - [ ] Remove `Dynamic` as a modifier
+        - [ ] Remove `Content` as a modifier
     - [ ] Clean up `bindings.rs`
         - [ ] A lot actually belong to `Modify`
         - [ ] It should be generic over what is being modified
         - [ ] `sort` type-safe slices for usage in `Modifiers` and `Dependencies`
               to ensure we indeed sort our stuff correctly
+- [ ] (unsure) optimization: take inspiration from https://github.com/Wallacoloo/jagged_array/blob/master/src/lib.rs#L68 for `VarMatrix`s impls
 - [ ] (unsure) better format string error messages
 - [ ] (unsure) Allow compile-time verification of rich text spec through a
       proc macro
+
+[misery-bui]: https://github.com/bevyengine/bevy/blob/22121e69fb4a72bb514d43240df220b8938a1e13/examples/3d/shadow_biases.rs#L107-L141

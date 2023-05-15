@@ -25,7 +25,6 @@ use winnow::{
     Parser,
 };
 
-use crate::binding::Modifiers;
 use crate::AnyError;
 use crate::{show::RuntimeFormat, track::Tracker};
 use structs::{flatten_section, Binding, Dyn, Format, Modifier, Section, Sections};
@@ -162,18 +161,18 @@ fn sections_inner(input: &str) -> IResult<Sections> {
         .parse_next(input)
 }
 pub(super) fn richtext(
-    mut ctx: interpret::Context,
+    ctx: &mut interpret::Context,
     input: &str,
     trackers: &mut Vec<Tracker>,
-) -> AnyResult<Modifiers> {
+) -> AnyResult<Vec<crate::richtext::Modifier>> {
     let parsed = sections_inner.parse(input).map_err(|e| e.into_owned())?;
 
     let mut modifiers = Vec::with_capacity(parsed.0.len() * 2);
 
     for (i, sec) in parsed.0.into_iter().enumerate() {
-        interpret::section(i, sec, &mut ctx, trackers, &mut modifiers)?;
+        interpret::section(i, sec, ctx, trackers, &mut modifiers)?;
     }
-    Ok(Modifiers(modifiers.into()))
+    Ok(modifiers)
 }
 
 #[cfg(test)]

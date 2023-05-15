@@ -37,3 +37,8 @@ Bit is activated when `Modify` at index _n_ DependsOn _r_.
 
 iterate through `for modify in &dependencies[depends_on]` 
 
+## Other performance improvements
+
+- `Dynamic` isn't a `Modify` anymore.
+- `Content` row of dependencies can be removed,
+  as it is always applied to a single section, never depends on anything.

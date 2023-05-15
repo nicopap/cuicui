@@ -4,11 +4,11 @@ use std::{any::Any, borrow::Cow, fmt};
 use anyhow::Error as AnyError;
 use bevy::prelude::{trace, FromReflect, Reflect, TextSection};
 use bevy::reflect::ReflectFromReflect;
+use enumset::EnumSet;
 use thiserror::Error;
 
-use crate::{
-    modify, modify::BindingId, modify::Context, modify::DependsOn, IntoModify, Modify, ModifyBox,
-};
+use crate::modify::{BindingId, Change, Context};
+use crate::{modify, IntoModify, Modify, ModifyBox};
 
 macro_rules! common_modify_methods {
     () => {
@@ -48,8 +48,11 @@ impl Modify for Font {
         text.style.font = (ctx.fonts)(&self.0).ok_or_else(err)?;
         Ok(())
     }
-    fn depends_on(&self) -> Vec<DependsOn> {
-        vec![DependsOn::Fonts]
+    fn depends(&self) -> EnumSet<Change> {
+        EnumSet::EMPTY
+    }
+    fn changes(&self) -> EnumSet<Change> {
+        Change::Font.into()
     }
     common_modify_methods! {}
 }
@@ -71,8 +74,11 @@ impl Modify for RelSize {
         text.style.font_size = ctx.parent_style.font_size * self.0;
         Ok(())
     }
-    fn depends_on(&self) -> Vec<DependsOn> {
-        vec![DependsOn::StyleFontSize]
+    fn depends(&self) -> EnumSet<Change> {
+        Change::FontSize.into()
+    }
+    fn changes(&self) -> EnumSet<Change> {
+        Change::FontSize.into()
     }
     common_modify_methods! {}
 }
@@ -94,8 +100,11 @@ impl Modify for Color {
         text.style.color = self.0;
         Ok(())
     }
-    fn depends_on(&self) -> Vec<DependsOn> {
-        Vec::new()
+    fn depends(&self) -> EnumSet<Change> {
+        EnumSet::EMPTY
+    }
+    fn changes(&self) -> EnumSet<Change> {
+        Change::Color.into()
     }
     common_modify_methods! {}
 }
@@ -122,8 +131,13 @@ impl Modify for Content {
         text.value.push_str(&self.0);
         Ok(())
     }
-    fn depends_on(&self) -> Vec<DependsOn> {
-        Vec::new()
+    fn depends(&self) -> EnumSet<Change> {
+        EnumSet::EMPTY
+    }
+    fn changes(&self) -> EnumSet<Change> {
+        // TODO(clean): It is not true that it doesnt' changee anything, but
+        // Content is special-cased RichText so as to avoid extra storage
+        EnumSet::EMPTY
     }
     common_modify_methods! {}
 }
@@ -148,18 +162,16 @@ impl Modify for Dynamic {
         let Some(modifier) = ctx.get_binding(self.0) else { return Ok(()) };
         modifier.apply(ctx, text)
     }
-    fn depends_on(&self) -> Vec<modify::DependsOn> {
+    fn depends(&self) -> EnumSet<Change> {
         // TODO(bug): problem: this also depends on the dependencies of the `Modify` this resolves to.
-        vec![DependsOn::Binding(self.0)]
+        // Current plan is to convert `Dynamic` to a struct and add depends and change as fields.
+        EnumSet::EMPTY
     }
-    common_modify_methods! {}
-}
-impl Modify for () {
-    fn apply(&self, _: &Context, _: &mut TextSection) -> Result<(), AnyError> {
-        Ok(())
+    fn changes(&self) -> EnumSet<Change> {
+        EnumSet::EMPTY
     }
-    fn depends_on(&self) -> Vec<modify::DependsOn> {
-        Vec::new()
+    fn binding(&self) -> Option<BindingId> {
+        Some(self.0)
     }
     common_modify_methods! {}
 }

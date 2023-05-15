@@ -134,13 +134,13 @@ when ∄ _M_ such as _s_ ∈ _S(M)_ and _c_ ∈ _C(M)_.
 
 ### What proofs do I need?
 
-I don't know if "ordered" trigger is enough to:
+The tricky bit is the colored relations. Can I abstract it away?
+Saying X depends on Y, or update X always follow update Y allows using
+compact bitfields.
 
-- Apply all `Modify`s affected by a change
-- Apply no other `Modify`s than the ones affected by a change
-
-The difficulty is compounded when considering that dependency types are
-intermixed in the algorithm.
+- Assuming distinct trees (`depends_on: Option<Change>`), can we assume
+  dependencies to work globally?
+  → Trivially: **NO**.
 
 ### Dynamic bindings
 
@@ -149,3 +149,54 @@ and what it changes, it's behavior depends on what the user sets it to.
 
 Idea: store a `Vec<DependsOn>` or `PhantomData<T>` in `Dynamic`.
 This resolves the issue of dynamic binding type specification as well.
+
+### Open problems
+
+#### Where to store my `ModifyBox`es?
+
+The final data structure would be like
+
+```rust
+/// Index in `modifies`.
+struct ModifyIndex(u32);
+
+struct RichText {
+  /// All `ModifyBox` that can be applied.
+  modifies: Box<[ModifyBox]>,
+  direct_dependencies: Box<VarMatrix<ModifyIndex, Change::BIT_WIDTH>>,
+  modify_dependencies: BitMultiMap<ModifyIndex, ModifyIndex>,
+  dynamic: Vec<(BindingId, ModifyIndex)>,
+}
+```
+
+However, why the level of indirection and storing `ModifyIndex` in `VarMatrix`
+over, say, `ModifyBox` already?
+
+This would prevent the same `Modify` to depend on more than one `Change`.
+A use case that is wishable long term, but not immediately required.
+
+→ This would also prevent `Modify`s that purely depend on other `Modify`s,
+so it isn't possible.
+
+#### Range dependency mask
+
+We store the range of sections a `Modify` influences. But within that range,
+some section components are masked by other child `Modify`s, the question on
+how to solve this is open.
+
+Supposedly,
+we store a bitset containing the mask of sections with which depends on
+`Modify`s that themselves depend on nothing.
+This way, we never update them.
+Updating other sections is actually necessary, as we run the depending `Modify`
+with the new values.
+
+#### `Binding`s representation
+
+We handily removed bindings from our considerations, but they are important.
+
+I'm thinking of a `Vec<(BindingId, (u16, u16))>` sorted vec where (u16, u16)
+is position in `VarMatrix` of relrevant `Modify` → Does not work
+because may have several `Modify` per binding.
+
+We could make a `VarMatrix` where the key is association `(BindingId, starts_at)`.

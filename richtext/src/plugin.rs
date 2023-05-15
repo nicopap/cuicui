@@ -8,6 +8,7 @@ use bevy::{asset::HandleId, prelude::*};
 
 use crate::{
     binding::{self, LocalBindings},
+    change_text::ChangeTextStyle,
     modifiers::{self, Content},
     modify::{BindingId, Context},
     track::{update_tracked_components, update_tracked_resources},
@@ -43,7 +44,7 @@ impl WorldBindings {
 pub struct RichTextData {
     text: RichText,
     bindings: LocalBindings,
-    base_style: TextStyle,
+    base_style: ChangeTextStyle,
 }
 impl RichTextData {
     pub fn set(&mut self, binding_name: impl Into<String>, value: impl IntoModify) {
@@ -65,11 +66,12 @@ pub fn update_text(
         let view = world_bindings.0.view_with_local(bindings);
         let ctx = Context {
             bindings: view.unwrap(),
-            parent_style: base_style,
+            parent_style: &base_style.inner,
             fonts: &|name| Some(fonts.get_handle(HandleId::from(name))),
         };
-        // TODO(perf): only update when changes are detected
-        text.update(&mut to_update, &ctx);
+        text.update(&mut to_update, base_style.changes, ctx);
+        base_style.reset_changes();
+        bindings.reset_changes();
     }
 }
 

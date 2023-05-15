@@ -1,19 +1,14 @@
 //! Stores [`Modify`].
 
-use std::{collections::BTreeMap, fmt, mem, ops::Range};
+use std::{collections::BTreeMap, mem};
 
 use anyhow::anyhow;
-use bevy::{reflect::Reflect, reflect::Typed, text::Text, text::TextSection, utils::HashMap};
 use smallvec::SmallVec;
 use string_interner::{backend::StringBackend, StringInterner, Symbol};
 
 use crate::{
-    joined_sort::{joined_sort, Ior},
-    modify::{self, BindingId, DependsOn},
-    parse::{self, interpret},
-    show::{self, ShowBox},
-    track::Tracker,
-    AnyError, IntoModify, Modify, ModifyBox,
+    joined_sort::joined_sort, joined_sort::Ior, modify::BindingId, AnyError, IntoModify, Modify,
+    ModifyBox,
 };
 
 #[derive(Debug, Default)]
@@ -67,6 +62,10 @@ impl LocalBindings {
         }
         Ok(())
     }
+
+    pub fn reset_changes(&mut self) {
+        self.inner.values_mut().for_each(|v| v.0 = false);
+    }
 }
 impl WorldBindings {
     // TODO(err): Should return Result
@@ -97,13 +96,6 @@ impl WorldBindings {
     pub(crate) fn get_or_add(&mut self, name: impl AsRef<str>) -> BindingId {
         self.interner.get_or_intern(name)
     }
-    pub fn richtext_builder(&mut self, format_string: impl Into<String>) -> RichTextBuilder {
-        RichTextBuilder {
-            format_string: format_string.into(),
-            context: interpret::Context::new(self).with_defaults(),
-            formatters: HashMap::default(),
-        }
-    }
     pub fn view(&self) -> BindingsView {
         BindingsView { root: &self.inner, overlay: None }
     }
@@ -131,187 +123,6 @@ impl<'a> BindingsView<'a> {
     }
 }
 
-#[derive(Debug)]
-pub struct RichText {
-    modifiers: Modifiers,
-
-    /// What needs to be triggered when given dependency is updated?
-    ///
-    /// This list must be sorted in ascending `Dependecy.on` order always.
-    dependencies: Box<[Dependency]>,
-}
-
-#[derive(Debug)]
-pub(crate) struct Modifiers(pub(crate) Box<[Modifier]>);
-
-/// A [`ModifyBox`] that apply to a given [`Range`] of [`TextSection`]s on a [`Text`].
-#[derive(Debug)]
-pub(crate) struct Modifier {
-    /// The modifier to apply in the given `range`.
-    pub(crate) modify: ModifyBox,
-
-    /// The range to which to apply the `modify`.
-    pub(crate) range: Range<u32>,
-}
-
-#[derive(Debug)]
-struct Dependency {
-    /// What triggers this dependency.
-    on: DependsOn,
-
-    /// Indicies of `Modifier` in `Modifiers` that depends on `on`.
-    ///
-    /// The indicies are in ascending order, so when applying `Modify` on change,
-    /// the most general apply before the more specific.
-    targets: SmallVec<[u16; 8]>,
-}
-impl RichText {
-    pub fn update<'a>(&'a self, to_update: &'a mut Text, ctx: &'a modify::Context) {
-        RichTextCtx { rich: self, ctx, to_update }.update()
-    }
-    pub fn default_text(&self, ctx: &modify::Context) -> Text {
-        let modifiers = self.modifiers.0.iter();
-        let section_count = modifiers.map(|m| m.range.end).max().unwrap_or(0);
-        let section_count = usize::try_from(section_count).unwrap();
-        let default_section = || TextSection {
-            value: "{}".to_string(),
-            style: ctx.parent_style.clone(),
-        };
-        let mut text = Text {
-            sections: vec![default_section(); section_count],
-            ..Default::default()
-        };
-        self.modifiers.update_all(ctx, &mut text);
-        text
-    }
-}
-impl Modifiers {
-    fn dependencies(&self) -> Box<[Dependency]> {
-        let mut dependencies = BTreeMap::new();
-        let get_deps =
-            |(i, m): (_, &Modifier)| m.modify.depends_on().into_iter().map(move |d| (i, d));
-        let iter = self.0.iter().enumerate().flat_map(get_deps);
-        for (i, dep) in iter {
-            dependencies
-                .entry(dep)
-                .or_insert_with(SmallVec::new)
-                .push(u16::try_from(i).unwrap());
-        }
-        dependencies
-            .into_iter()
-            .map(|(on, targets)| Dependency { on, targets })
-            .collect()
-    }
-    fn update_all(&self, ctx: &modify::Context, text: &mut Text) {
-        for modifier in self.0.iter() {
-            modifier.update(ctx, text);
-        }
-    }
-}
-impl Modifier {
-    fn update(&self, ctx: &modify::Context, text: &mut Text) {
-        for section in self.range.clone() {
-            let section = usize::try_from(section).unwrap();
-            // TODO(err): Text should have same size as RichText
-            if let Some(to_update) = text.sections.get_mut(section) {
-                // TODO(err) :^)
-                self.modify.apply(ctx, to_update).unwrap()
-            }
-        }
-    }
-}
-
-pub struct RichTextBuilder<'a> {
-    format_string: String,
-    context: interpret::Context<'a>,
-    // TODO(perf): This sucks, the `FetchBox`, which we are using this for, is
-    // calling itself the `ShowBox` impl. Instead of storing formatters, we should
-    // directly construct the `FetchBox` when it is added
-    // TODO(feat): This is actually unused.
-    formatters: HashMap<&'static str, ShowBox>,
-}
-struct RichTextCtx<'a> {
-    rich: &'a RichText,
-    ctx: &'a modify::Context<'a>,
-    to_update: &'a mut Text,
-}
-impl<'a> RichTextBuilder<'a> {
-    /// Add a [formatter](crate::show::Show).
-    pub fn fmt<I, O, F>(mut self, name: &'static str, convert: F) -> Self
-    where
-        I: Reflect + Typed,
-        O: fmt::Display + 'static, // TODO(bug): shouldn't need this + 'static
-        F: Clone + Send + Sync + Fn(&I) -> O + 'static,
-    {
-        self.formatters
-            .insert(name, show::Convert::<I, O, F>::new(convert));
-        self
-    }
-    pub fn build(self) -> Result<(RichText, Vec<Tracker>), AnyError> {
-        let Self { format_string, context, .. } = self;
-        let mut trackers = Vec::new();
-        let modifiers = parse::richtext(context, &format_string, &mut trackers)?;
-        let dependencies = modifiers.dependencies();
-
-        // debug!("Making RichText: {format_string:?}");
-        // partial.print_bindings();
-
-        Ok((RichText { modifiers, dependencies }, trackers))
-    }
-}
-impl<'a> RichTextCtx<'a> {
-    fn update(self) {
-        let triggers = self.ctx.changed();
-        self.trigger(triggers);
-    }
-
-    /// Updates `to_update` based on `rich` given updated dependencies in `changed`.
-    ///
-    /// `changed` MUST be sorted and unique, or mayhem will ensue;
-    /// Not all relevant `Modify` will be triggered.
-    fn trigger(self, changed: impl Iterator<Item = DependsOn>) {
-        // TODO(perf):
-        // `trigger` is called once per `RichText`, with the 1st iteration scheme,
-        // we iterate over `changed` N times, N be how many `RichText` we have.
-        // With the 2nd iteration scheme, we iterate D-times which is the total number
-        // of dependencies.
-        // Depending on the change pattern, one can be better than the other
-        // NOTE: Assuming `changed` is sorted, we keep track in `rich_dependency_index`
-        // of position in `rich.dependencies`. We check the dependecy definition
-        // at this index. Then one of three things happen:
-        // 1. dependency = changed: we trigger it, pass to the next dependency and changed
-        // 2. dependency < changed: We know the dependency we are looking for is at least _after_
-        //    `rich_dependency_index`, so we increment it and look at the next one
-        // 3. dependency > changed: changed is not one of our dependency, so we pass to the
-        //    next changed
-        let mut rich_dependency_index = 0;
-        for changed in changed {
-            'lööp: loop {
-                let Some(depends) = self.rich.dependencies.get(rich_dependency_index) else {
-                    // TODO(err): when is this triggered? What error message?
-                    return;
-                };
-                if depends.on > changed {
-                    break 'lööp;
-                }
-                rich_dependency_index += 1;
-
-                if depends.on == changed {
-                    for modifier_index in &depends.targets {
-                        let modifier_index = usize::from(*modifier_index);
-                        let Some(modifier) = self.rich.modifiers.0.get(modifier_index) else {
-                            panic!("RichText.dependencies out of sync with RichText.modifiers");
-                        };
-                        // TODO(bug): Once X is updated, if there is sub-section that depends on X,
-                        // they should be updated as well.
-                        modifier.update(self.ctx, self.to_update);
-                    }
-                    break 'lööp;
-                }
-            }
-        }
-    }
-}
 impl Symbol for BindingId {
     fn try_from_usize(index: usize) -> Option<Self> {
         let u32 = u32::try_from(index).ok()?;

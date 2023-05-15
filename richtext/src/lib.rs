@@ -8,7 +8,6 @@
 //!     - Use the [`track!`] macro to make [`RichText`] binding's follow the value
 //!       of components you added to the ECS.
 //!     - Use the [`ResourceTrackerExt`] methods to track some [`Resource`]s.
-//!     - Use `fmt:` reflection (TODO(doc): explain).
 //!     - Manually use the [`RichTextData::set`],
 //!       [`set_typed`](RichTextData::set_typed) or [`set_content`](RichTextData::set_content)
 //!       to update a specific [`RichText`] context.
@@ -106,19 +105,21 @@
 
 // mod hlist_madness;
 mod binding;
-mod bitset;
+pub mod change_text;
 mod joined_sort;
 pub mod modifiers;
 pub mod modify;
 mod parse;
 mod plugin;
+mod richtext;
 pub mod show;
 mod store;
 pub mod track;
 
-pub use binding::{BindingsView, LocalBindings, RichText, RichTextBuilder};
+pub use binding::{BindingsView, LocalBindings};
 pub use modify::{AnyError, IntoModify, Modify, ModifyBox};
 pub use plugin::{
     make_rich, MakeRichText, MakeRichTextBundle, RichTextData, RichTextPlugin, WorldBindings,
 };
+pub use richtext::{RichText, RichTextBuilder};
 pub use track::{ResTrackers, ResourceTrackerExt, Tracked};

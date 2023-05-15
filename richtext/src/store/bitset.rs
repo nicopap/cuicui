@@ -1,5 +1,7 @@
 use std::ops::Range;
 
+use super::div_ceil;
+
 trait BlockT {
     const BIT_COUNT: usize;
 }
@@ -8,29 +10,48 @@ impl BlockT for u32 {
 }
 type Block = u32;
 
-/// Integer division rounded up.
-const fn div_ceil(lhf: usize, rhs: usize) -> usize {
-    (lhf + rhs - 1) / rhs
-}
-
 pub trait BitSetExtensions {
+    fn bit_len(&self) -> usize;
     fn ones_in_range(&self, range: Range<usize>) -> Ones;
+    fn enable_bit(&mut self, bit: usize) -> Option<()>;
 }
 impl BitSetExtensions for [Block] {
+    fn bit_len(&self) -> usize {
+        self.len() * Block::BIT_COUNT
+    }
+    /// Returns `None` if `bit` is out of range
+    fn enable_bit(&mut self, bit: usize) -> Option<()> {
+        let block = bit / Block::BIT_COUNT;
+        let offset = bit % Block::BIT_COUNT;
+
+        if let Some(block) = self.get_mut(block) {
+            *block |= 1 << offset;
+            Some(())
+        } else {
+            None
+        }
+    }
     fn ones_in_range(&self, range: Range<usize>) -> Ones {
         let Range { start, end } = range;
-        // TODO(perf): this can probably be reduced sill;
+        assert!(start <= self.bit_len());
+        assert!(end <= self.bit_len());
+
+        // the offset to "crop" the bits at the edges of the [u32]
         let crop = Range {
             start: (start % Block::BIT_COUNT) as u32,
             end: (end % Block::BIT_COUNT) as u32,
         };
+        // The indices of Blocks of [u32] (ie: NOT bits) affected by range
         let range = Range {
-            start: start / Block::BIT_COUNT + 1,
+            start: start / Block::BIT_COUNT,
             end: div_ceil(end, Block::BIT_COUNT),
         };
-        let remaining_blocks = &self[range.clone()];
+        let all_blocks = &self[range.clone()];
 
-        let mut bitset = self[range.start - 1];
+        let (mut bitset, remaining_blocks) = all_blocks
+            .split_first()
+            .map_or((0, all_blocks), |(b, r)| (*b, r));
+
         bitset &= ((1 << crop.start) - 1) ^ Block::MAX;
         if remaining_blocks.is_empty() && crop.end != 0 {
             bitset &= (1 << crop.end) - 1;
@@ -39,11 +60,12 @@ impl BitSetExtensions for [Block] {
             crop: crop.end,
             remaining_blocks,
             bitset,
-            block_idx: u32::try_from(range.start - 1).unwrap(),
+            block_idx: u32::try_from(range.start).unwrap(),
         }
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Ones<'a> {
     bitset: Block,
     /// Index in Block of `bitset`.
@@ -83,6 +105,43 @@ mod tests {
     //                           16v  32v     48v  64v     80v  96v
     const BLOCKS: &[u32] = &[0xf0f0_00ff, 0xfff0_000f, 0xfff0_0f0f];
 
+    #[test]
+    fn empty_empty() {
+        let blocks: &[u32] = &[];
+        let actual: Vec<_> = blocks.ones_in_range(0..0).collect();
+        let expected: &[u32] = &[];
+        assert_eq!(expected, actual);
+    }
+    #[test]
+    fn empty_range() {
+        let blocks = BLOCKS;
+
+        let actual: Vec<_> = blocks.ones_in_range(17..17).collect();
+        let expected: &[u32] = &[];
+        assert_eq!(expected, actual);
+
+        let actual: Vec<_> = blocks.ones_in_range(32..32).collect();
+        assert_eq!(expected, actual);
+
+        let actual: Vec<_> = blocks.ones_in_range(0..0).collect();
+        assert_eq!(expected, actual);
+    }
+    #[test]
+    fn same_block() {
+        let blocks: Vec<_> = BLOCKS.iter().map(|i| i.reverse_bits()).collect();
+
+        let actual: Vec<_> = blocks.ones_in_range(16..31).collect();
+        let expected: Vec<u32> = (24..31).collect();
+        assert_eq!(&expected, &actual);
+
+        let actual: Vec<_> = blocks.ones_in_range(16..32).collect();
+        let expected: Vec<u32> = (24..32).collect();
+        assert_eq!(&expected, &actual);
+
+        let actual: Vec<_> = blocks.ones_in_range(64..80).collect();
+        let expected: Vec<u32> = (64..76).collect();
+        assert_eq!(&expected, &actual);
+    }
     #[test]
     fn both_unaligned() {
         let range = 24..76;

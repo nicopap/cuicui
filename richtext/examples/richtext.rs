@@ -9,10 +9,14 @@ use cuicui_richtext::{modifiers, MakeRichTextBundle, RichTextData, RichTextPlugi
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(bevy::log::LogPlugin {
-            level: bevy::log::Level::TRACE,
-            filter: "wgpu=warn,bevy_ecs=info,naga=info,bevy_app=info".to_string(),
-        }))
+        .add_plugins(
+            DefaultPlugins.set(bevy::log::LogPlugin {
+                level: bevy::log::Level::TRACE,
+                filter:
+                    "wgpu=warn,bevy_ecs=info,naga=info,bevy_app=info,gilrs_core=info,gilrs=info,cuicui_richtext::show=debug,cuicui_richtext::modifiers=trace"
+                        .to_string(),
+            }),
+        )
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(RichTextPlugin)
         .add_plugin(WorldInspectorPlugin::default())
