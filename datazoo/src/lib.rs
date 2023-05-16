@@ -1,3 +1,7 @@
+#![warn(clippy::nursery)]
+#![allow(clippy::use_self)]
+#![doc = include_str!("../README.md")]
+
 mod bitmatrix;
 mod bitmultimap;
 mod bitset;

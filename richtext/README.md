@@ -489,7 +489,8 @@ impl IntoModify for UserColor {
             - [ ] Make::purge_static
             - [ ] Make::modify_deps
             - [ ] Make::binding_mask
-    - [ ] extract `store` module into individual crate.
+    - [X] extract `store` module into individual crate.
+    - [ ] VarMatrix → JaggedArray
     - [ ] Clean up `bindings.rs`, `richtext.rs`, `richtext/make.rs`, `modify.rs`
         - [ ] A lot actually belong to `Modify`
         - [ ] It should be generic over what is being modified

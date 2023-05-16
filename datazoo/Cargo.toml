@@ -1,0 +1,18 @@
+[package]
+name = "cuicui_datazoo"
+authors = ["Nicola Papale"]
+description = "Data structures used in cuicui"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["multimap", "bitmap", "jagged array", "enummultimap"]
+categories = ["data-structures"]
+repository = "https://github.com/nicopap/cuicui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+enumset = { version = "1.1", features = ["std"] }
+thiserror = "1"
+
+[dev-dependencies]
+pretty_assertions = "1.3"

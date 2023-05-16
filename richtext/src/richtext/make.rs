@@ -5,12 +5,10 @@ use std::{
 };
 
 use bevy::{log::trace, text::TextSection};
+use datazoo::{BitMultiMap, EnumBitMatrix, EnumMultiMapBuilder, VarBitMatrix, VarBitMatrixBuilder};
 use enumset::EnumSet;
 
-use crate::{
-    modify::{self, BindingId, Change},
-    store::{BitMultiMap, EnumBitMatrix, EnumMultiMapBuilder, VarBitMatrix, VarBitMatrixBuilder},
-};
+use crate::modify::{self, BindingId, Change};
 
 use super::{Modifier, ModifyIndex as Idx, ParseModifier, RichText};
 
@@ -81,7 +79,7 @@ impl Make {
     fn root_mask(&self) -> EnumBitMatrix<Change> {
         // TODO(err): unwrap
         let section_count = self.modifiers.iter().map(|m| m.range.end).max().unwrap();
-        let mut root_mask = EnumBitMatrix::new(section_count as usize);
+        let mut root_mask = EnumBitMatrix::new(section_count);
 
         for change in EnumSet::ALL {
             root_mask.set_row(change, self.change_root_mask(change));

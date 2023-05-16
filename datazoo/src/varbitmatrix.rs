@@ -4,15 +4,34 @@ use super::bitset::BitSetExtensions;
 
 /// A bit matrix similar to [`BitMatrix`](super::BitMatrix),
 /// but with columns of variable length like [`VarMatrix`](super::VarMatrix).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VarBitMatrix {
     ends: Box<[u32]>,
     bits: Box<[u32]>,
 }
 impl VarBitMatrix {
-    fn bit_len(&self) -> u32 {
-        self.ends.last().map_or(0, |i| *i)
-    }
+    /// Iterate over all enabled bits in given `index` row.
+    ///
+    /// Values are returned in unique ascending order always.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use cuicui_datazoo::VarBitMatrixBuilder;
+    ///
+    /// let mut build = VarBitMatrixBuilder::new();
+    /// build.add_row([0_u32, 2, 4, 8].into_iter());
+    /// build.add_row([1_u32, 3, 5, 9].into_iter());
+    /// build.add_row([0_u32, 2, 4, 8].into_iter());
+    /// build.add_row([1_u32, 3, 5, 9].into_iter());
+    /// let jagged = build.build();
+    ///
+    /// let row_2: Vec<_> = jagged.row(2).collect();
+    /// assert_eq!(&row_2, &[0, 2, 4, 8]);
+    ///
+    /// let row_3: Vec<_> = jagged.row(3).collect();
+    /// assert_eq!(&row_3, &[1, 3, 5, 9]);
+    /// ```
     pub fn row(&self, index: usize) -> impl Iterator<Item = u32> + '_ {
         assert!(index < self.ends.len());
 
@@ -26,20 +45,33 @@ impl VarBitMatrix {
         is_not_empty.then_some(bits).into_iter().flatten()
     }
 }
+/// Helps create [`VarBitMatrix`] with [`VarBitMatrixBuilder::build`].
+///
+/// [`VarBitMatrix`] is immutable with a fixed capacity, so it is necessary
+/// to pass through a builder ot create one.
+#[derive(Debug, Clone, Default)]
 pub struct VarBitMatrixBuilder {
     ends: Vec<u32>,
     bits: Vec<u32>,
 }
 impl VarBitMatrixBuilder {
+    /// Initialize a [`VarBitMatrixBuilder`].
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// Initialize a [`VarBitMatrixBuilder`] with capacity rows.
     pub fn with_capacity(cap: usize) -> Self {
         VarBitMatrixBuilder { ends: Vec::with_capacity(cap), bits: Vec::new() }
     }
+    /// Create the immutable [`VarBitMatrix`], consuming this constructor.
     pub fn build(self) -> VarBitMatrix {
         VarBitMatrix {
             ends: self.ends.into_boxed_slice(),
             bits: self.bits.into_boxed_slice(),
         }
     }
+    /// Add a single row to this [`VarBitMatrixBuilder`],
+    /// each item of the iterator is a bit to enable in this row.
     pub fn add_row(&mut self, row: impl Iterator<Item = u32>) {
         let end = self.ends.last().map_or(0, |i| *i);
 
@@ -53,6 +85,6 @@ impl VarBitMatrixBuilder {
             self.bits.enable_bit(cell_u);
             this_row_length = this_row_length.max(cell);
         }
-        self.ends.push(end + this_row_length);
+        self.ends.push(end + this_row_length + 1);
     }
 }

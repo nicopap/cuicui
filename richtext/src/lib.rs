@@ -113,7 +113,6 @@ mod parse;
 mod plugin;
 mod richtext;
 pub mod show;
-mod store;
 pub mod track;
 
 pub use binding::{BindingsView, LocalBindings};

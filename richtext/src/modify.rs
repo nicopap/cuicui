@@ -6,11 +6,12 @@ use bevy::{
     prelude::{Font, Handle, TextSection},
     text::TextStyle,
 };
+use enumset::EnumSetType;
 
 use crate::binding::BindingsView;
 
 pub use anyhow::Error as AnyError;
-pub use enumset::{EnumSet, EnumSetType};
+pub use enumset::EnumSet;
 
 /// A Boxed [`Modify`] trait object, with all necessary bounds to make it work
 /// with bevy's [`Resource`] and [`Component`] types.

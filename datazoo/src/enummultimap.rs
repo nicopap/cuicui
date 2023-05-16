@@ -6,18 +6,21 @@ use super::{VarMatrix, VarMatrixError};
 
 pub use enumset::EnumSetType;
 
-/// A MultiMap stored in a [`VarMatrix`].
+/// A [multimap] stored in a [`VarMatrix`].
 ///
 /// The key set need to be bound and exhaustively known at compile time,
 /// ie: it must be an enum derived with `#[derive(EnumSetType)]`.
 ///
 /// Use it as follow:
 /// `EnumMultiMap<MyEnumSet, ModifyIndex, { (MyEnumSet::BIT_WIDTH - 1) as usize }>`
+///
+/// [multimap]: https://en.wikipedia.org/wiki/Multimap
 #[derive(Debug)]
 pub struct EnumMultiMap<K: EnumSetType, V, const CLM: usize> {
     inner: VarMatrix<V, CLM>,
     _key: PhantomData<K>,
 }
+#[allow(clippy::let_unit_value)] // false positive: we just want to inline the panic
 impl<K: EnumSetType, V, const CLM: usize> EnumMultiMap<K, V, CLM> {
     /// Compile time error when `CLM` is not the correct value.
     ///
@@ -30,22 +33,35 @@ impl<K: EnumSetType, V, const CLM: usize> EnumMultiMap<K, V, CLM> {
         let () = Self::SENSIBLE;
         self.inner.all_rows(set)
     }
+    #[must_use]
     pub fn row(&self, key: K) -> &[V] {
         let () = Self::SENSIBLE;
-        self.inner.row(key.enum_into_u32() as usize)
+        let index = usize::try_from(key.enum_into_u32()).unwrap();
+        self.inner.row(index)
     }
+    /// Get `V` at exact `direct_index` ignoring row sizes,
+    /// acts as if the whole array was a single row.
+    ///
+    /// `None` when `direct_index` is out of bound.
+    #[must_use]
     pub fn get(&self, direct_index: usize) -> Option<&V> {
-        let () = Self::SENSIBLE;
         self.inner.get(direct_index)
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct EnumMultiMapBuilder<K, V, const CLM: usize> {
     // TODO(perf): could be replaced by eehh idk
     pub rows: Vec<Box<[V]>>,
     _key: PhantomData<K>,
 }
+impl<K: EnumSetType, V, const CLM: usize> Default for EnumMultiMapBuilder<K, V, CLM> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl<K: EnumSetType, V, const CLM: usize> EnumMultiMapBuilder<K, V, CLM> {
+    #[must_use]
     pub fn new() -> Self {
         EnumMultiMapBuilder { rows: Vec::with_capacity(CLM), _key: PhantomData }
     }

@@ -17,7 +17,8 @@ no_tracked_debug = []
 [dependencies]
 anyhow = "1"
 bevy = { version = "0.10", default-features = false, features = ["bevy_render", "bevy_core_pipeline", "bevy_text", "bevy_ui"] }
-enumset = "1.1"
+datazoo = { path = "../datazoo", package = "cuicui_datazoo" }
+enumset = { version = "1.1", features = ["std"] }
 smallvec = { version = "1.10", features = ["union", "const_generics", "const_new"] }
 string-interner = { version = "0.14", default-features = false, features = ["std", "inline-more", "backends"] }
 thiserror = "1"

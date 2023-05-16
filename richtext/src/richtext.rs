@@ -8,12 +8,12 @@ use bevy::{
     text::{BreakLineOn, Font, Text, TextAlignment, TextStyle},
     utils::HashMap,
 };
+use datazoo::{BitMultiMap, EnumBitMatrix, EnumMultiMap, VarBitMatrix};
 use enumset::{EnumSet, __internal::EnumSetTypePrivate};
 
 use crate::{
     joined_sort::left_not_right, modify, modify::BindingId, modify::Change, parse,
-    parse::interpret, show, show::ShowBox, store::BitMultiMap, store::EnumBitMatrix,
-    store::EnumMultiMap, store::VarBitMatrix, track::Tracker, AnyError, ModifyBox,
+    parse::interpret, show, show::ShowBox, track::Tracker, AnyError, ModifyBox,
 };
 
 /// Index in `modifies`.

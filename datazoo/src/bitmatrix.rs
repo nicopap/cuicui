@@ -38,9 +38,18 @@ impl Iterator for Column<'_> {
 }
 
 /// A bitset accessible by range.
+///
+/// Note that only the total size is tracked in `BitMatrix` and you must provide
+/// the `width` value when calling methods on it.
 #[derive(Debug)]
 pub struct BitMatrix(Box<[u32]>);
 impl BitMatrix {
+    /// Iterate over active bits in given `column`.
+    ///
+    /// # Panics
+    ///
+    /// When `width = 0` (this would otherwise mean there is an infinite
+    /// amount of columns)
     pub fn active_rows_in_column(
         &self,
         width: usize,
@@ -60,6 +69,8 @@ impl BitMatrix {
     pub fn enable_bit(&mut self, width: usize, row: usize, column: usize) -> Option<()> {
         self.0.enable_bit(width * row + column)
     }
+    /// Create a [`BitMatrix`] with given proportions.
+    #[must_use]
     pub fn new_with_size(width: usize, height: usize) -> Self {
         let bit_size = width * height;
         let u32_size = div_ceil(bit_size, mem::size_of::<u32>());

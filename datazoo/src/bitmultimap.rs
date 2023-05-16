@@ -31,10 +31,12 @@ impl<K: Eq + Ord, V: Eq + Ord> BitMultiMap<K, V> {
         let width = self.sparse_values.len();
         self.associations.row(width, row)
     }
-    pub fn keys(&self) -> &[K] {
+    #[must_use]
+    pub const fn keys(&self) -> &[K] {
         &self.sparse_keys
     }
-    pub fn values(&self) -> &[V] {
+    #[must_use]
+    pub const fn values(&self) -> &[V] {
         &self.sparse_values
     }
     pub fn get(&self, key: &K) -> impl Iterator<Item = &V> + '_ {
@@ -64,7 +66,7 @@ impl<K: Eq + Ord + Clone, V: Eq + Ord + Clone> FromIterator<(K, V)> for BitMulti
 
         let mut key_values = Vec::new();
 
-        for (key, value) in iter.into_iter() {
+        for (key, value) in iter {
             key_values.push((key.clone(), value.clone()));
             keys.push(key);
             values.push(value);
@@ -74,7 +76,7 @@ impl<K: Eq + Ord + Clone, V: Eq + Ord + Clone> FromIterator<(K, V)> for BitMulti
 
         let mut associations = BitMatrix::new_with_size(sparse_values.len(), sparse_keys.len());
 
-        for (key, value) in key_values.into_iter() {
+        for (key, value) in key_values {
             let key_i = sparse_keys.binary_search(&key).unwrap();
             let value_i = sparse_values.binary_search(&value).unwrap();
 

@@ -24,12 +24,9 @@ impl BitSetExtensions for [Block] {
         let block = bit / Block::BIT_COUNT;
         let offset = bit % Block::BIT_COUNT;
 
-        if let Some(block) = self.get_mut(block) {
+        self.get_mut(block).map(|block| {
             *block |= 1 << offset;
-            Some(())
-        } else {
-            None
-        }
+        })
     }
     fn ones_in_range(&self, range: Range<usize>) -> Ones {
         let Range { start, end } = range;
@@ -38,8 +35,10 @@ impl BitSetExtensions for [Block] {
 
         // the offset to "crop" the bits at the edges of the [u32]
         let crop = Range {
-            start: (start % Block::BIT_COUNT) as u32,
-            end: (end % Block::BIT_COUNT) as u32,
+            // TODO(perf): verify that this unwrap is always elided,
+            // We `% 32` just before, so it should be fine.
+            start: u32::try_from(start % Block::BIT_COUNT).unwrap(),
+            end: u32::try_from(end % Block::BIT_COUNT).unwrap(),
         };
         // The indices of Blocks of [u32] (ie: NOT bits) affected by range
         let range = Range {
@@ -65,7 +64,7 @@ impl BitSetExtensions for [Block] {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Ones<'a> {
     bitset: Block,
     /// Index in Block of `bitset`.
@@ -94,7 +93,7 @@ impl<'a> Iterator for Ones<'a> {
         let t = self.bitset & 0_u32.wrapping_sub(self.bitset);
         let r = self.bitset.trailing_zeros();
         self.bitset ^= t;
-        Some(self.block_idx * (Block::BIT_COUNT as u32) + r)
+        Some(self.block_idx * Block::BITS + r)
     }
 }
 #[cfg(test)]
