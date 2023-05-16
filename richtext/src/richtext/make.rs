@@ -1,11 +1,7 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    iter,
-    ops::Range,
-};
+use std::{collections::BTreeSet, ops::Range};
 
 use bevy::{log::trace, text::TextSection};
-use datazoo::{BitMultiMap, EnumBitMatrix, EnumMultiMapBuilder, JaggedBitset, JaggedBitsetBuilder};
+use datazoo::{enum_multimap, sorted, BitMultiMap, EnumBitMatrix};
 use enumset::EnumSet;
 
 use crate::modify::{self, BindingId, Change};
@@ -15,7 +11,7 @@ use super::{Modifier, ModifyIndex as Idx, ParseModifier, RichText};
 #[derive(Debug)]
 pub(super) struct Make {
     modifiers: Vec<Modifier>,
-    bindings: Vec<(BindingId, Range<u32>)>,
+    bindings: sorted::ByKeyBox<BindingId, Range<u32>>,
 }
 
 impl Make {
@@ -29,38 +25,7 @@ impl Make {
                 super::ModifyKind::Modify(modify) => modifiers.push(Modifier { modify, range }),
             }
         }
-
-        Self { modifiers, bindings }
-    }
-    /// The mask of static sections.
-    ///
-    /// If the bit is enabled, then it shouldn't be updated.
-    /// This will be empty if there is no masks.
-    fn binding_mask(&self, binding: BindingId) -> impl Iterator<Item = u32> + '_ {
-        // TODO(bug)TODO(feat): We just assume no binding mask is needed
-        // let range = self.modifiers.iter().filter(|m| m.modify.binding() == Some(binding));
-        // let range = range.filter(|m| m.range.len() > 1);
-        // range.flat_map(|m|)
-        iter::empty()
-    }
-    fn all_binding_masks(&self) -> BTreeMap<BindingId, Box<[u32]>> {
-        let all_bindings = self.bindings.iter().map(|b| b.0);
-        all_bindings
-            .map(|b| (b, self.binding_mask(b).collect::<Box<[_]>>()))
-            .collect()
-    }
-    fn reorder_bindings(
-        &self,
-        ordered: impl ExactSizeIterator<Item = BindingId>,
-        mut masks: BTreeMap<BindingId, Box<[u32]>>,
-    ) -> JaggedBitset {
-        let mut builder = JaggedBitsetBuilder::with_capacity(ordered.len());
-        for binding in ordered {
-            let mask = masks.remove(&binding).unwrap();
-
-            builder.add_row(mask.into_vec().into_iter());
-        }
-        builder.build()
+        Self { modifiers, bindings: bindings.into() }
     }
     fn change_root_mask(&self, change: Change) -> impl Iterator<Item = u32> + '_ {
         // TODO(bug): should handle things that depend on other things that themselves
@@ -86,7 +51,6 @@ impl Make {
         }
         root_mask
     }
-    // TODO(perf): Also trim binding-dependent `Modify`
     // TODO(clean): shouldn't need `ctx`, but since it would require creating
     // references, it is impossible to create an ad-hoc empty one.
     /// Apply all `Modify` that do depend on nothing and remove them from `modifiers`.
@@ -188,20 +152,14 @@ impl Make {
             .iter()
             .flat_map(|change| self.change_modify_deps(change))
     }
-    /// `Modify` that depends on a binding.
-    fn binding_deps(&mut self) -> impl Iterator<Item = (BindingId, Range<u32>)> + '_ {
-        self.bindings.drain(..)
-    }
     pub(super) fn build(mut self, ctx: &modify::Context) -> (Vec<TextSection>, RichText) {
         trace!("Building a RichText from {self:?}");
         let old_count = self.modifiers.len();
 
         let root_mask = self.root_mask();
         trace!("Root mask is {root_mask:?}");
-        let binding_masks = self.all_binding_masks();
-        trace!("binding mask is {binding_masks:?}");
-
-        let bindings: Box<[_]> = self.binding_deps().collect();
+        // let binding_masks = self.all_binding_masks();
+        // trace!("binding mask is {binding_masks:?}");
 
         let sections = self.purge_static(ctx);
         let new_count = self.modifiers.len();
@@ -210,7 +168,7 @@ impl Make {
         let modify_deps: BitMultiMap<_, _> = self.modify_deps().collect();
         trace!("m2m deps: {modify_deps:?}");
 
-        let mut direct_deps = EnumMultiMapBuilder::new();
+        let mut direct_deps = enum_multimap::Builder::new();
         for change in EnumSet::<Change>::ALL {
             direct_deps.insert(change, self.change_direct_deps(change));
         }
@@ -218,19 +176,14 @@ impl Make {
         let direct_deps = direct_deps.build().unwrap();
         trace!("c2m: {direct_deps:?}");
 
-        trace!("bindings: {bindings:?}");
+        trace!("bindings: {:?}", &self.bindings);
         trace!("modifiers: {:?}", &self.modifiers);
 
-        let binding_iter = bindings.iter().map(|b| b.0);
-        let binding_masks = self.reorder_bindings(binding_iter, binding_masks);
-        trace!("binding masks: {binding_masks:?}");
-
         let with_deps = RichText {
-            bindings,
+            bindings: self.bindings,
             modify_deps,
             direct_deps,
             modifies: self.modifiers.into(),
-            binding_masks,
             root_mask,
         };
         (sections, with_deps)

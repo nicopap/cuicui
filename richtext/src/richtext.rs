@@ -8,12 +8,12 @@ use bevy::{
     text::{BreakLineOn, Font, Text, TextAlignment, TextStyle},
     utils::HashMap,
 };
-use datazoo::{BitMultiMap, EnumBitMatrix, EnumMultiMap, JaggedBitset};
+use datazoo::{sorted, BitMultiMap, EnumBitMatrix, EnumMultiMap, SortedIterator};
 use enumset::{EnumSet, __internal::EnumSetTypePrivate};
 
 use crate::{
-    joined_sort::left_not_right, modify, modify::BindingId, modify::Change, parse,
-    parse::interpret, show, show::ShowBox, track::Tracker, AnyError, ModifyBox,
+    modify, modify::BindingId, modify::Change, parse, parse::interpret, show, show::ShowBox,
+    track::Tracker, AnyError, ModifyBox,
 };
 
 /// Index in `modifies`.
@@ -43,13 +43,7 @@ pub struct RichText {
     /// Binding ranges.
     ///
     /// Note that this prevents having 1 binding to N instances.
-    bindings: Box<[(BindingId, Range<u32>)]>,
-
-    /// The dependency mask for individual bindings.
-    ///
-    /// Row `i` in `binding_mask` is the mask for binding at index `i` in `bindings`.
-    /// When the row is empty, it means it affects the whole range.
-    binding_masks: JaggedBitset,
+    bindings: sorted::ByKeyBox<BindingId, Range<u32>>,
 
     root_mask: EnumBitMatrix<Change>,
 }
@@ -64,10 +58,11 @@ impl<'a> RichTextCtx<'a> {
     fn apply_modify(
         &mut self,
         index: ModifyIndex,
-        mask: impl Iterator<Item = u32>,
+        mask: impl SortedIterator<Item = u32>,
     ) -> Result<(), AnyError> {
         let Modifier { modify, range } = self.rich.modify_at(index);
-        for section in left_not_right(range.clone(), mask, u32::cmp) {
+
+        for section in range.clone().difference(mask) {
             let section = &mut self.to_update.sections[section as usize];
             modify.apply(&self.ctx, section)?;
         }
@@ -75,7 +70,7 @@ impl<'a> RichTextCtx<'a> {
     }
     fn apply_modify_deps<I>(&mut self, index: ModifyIndex, mask: impl Fn() -> I)
     where
-        I: Iterator<Item = u32>,
+        I: SortedIterator<Item = u32>,
     {
         if let Err(err) = self.apply_modify(index, mask()) {
             warn!("when applying {index:?}: {err}");
@@ -92,12 +87,10 @@ impl<'a> RichTextCtx<'a> {
         bindings: impl Iterator<Item = (BindingId, &'b ModifyBox)>,
     ) {
         for (id, modify) in bindings {
-            let Some((i, range)) = self.rich.binding_range(id) else {
+            let Some((_, range)) = self.rich.binding_range(id) else {
                 continue;
             };
-            let mask = self.rich.binding_masks.row(i);
-
-            for section in left_not_right(range, mask, Ord::cmp) {
+            for section in range.difference(iter::empty()) {
                 let section = &mut self.to_update.sections[section as usize];
                 if let Err(err) = modify.apply(&self.ctx, section) {
                     warn!("when applying {id:?}: {err}");
@@ -125,7 +118,7 @@ impl RichText {
         &self,
         _changes: EnumSet<Change>,
         _range: Range<u32>,
-    ) -> impl Iterator<Item = u32> + '_ {
+    ) -> impl SortedIterator<Item = u32> + '_ {
         // TODO(bug): need to get all change masks and merge them
         iter::empty()
     }

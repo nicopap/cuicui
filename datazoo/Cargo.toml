@@ -12,6 +12,7 @@ edition = "2021"
 
 [dependencies]
 enumset = { version = "1.1", features = ["std"] }
+sorted-iter = "0.1.10"
 thiserror = "1"
 
 [dev-dependencies]

@@ -1,5 +1,9 @@
 use std::collections::BinaryHeap;
 
+use sorted_iter::{assume::AssumeSortedByItemExt, SortedIterator};
+
+use crate::sorted;
+
 use super::bitmatrix::BitMatrix;
 
 /// A sparse associative array.
@@ -16,8 +20,8 @@ use super::bitmatrix::BitMatrix;
 /// [multimap]: https://en.wikipedia.org/wiki/Multimap
 #[derive(Debug)]
 pub struct BitMultiMap<K: Eq + Ord, V: Eq + Ord> {
-    sparse_keys: Box<[K]>,
-    sparse_values: Box<[V]>,
+    sparse_keys: sorted::Box<K>,
+    sparse_values: sorted::Box<V>,
     // TODO(feat): When the nº Modify that have Modify dependencies become very
     // large, we should consider a roaring bitmap
     // TODO(perf): Also consider storing a raw pointer with no size data,
@@ -35,23 +39,24 @@ impl<K: Eq + Ord, V: Eq + Ord> BitMultiMap<K, V> {
         self.associations.row(width, row)
     }
     #[must_use]
-    pub const fn keys(&self) -> &[K] {
-        &self.sparse_keys
+    pub fn keys(&self) -> sorted::Slice<K> {
+        self.sparse_keys.slice()
     }
     #[must_use]
-    pub const fn values(&self) -> &[V] {
-        &self.sparse_values
+    pub fn values(&self) -> sorted::Slice<V> {
+        self.sparse_values.slice()
     }
-    pub fn get(&self, key: &K) -> impl Iterator<Item = &V> + '_ {
+    pub fn get(&self, key: &K) -> impl SortedIterator<Item = &V> + '_ {
         let mapped = self.sparse_keys.binary_search(key).ok();
 
         mapped
             .into_iter()
             .flat_map(|mapped| self.mapped_associates_of(mapped))
             // TODO(perf): This can be a `get_unchecked`
-            .map(|mapped| &self.sparse_values[mapped])
+            .filter_map(|mapped| self.sparse_values.get(mapped))
+            .assume_sorted_by_item()
     }
-    pub fn get_keys_of(&self, value: &V) -> impl Iterator<Item = &K> + '_ {
+    pub fn get_keys_of(&self, value: &V) -> impl SortedIterator<Item = &K> + '_ {
         let mapped = self.sparse_values.binary_search(value).ok();
         let width = self.sparse_values.len();
 
@@ -59,7 +64,8 @@ impl<K: Eq + Ord, V: Eq + Ord> BitMultiMap<K, V> {
             .into_iter()
             .flat_map(move |mapped| self.associations.active_rows_in_column(width, mapped))
             // TODO(perf): This can be a `get_unchecked`
-            .map(|mapped| &self.sparse_keys[mapped])
+            .filter_map(|mapped| self.sparse_keys.get(mapped))
+            .assume_sorted_by_item()
     }
 }
 impl<K: Eq + Ord + Clone, V: Eq + Ord + Clone> FromIterator<(K, V)> for BitMultiMap<K, V> {
@@ -74,8 +80,8 @@ impl<K: Eq + Ord + Clone, V: Eq + Ord + Clone> FromIterator<(K, V)> for BitMulti
             keys.push(key);
             values.push(value);
         }
-        let sparse_keys: Box<[_]> = keys.into_sorted_vec().into();
-        let sparse_values: Box<[_]> = values.into_sorted_vec().into();
+        let sparse_keys: sorted::Box<_> = keys.into();
+        let sparse_values: sorted::Box<_> = values.into();
 
         let mut associations = BitMatrix::new_with_size(sparse_values.len(), sparse_keys.len());
 

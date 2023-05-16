@@ -3,13 +3,11 @@
 use std::{collections::BTreeMap, mem};
 
 use anyhow::anyhow;
+use datazoo::{AssumeSortedByKeyExt, SortedPairIterator};
 use smallvec::SmallVec;
 use string_interner::{backend::StringBackend, StringInterner, Symbol};
 
-use crate::{
-    joined_sort::joined_sort, joined_sort::Ior, modify::BindingId, AnyError, IntoModify, Modify,
-    ModifyBox,
-};
+use crate::{modify::BindingId, AnyError, IntoModify, Modify, ModifyBox};
 
 #[derive(Debug, Default)]
 pub struct LocalBindings {
@@ -115,13 +113,15 @@ impl<'a> BindingsView<'a> {
             .overlay
             .iter()
             .flat_map(|b| *b)
-            .filter_map(|(id, (changed, m))| changed.then_some((*id, m)));
+            .filter_map(|(id, (changed, m))| changed.then_some((*id, m)))
+            .assume_sorted_by_key();
         let root = self
             .root
             .iter()
-            .filter_map(|(id, (changed, m))| changed.then_some((*id, m)));
+            .filter_map(|(id, (changed, m))| changed.then_some((*id, m)))
+            .assume_sorted_by_key();
 
-        joined_sort(overlay, root, |l, r| l.0.cmp(&r.0)).map(Ior::prefer_left)
+        overlay.outer_join(root).filter_map_values(|(l, r)| l.or(r))
     }
     pub fn get(&self, id: BindingId) -> Option<&'a (dyn Modify + Send + Sync)> {
         self.overlay

@@ -1,5 +1,7 @@
 use std::ops::Range;
 
+use sorted_iter::sorted_iterator::SortedByItem;
+
 use crate::div_ceil;
 
 trait BlockT {
@@ -119,7 +121,7 @@ pub struct Ones<'a> {
     crop: u32,
     remaining_blocks: &'a [u32],
 }
-impl<'a> Iterator for Ones<'a> {
+impl Iterator for Ones<'_> {
     type Item = u32;
 
     #[inline]
@@ -142,6 +144,8 @@ impl<'a> Iterator for Ones<'a> {
         Some(self.block_idx * u32::BITS + r)
     }
 }
+impl SortedByItem for Ones<'_> {}
+
 #[cfg(test)]
 mod tests {
     use super::*;

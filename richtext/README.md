@@ -493,8 +493,9 @@ impl IntoModify for UserColor {
     - [X] VarMatrix → JaggedArray
     - [ ] Clean up `bindings.rs`, `richtext.rs`, `richtext/make.rs`, `modify.rs`
         - [ ] A lot actually belong to `Modify`
+        - [ ] remove `ctx` arg from `Modify::apply` (yep)
         - [ ] It should be generic over what is being modified
-        - [ ] `sort` type-safe slices for usage in `Modifiers` and `Dependencies`
+        - [X] `sort` type-safe slices for usage in `Modifiers` and `Dependencies`
               to ensure we indeed sort our stuff correctly
 - [ ] (unsure) optimization: take inspiration from https://github.com/Wallacoloo/jagged_array/blob/master/src/lib.rs#L68 for `VarMatrix`s impls
 - [ ] (unsure) better format string error messages

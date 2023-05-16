@@ -1,6 +1,6 @@
 use std::{iter, mem};
 
-use super::bitset::Bitset;
+use crate::Bitset;
 
 /// A bit matrix similar to [`BitMatrix`](super::BitMatrix),
 /// but with columns of variable length like [`JaggedArray`](super::JaggedArray).
@@ -17,9 +17,9 @@ impl JaggedBitset {
     /// # Example
     ///
     /// ```rust
-    /// use cuicui_datazoo::JaggedBitsetBuilder;
+    /// use cuicui_datazoo::jagged_bitset;
     ///
-    /// let mut build = JaggedBitsetBuilder::new();
+    /// let mut build = jagged_bitset::Builder::new();
     /// build.add_row([0_u32, 2, 4, 8].into_iter());
     /// build.add_row([1_u32, 3, 5, 9].into_iter());
     /// build.add_row([0_u32, 2, 4, 8].into_iter());
@@ -50,18 +50,18 @@ impl JaggedBitset {
 /// [`JaggedBitset`] is immutable with a fixed capacity, so it is necessary
 /// to pass through a builder ot create one.
 #[derive(Debug, Clone, Default)]
-pub struct JaggedBitsetBuilder {
+pub struct Builder {
     ends: Vec<u32>,
     bits: Bitset<Vec<u32>>,
 }
-impl JaggedBitsetBuilder {
+impl Builder {
     /// Initialize a [`JaggedBitsetBuilder`].
     pub fn new() -> Self {
         Self::default()
     }
     /// Initialize a [`JaggedBitsetBuilder`] with capacity rows.
     pub fn with_capacity(cap: usize) -> Self {
-        JaggedBitsetBuilder {
+        Builder {
             ends: Vec::with_capacity(cap),
             bits: Bitset(Vec::new()),
         }

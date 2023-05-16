@@ -106,7 +106,6 @@
 // mod hlist_madness;
 mod binding;
 pub mod change_text;
-mod joined_sort;
 pub mod modifiers;
 pub mod modify;
 mod parse;

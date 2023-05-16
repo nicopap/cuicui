@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use enumset::{EnumSet, EnumSetType};
 
-use crate::{JaggedArray, JaggedArrayError};
+use crate::{jagged_array, JaggedArray};
 
 /// A [multimap] stored in a [`JaggedArray`].
 ///
@@ -48,26 +48,26 @@ impl<K: EnumSetType, V, const CLM: usize> EnumMultiMap<K, V, CLM> {
 }
 
 #[derive(Debug, Clone)]
-pub struct EnumMultiMapBuilder<K, V, const CLM: usize> {
+pub struct Builder<K, V, const CLM: usize> {
     // TODO(perf): could be replaced by eehh idk
     pub rows: Vec<Box<[V]>>,
     _key: PhantomData<K>,
 }
-impl<K: EnumSetType, V, const CLM: usize> Default for EnumMultiMapBuilder<K, V, CLM> {
+impl<K: EnumSetType, V, const CLM: usize> Default for Builder<K, V, CLM> {
     fn default() -> Self {
         Self::new()
     }
 }
-impl<K: EnumSetType, V, const CLM: usize> EnumMultiMapBuilder<K, V, CLM> {
+impl<K: EnumSetType, V, const CLM: usize> Builder<K, V, CLM> {
     #[must_use]
     pub fn new() -> Self {
-        EnumMultiMapBuilder { rows: Vec::with_capacity(CLM), _key: PhantomData }
+        Builder { rows: Vec::with_capacity(CLM), _key: PhantomData }
     }
     pub fn insert(&mut self, key: K, values: impl Iterator<Item = V>) {
         let row = key.enum_into_u32() as usize;
         self.rows.insert(row, values.collect());
     }
-    pub fn build(self) -> Result<EnumMultiMap<K, V, CLM>, JaggedArrayError> {
+    pub fn build(self) -> Result<EnumMultiMap<K, V, CLM>, jagged_array::Error> {
         let mut end = 0;
         let mut ends = Box::new([0; CLM]);
         let mut data = Vec::new();
