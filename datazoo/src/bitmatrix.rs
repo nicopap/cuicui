@@ -37,7 +37,7 @@ impl Iterator for Column<'_> {
     }
 }
 
-/// A bitset accessible by range.
+/// A [bitset](Bitset) accessible by range.
 ///
 /// Note that only the total size is tracked in `BitMatrix` and you must provide
 /// the `width` value when calling methods on it.

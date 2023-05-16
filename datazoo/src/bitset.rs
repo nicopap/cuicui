@@ -1,30 +1,78 @@
 use std::ops::Range;
 
-use super::div_ceil;
+use crate::div_ceil;
 
 trait BlockT {
-    const BIT_COUNT: usize;
+    const BITS64: usize;
 }
 impl BlockT for u32 {
-    const BIT_COUNT: usize = u32::BITS as usize;
+    const BITS64: usize = u32::BITS as usize;
 }
-type Block = u32;
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Bitset<T: AsRef<[u32]> + AsMut<[u32]>>(pub T);
+/// A slice of `u32` accessed on the bit level, see [wikipedia][bitset].
+///
+/// # Usage
+///
+/// `Bitset` is parametrized on the storage type, to let you chose whether
+/// this needs to be a reference, a `Box`, a `Vec` etc.
+///
+/// Mutable methods are only available when the underlying storage allows
+/// mutable access.
+///
+/// ```rust
+/// use cuicui_datazoo::Bitset;
+/// let bunch_of_bits = [0xf0f0_00ff, 0xfff0_000f, 0xfff0_0f0f];
+///
+/// let as_array: Bitset<[u32; 3]> = Bitset(bunch_of_bits);
+/// let mut as_vec: Bitset<Vec<u32>> = Bitset(bunch_of_bits.to_vec());
+/// let as_slice: Bitset<&[u32]> = Bitset(&bunch_of_bits);
+/// let as_box: Bitset<Box<[u32]>> = Bitset(Box::new(bunch_of_bits));
+///
+/// assert_eq!(
+///     as_array.ones_in_range(5..91),
+///     as_vec.ones_in_range(5..91),
+/// );
+/// assert_eq!(
+///     as_vec.ones_in_range(5..91),
+///     as_slice.ones_in_range(5..91),
+/// );
+/// assert_eq!(
+///     as_slice.ones_in_range(5..91),
+///     as_box.ones_in_range(5..91),
+/// );
+/// assert_eq!(
+///     as_box.ones_in_range(5..91),
+///     as_array.ones_in_range(5..91),
+/// );
+/// // Since `Vec` allows mutable access to the underlying slice, you can use
+/// // mutable methods of `Bitset`, unlike with `&[u32]`.
+/// as_vec.enable_bit(11);
+/// // The following wouldn't compile:
+/// // as_slice.enable_bit(11);
+/// assert_ne!(
+///     as_vec.ones_in_range(5..91),
+///     as_slice.ones_in_range(5..91),
+/// );
+/// ```
+///
+/// [bitset]: https://en.wikipedia.org/wiki/Bit_array
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Bitset<T: AsRef<[u32]>>(pub T);
 
 impl<T: AsRef<[u32]> + AsMut<[u32]>> Bitset<T> {
-    pub fn bit_len(&self) -> usize {
-        self.0.as_ref().len() * Block::BIT_COUNT
-    }
     /// Returns `None` if `bit` is out of range
     pub fn enable_bit(&mut self, bit: usize) -> Option<()> {
-        let block = bit / Block::BIT_COUNT;
-        let offset = bit % Block::BIT_COUNT;
+        let block = bit / u32::BITS64;
+        let offset = bit % u32::BITS64;
 
         self.0.as_mut().get_mut(block).map(|block| {
             *block |= 1 << offset;
         })
+    }
+}
+impl<T: AsRef<[u32]>> Bitset<T> {
+    pub fn bit_len(&self) -> usize {
+        self.0.as_ref().len() * u32::BITS64
     }
     pub fn ones_in_range(&self, range: Range<usize>) -> Ones {
         let Range { start, end } = range;
@@ -35,13 +83,13 @@ impl<T: AsRef<[u32]> + AsMut<[u32]>> Bitset<T> {
         let crop = Range {
             // TODO(perf): verify that this unwrap is always elided,
             // We `% 32` just before, so it should be fine.
-            start: u32::try_from(start % Block::BIT_COUNT).unwrap(),
-            end: u32::try_from(end % Block::BIT_COUNT).unwrap(),
+            start: u32::try_from(start % u32::BITS64).unwrap(),
+            end: u32::try_from(end % u32::BITS64).unwrap(),
         };
         // The indices of Blocks of [u32] (ie: NOT bits) affected by range
         let range = Range {
-            start: start / Block::BIT_COUNT,
-            end: div_ceil(end, Block::BIT_COUNT),
+            start: start / u32::BITS64,
+            end: div_ceil(end, u32::BITS64),
         };
         let all_blocks = &self.0.as_ref()[range.clone()];
 
@@ -49,7 +97,7 @@ impl<T: AsRef<[u32]> + AsMut<[u32]>> Bitset<T> {
             .split_first()
             .map_or((0, all_blocks), |(b, r)| (*b, r));
 
-        bitset &= ((1 << crop.start) - 1) ^ Block::MAX;
+        bitset &= ((1 << crop.start) - 1) ^ u32::MAX;
         if remaining_blocks.is_empty() && crop.end != 0 {
             bitset &= (1 << crop.end) - 1;
         }
@@ -62,14 +110,14 @@ impl<T: AsRef<[u32]> + AsMut<[u32]>> Bitset<T> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ones<'a> {
-    bitset: Block,
-    /// Index in Block of `bitset`.
+    bitset: u32,
+    /// Index in u32 of `bitset`.
     block_idx: u32,
     /// How many bits to keep in the last block.
     crop: u32,
-    remaining_blocks: &'a [Block],
+    remaining_blocks: &'a [u32],
 }
 impl<'a> Iterator for Ones<'a> {
     type Item = u32;
@@ -91,7 +139,7 @@ impl<'a> Iterator for Ones<'a> {
         let t = self.bitset & 0_u32.wrapping_sub(self.bitset);
         let r = self.bitset.trailing_zeros();
         self.bitset ^= t;
-        Some(self.block_idx * Block::BITS + r)
+        Some(self.block_idx * u32::BITS + r)
     }
 }
 #[cfg(test)]

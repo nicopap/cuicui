@@ -8,7 +8,7 @@ use bevy::{
     text::{BreakLineOn, Font, Text, TextAlignment, TextStyle},
     utils::HashMap,
 };
-use datazoo::{BitMultiMap, EnumBitMatrix, EnumMultiMap, VarBitMatrix};
+use datazoo::{BitMultiMap, EnumBitMatrix, EnumMultiMap, JaggedBitset};
 use enumset::{EnumSet, __internal::EnumSetTypePrivate};
 
 use crate::{
@@ -49,7 +49,7 @@ pub struct RichText {
     ///
     /// Row `i` in `binding_mask` is the mask for binding at index `i` in `bindings`.
     /// When the row is empty, it means it affects the whole range.
-    binding_masks: VarBitMatrix,
+    binding_masks: JaggedBitset,
 
     root_mask: EnumBitMatrix<Change>,
 }

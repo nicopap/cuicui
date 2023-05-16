@@ -1,12 +1,10 @@
 use std::marker::PhantomData;
 
-use enumset::EnumSet;
+use enumset::{EnumSet, EnumSetType};
 
-use super::{VarMatrix, VarMatrixError};
+use crate::{JaggedArray, JaggedArrayError};
 
-pub use enumset::EnumSetType;
-
-/// A [multimap] stored in a [`VarMatrix`].
+/// A [multimap] stored in a [`JaggedArray`].
 ///
 /// The key set need to be bound and exhaustively known at compile time,
 /// ie: it must be an enum derived with `#[derive(EnumSetType)]`.
@@ -17,7 +15,7 @@ pub use enumset::EnumSetType;
 /// [multimap]: https://en.wikipedia.org/wiki/Multimap
 #[derive(Debug)]
 pub struct EnumMultiMap<K: EnumSetType, V, const CLM: usize> {
-    inner: VarMatrix<V, CLM>,
+    inner: JaggedArray<V, CLM>,
     _key: PhantomData<K>,
 }
 #[allow(clippy::let_unit_value)] // false positive: we just want to inline the panic
@@ -69,7 +67,7 @@ impl<K: EnumSetType, V, const CLM: usize> EnumMultiMapBuilder<K, V, CLM> {
         let row = key.enum_into_u32() as usize;
         self.rows.insert(row, values.collect());
     }
-    pub fn build(self) -> Result<EnumMultiMap<K, V, CLM>, VarMatrixError> {
+    pub fn build(self) -> Result<EnumMultiMap<K, V, CLM>, JaggedArrayError> {
         let mut end = 0;
         let mut ends = Box::new([0; CLM]);
         let mut data = Vec::new();
@@ -81,7 +79,7 @@ impl<K: EnumSetType, V, const CLM: usize> EnumMultiMapBuilder<K, V, CLM> {
             }
         }
         Ok(EnumMultiMap {
-            inner: VarMatrix::new(ends, data.into_boxed_slice())?,
+            inner: JaggedArray::new(ends, data.into_boxed_slice())?,
             _key: PhantomData,
         })
     }

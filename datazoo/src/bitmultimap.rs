@@ -2,15 +2,18 @@ use std::collections::BinaryHeap;
 
 use super::bitmatrix::BitMatrix;
 
-/// A sparse associative bitfield array.
+/// A sparse associative array.
 ///
-/// This is a multimap that is very good for small sets of key and values
+/// This is a [multimap] with very good perf for small sets of key and values
 /// that themselves shouldn't take much memory.
 ///
-/// The other advantage is that this map works both from keys to value and
-/// values to keys.
+/// Furthermore, you can not only get all `values` associated with a given `key`,
+/// but also all `keys` associated with a given `value`.
+/// See [`BitMultiMap::get_keys_of`] and [`BitMultiMap::get`].
 ///
 /// When the #K × #V > 8000, should consider using roaring bitmaps for this.
+///
+/// [multimap]: https://en.wikipedia.org/wiki/Multimap
 #[derive(Debug)]
 pub struct BitMultiMap<K: Eq + Ord, V: Eq + Ord> {
     sparse_keys: Box<[K]>,

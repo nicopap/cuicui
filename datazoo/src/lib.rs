@@ -7,8 +7,8 @@ mod bitmultimap;
 mod bitset;
 mod enumbitmatrix;
 mod enummultimap;
-mod varbitmatrix;
-mod varmatrix;
+mod jagged_array;
+mod jagged_bitset;
 
 /// Integer division rounded up.
 const fn div_ceil(lhf: usize, rhs: usize) -> usize {
@@ -20,6 +20,6 @@ pub use bitmultimap::BitMultiMap;
 pub use bitset::Bitset;
 pub use enumbitmatrix::EnumBitMatrix;
 pub use enummultimap::{EnumMultiMap, EnumMultiMapBuilder};
-pub use varbitmatrix::{VarBitMatrix, VarBitMatrixBuilder};
-pub use varmatrix::Error as VarMatrixError;
-pub use varmatrix::VarMatrix;
+pub use jagged_array::Error as JaggedArrayError;
+pub use jagged_array::JaggedArray;
+pub use jagged_bitset::{JaggedBitset, JaggedBitsetBuilder};

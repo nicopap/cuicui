@@ -5,7 +5,7 @@ use std::{
 };
 
 use bevy::{log::trace, text::TextSection};
-use datazoo::{BitMultiMap, EnumBitMatrix, EnumMultiMapBuilder, VarBitMatrix, VarBitMatrixBuilder};
+use datazoo::{BitMultiMap, EnumBitMatrix, EnumMultiMapBuilder, JaggedBitset, JaggedBitsetBuilder};
 use enumset::EnumSet;
 
 use crate::modify::{self, BindingId, Change};
@@ -53,8 +53,8 @@ impl Make {
         &self,
         ordered: impl ExactSizeIterator<Item = BindingId>,
         mut masks: BTreeMap<BindingId, Box<[u32]>>,
-    ) -> VarBitMatrix {
-        let mut builder = VarBitMatrixBuilder::with_capacity(ordered.len());
+    ) -> JaggedBitset {
+        let mut builder = JaggedBitsetBuilder::with_capacity(ordered.len());
         for binding in ordered {
             let mask = masks.remove(&binding).unwrap();
 

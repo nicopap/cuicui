@@ -2,36 +2,35 @@ use enumset::{EnumSet, EnumSetType, __internal::EnumSetTypePrivate};
 
 use thiserror::Error;
 
-/// [`VarMatrix::new`] construction error.
+/// [`JaggedArray::new`] construction error.
 #[derive(Debug, Error)]
 #[allow(missing_docs)]
 pub enum Error {
     /// An `end` in `ends` was lower than a previous one.
     #[error(
-        "Cannot build VarMatrix: `ends` represents the end of each row in `data`, \
+        "Cannot build JaggedArray: `ends` represents the end of each row in `data`, \
         it should be monotonically increasing. \
         Found `end` at position {i} lower than `end` at position {}", .i - 1
     )]
     BadEnd { i: usize },
     /// An `end` in `ends` was too large.
     #[error(
-        "Cannot build VarMatrix: `ends` represents the end of each row in `data`, \
+        "Cannot build JaggedArray: `ends` represents the end of each row in `data`, \
         Yet, `end` at position {i} ({end}) is larger than the length of data ({len})"
     )]
     TooLongEnd { i: usize, len: u32, end: u32 },
 }
 
-/// A variable length matrix, or irregular matrix, or jagged array, or Iliffe vector,
-/// but optimized for read-only rows and statically known row count.
+/// A variable length matrix optimized for read-only rows and statically known row count.
 #[derive(Debug)]
-pub struct VarMatrix<V, const R: usize> {
+pub struct JaggedArray<V, const R: usize> {
     // TODO(perf): store the row indices inline, preventing cache misses when looking up several rows.
     ends: Box<[u32; R]>,
     data: Box<[V]>,
 }
 
-impl<V, const R: usize> VarMatrix<V, R> {
-    /// Create a [`VarMatrix`] of `R + 1` rows, values of `ends` are the
+impl<V, const R: usize> JaggedArray<V, R> {
+    /// Create a [`JaggedArray`] of `R + 1` rows, values of `ends` are the
     /// end indicies (exclusive) of each row in `data`.
     ///
     /// Note that the _last index_ should be elided.
@@ -44,11 +43,11 @@ impl<V, const R: usize> VarMatrix<V, R> {
     /// # Example
     ///
     /// ```rust
-    /// use cuicui_datazoo::VarMatrix;
+    /// use cuicui_datazoo::JaggedArray;
     ///
     /// let ends = [0, 0, 3, 4, 7, 9, 10, 10];
     /// let data = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    /// let jagged = VarMatrix::new(Box::new(ends), Box::new(data)).unwrap();
+    /// let jagged = JaggedArray::new(Box::new(ends), Box::new(data)).unwrap();
     /// let iliffe = jagged.into_vecs();
     /// assert_eq!(
     ///     iliffe,
@@ -93,11 +92,11 @@ impl<V, const R: usize> VarMatrix<V, R> {
     /// # Example
     ///
     /// ```rust
-    /// use cuicui_datazoo::VarMatrix;
+    /// use cuicui_datazoo::JaggedArray;
     ///
     /// let ends = [0, 0, 3, 4, 7, 9, 10, 10];
     /// let data = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    /// let jagged = VarMatrix::new(Box::new(ends), Box::new(data)).unwrap();
+    /// let jagged = JaggedArray::new(Box::new(ends), Box::new(data)).unwrap();
     ///
     /// assert_eq!(jagged.row(4), &[4, 5, 6]);
     /// ```
@@ -119,11 +118,11 @@ impl<V, const R: usize> VarMatrix<V, R> {
     /// # Example
     ///
     /// ```rust
-    /// use cuicui_datazoo::VarMatrix;
+    /// use cuicui_datazoo::JaggedArray;
     ///
     /// let ends = [0, 0, 3, 4, 7, 9, 10, 10];
     /// let data = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    /// let jagged = VarMatrix::new(Box::new(ends), Box::new(data)).unwrap();
+    /// let jagged = JaggedArray::new(Box::new(ends), Box::new(data)).unwrap();
     ///
     /// assert_eq!(jagged.get(4), Some(&4));
     /// ```
@@ -134,7 +133,7 @@ impl<V, const R: usize> VarMatrix<V, R> {
     /// Turn this compact jagged array into a sparse representation.
     ///
     /// The returned `Vec<Vec<V>>` is an [Iliffe vector]. Iterating over it will
-    /// be much slower than iterating over `VarMatrix`, but extending individual
+    /// be much slower than iterating over `JaggedArray`, but extending individual
     /// rows is much less costly.
     ///
     /// [Iliffe vector]: https://en.wikipedia.org/wiki/Iliffe_vector

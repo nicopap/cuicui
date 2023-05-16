@@ -3,13 +3,13 @@ use std::{iter, mem};
 use super::bitset::Bitset;
 
 /// A bit matrix similar to [`BitMatrix`](super::BitMatrix),
-/// but with columns of variable length like [`VarMatrix`](super::VarMatrix).
+/// but with columns of variable length like [`JaggedArray`](super::JaggedArray).
 #[derive(Debug, Clone)]
-pub struct VarBitMatrix {
+pub struct JaggedBitset {
     ends: Box<[u32]>,
     bits: Bitset<Box<[u32]>>,
 }
-impl VarBitMatrix {
+impl JaggedBitset {
     /// Iterate over all enabled bits in given `index` row.
     ///
     /// Values are returned in unique ascending order always.
@@ -17,9 +17,9 @@ impl VarBitMatrix {
     /// # Example
     ///
     /// ```rust
-    /// use cuicui_datazoo::VarBitMatrixBuilder;
+    /// use cuicui_datazoo::JaggedBitsetBuilder;
     ///
-    /// let mut build = VarBitMatrixBuilder::new();
+    /// let mut build = JaggedBitsetBuilder::new();
     /// build.add_row([0_u32, 2, 4, 8].into_iter());
     /// build.add_row([1_u32, 3, 5, 9].into_iter());
     /// build.add_row([0_u32, 2, 4, 8].into_iter());
@@ -45,35 +45,35 @@ impl VarBitMatrix {
         is_not_empty.then_some(bits).into_iter().flatten()
     }
 }
-/// Helps create [`VarBitMatrix`] with [`VarBitMatrixBuilder::build`].
+/// Helps create [`JaggedBitset`] with [`JaggedBitsetBuilder::build`].
 ///
-/// [`VarBitMatrix`] is immutable with a fixed capacity, so it is necessary
+/// [`JaggedBitset`] is immutable with a fixed capacity, so it is necessary
 /// to pass through a builder ot create one.
 #[derive(Debug, Clone, Default)]
-pub struct VarBitMatrixBuilder {
+pub struct JaggedBitsetBuilder {
     ends: Vec<u32>,
     bits: Bitset<Vec<u32>>,
 }
-impl VarBitMatrixBuilder {
-    /// Initialize a [`VarBitMatrixBuilder`].
+impl JaggedBitsetBuilder {
+    /// Initialize a [`JaggedBitsetBuilder`].
     pub fn new() -> Self {
         Self::default()
     }
-    /// Initialize a [`VarBitMatrixBuilder`] with capacity rows.
+    /// Initialize a [`JaggedBitsetBuilder`] with capacity rows.
     pub fn with_capacity(cap: usize) -> Self {
-        VarBitMatrixBuilder {
+        JaggedBitsetBuilder {
             ends: Vec::with_capacity(cap),
             bits: Bitset(Vec::new()),
         }
     }
-    /// Create the immutable [`VarBitMatrix`], consuming this constructor.
-    pub fn build(self) -> VarBitMatrix {
-        VarBitMatrix {
+    /// Create the immutable [`JaggedBitset`], consuming this constructor.
+    pub fn build(self) -> JaggedBitset {
+        JaggedBitset {
             ends: self.ends.into_boxed_slice(),
             bits: Bitset(self.bits.0.into_boxed_slice()),
         }
     }
-    /// Add a single row to this [`VarBitMatrixBuilder`],
+    /// Add a single row to this [`JaggedBitsetBuilder`],
     /// each item of the iterator is a bit to enable in this row.
     pub fn add_row(&mut self, row: impl Iterator<Item = u32>) {
         let end = self.ends.last().map_or(0, |i| *i);
