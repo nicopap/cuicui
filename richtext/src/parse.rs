@@ -164,7 +164,7 @@ pub(super) fn richtext(
     ctx: &mut interpret::Context,
     input: &str,
     trackers: &mut Vec<Tracker>,
-) -> AnyResult<Vec<crate::richtext::Modifier>> {
+) -> AnyResult<Vec<crate::richtext::ParseModifier>> {
     let parsed = sections_inner.parse(input).map_err(|e| e.into_owned())?;
 
     let mut modifiers = Vec::with_capacity(parsed.0.len() * 2);

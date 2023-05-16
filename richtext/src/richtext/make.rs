@@ -12,16 +12,27 @@ use crate::{
     store::{BitMultiMap, EnumBitMatrix, EnumMultiMapBuilder, VarBitMatrix, VarBitMatrixBuilder},
 };
 
-use super::{Modifier, ModifyIndex as Idx, RichText};
+use super::{Modifier, ModifyIndex as Idx, ParseModifier, RichText};
 
 #[derive(Debug)]
 pub(super) struct Make {
     modifiers: Vec<Modifier>,
+    bindings: Vec<(BindingId, Range<u32>)>,
 }
 
 impl Make {
-    pub(super) fn new(modifiers: Vec<Modifier>) -> Self {
-        Self { modifiers }
+    pub(super) fn new(parse_modifiers: Vec<ParseModifier>) -> Self {
+        let mut modifiers = Vec::new();
+        let mut bindings = Vec::new();
+
+        for ParseModifier { kind, range } in parse_modifiers.into_iter() {
+            match kind {
+                super::ModifyKind::Bound(binding) => bindings.push((binding, range)),
+                super::ModifyKind::Modify(modify) => modifiers.push(Modifier { modify, range }),
+            }
+        }
+
+        Self { modifiers, bindings }
     }
     /// The mask of static sections.
     ///
@@ -35,7 +46,7 @@ impl Make {
         iter::empty()
     }
     fn all_binding_masks(&self) -> BTreeMap<BindingId, Box<[u32]>> {
-        let all_bindings = self.modifiers.iter().filter_map(|m| m.modify.binding());
+        let all_bindings = self.bindings.iter().map(|b| b.0);
         all_bindings
             .map(|b| (b, self.binding_mask(b).collect::<Box<[_]>>()))
             .collect()
@@ -180,10 +191,8 @@ impl Make {
             .flat_map(|change| self.change_modify_deps(change))
     }
     /// `Modify` that depends on a binding.
-    fn binding_deps(&self) -> impl Iterator<Item = (BindingId, Range<u32>)> + '_ {
-        self.modifiers
-            .iter()
-            .filter_map(|m| m.modify.binding().map(|b| (b, m.range.clone())))
+    fn binding_deps(&mut self) -> impl Iterator<Item = (BindingId, Range<u32>)> + '_ {
+        self.bindings.drain(..)
     }
     pub(super) fn build(mut self, ctx: &modify::Context) -> (Vec<TextSection>, RichText) {
         trace!("Building a RichText from {self:?}");

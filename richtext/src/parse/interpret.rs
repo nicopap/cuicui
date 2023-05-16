@@ -6,8 +6,8 @@ use thiserror::Error;
 
 use super::structs::{Binding, Dyn, Format, Modifier as ParseModifier, Section as ParseSection};
 use crate::{
-    binding::WorldBindings, modifiers::Dynamic, modify, richtext::Modifier, track::make_tracker,
-    track::Tracker, ModifyBox,
+    binding::WorldBindings, modify, richtext::ModifyKind, richtext::ParseModifier as Modifier,
+    track::make_tracker, track::Tracker, ModifyBox,
 };
 
 #[derive(Error, Debug)]
@@ -65,8 +65,8 @@ pub(super) fn section(
     trackers: &mut Vec<Tracker>,
     modifiers: &mut Vec<Modifier>,
 ) -> AnyResult<()> {
-    let mut dynbox = |name: &str| -> AnyResult<ModifyBox> {
-        Ok(Box::new(Dynamic(ctx.bindings.get_or_add(name))))
+    let mut dynbox = |name: &str| -> AnyResult<ModifyKind> {
+        Ok(ModifyKind::Bound(ctx.bindings.get_or_add(name)))
     };
     let mut parse_modify_value = |value, parse: MakeModifyBox| match value {
         Dyn::Dynamic(Binding::Name(name)) => dynbox(name),
@@ -83,7 +83,7 @@ pub(super) fn section(
         Dyn::Static(value) => {
             let mut value: Cow<'static, str> = value.to_owned().into();
             escape_backslashes(&mut value);
-            parse(value)
+            parse(value).map(ModifyKind::Modify)
         }
     };
     let parse_modify = |ParseModifier { name, value, subsection_count }| {
@@ -91,7 +91,7 @@ pub(super) fn section(
         let parse = ctx.modify_builders.get(name).ok_or_else(err)?;
         let try_u32 = u32::try_from;
         let modifier = Modifier {
-            modify: parse_modify_value(value, *parse)?,
+            kind: parse_modify_value(value, *parse)?,
             range: try_u32(section_index)?..try_u32(section_index + subsection_count)?,
         };
         Ok(modifier)

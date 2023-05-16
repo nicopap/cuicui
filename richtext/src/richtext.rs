@@ -144,14 +144,25 @@ impl RichText {
     }
 }
 
+#[derive(Debug)]
+pub(crate) enum ModifyKind {
+    Bound(BindingId),
+    Modify(ModifyBox),
+}
+#[derive(Debug)]
+pub(crate) struct ParseModifier {
+    pub(crate) kind: ModifyKind,
+    pub(crate) range: Range<u32>,
+}
+
 /// A [`ModifyBox`] that apply to a given [`Range`] of [`TextSection`]s on a [`Text`].
 #[derive(Debug)]
-pub(crate) struct Modifier {
+struct Modifier {
     /// The modifier to apply in the given `range`.
-    pub(crate) modify: ModifyBox,
+    modify: ModifyBox,
 
     /// The range to which to apply the `modify`.
-    pub(crate) range: Range<u32>,
+    range: Range<u32>,
 }
 pub struct RichTextBuilder<'a> {
     pub format_string: String,

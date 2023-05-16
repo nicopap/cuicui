@@ -7,7 +7,7 @@ use bevy::reflect::ReflectFromReflect;
 use enumset::EnumSet;
 use thiserror::Error;
 
-use crate::modify::{BindingId, Change, Context};
+use crate::modify::{Change, Context};
 use crate::{modify, IntoModify, Modify, ModifyBox};
 
 macro_rules! common_modify_methods {
@@ -151,27 +151,4 @@ impl<T: fmt::Display> From<T> for Content {
     fn from(value: T) -> Self {
         Content(value.to_string().into())
     }
-}
-
-/// An [`Modify`] that takes it value from [`Context::bindings`].
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub struct Dynamic(pub(crate) BindingId);
-impl Modify for Dynamic {
-    fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError> {
-        trace!("Apply -DYNAMIC-: {:?}", self.0);
-        let Some(modifier) = ctx.get_binding(self.0) else { return Ok(()) };
-        modifier.apply(ctx, text)
-    }
-    fn depends(&self) -> EnumSet<Change> {
-        // TODO(bug): problem: this also depends on the dependencies of the `Modify` this resolves to.
-        // Current plan is to convert `Dynamic` to a struct and add depends and change as fields.
-        EnumSet::EMPTY
-    }
-    fn changes(&self) -> EnumSet<Change> {
-        EnumSet::EMPTY
-    }
-    fn binding(&self) -> Option<BindingId> {
-        Some(self.0)
-    }
-    common_modify_methods! {}
 }
