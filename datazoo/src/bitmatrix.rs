@@ -1,6 +1,6 @@
 use std::mem;
 
-use super::{bitset::BitSetExtensions, div_ceil};
+use crate::{div_ceil, Bitset};
 
 pub struct Column<'a> {
     width: usize,
@@ -42,7 +42,7 @@ impl Iterator for Column<'_> {
 /// Note that only the total size is tracked in `BitMatrix` and you must provide
 /// the `width` value when calling methods on it.
 #[derive(Debug)]
-pub struct BitMatrix(Box<[u32]>);
+pub struct BitMatrix(Bitset<Box<[u32]>>);
 impl BitMatrix {
     /// Iterate over active bits in given `column`.
     ///
@@ -56,7 +56,7 @@ impl BitMatrix {
         column: usize,
     ) -> impl Iterator<Item = usize> + '_ {
         assert_ne!(width, 0);
-        Column { data: &self.0, width, current_cell: column }
+        Column { data: &self.0 .0, width, current_cell: column }
     }
     pub fn row(&self, width: usize, row: usize) -> impl Iterator<Item = usize> + '_ {
         let start = row * width;
@@ -74,6 +74,6 @@ impl BitMatrix {
     pub fn new_with_size(width: usize, height: usize) -> Self {
         let bit_size = width * height;
         let u32_size = div_ceil(bit_size, mem::size_of::<u32>());
-        BitMatrix(vec![0; u32_size].into_boxed_slice())
+        BitMatrix(Bitset(vec![0; u32_size].into_boxed_slice()))
     }
 }

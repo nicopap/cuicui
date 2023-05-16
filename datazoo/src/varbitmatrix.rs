@@ -1,13 +1,13 @@
 use std::{iter, mem};
 
-use super::bitset::BitSetExtensions;
+use super::bitset::Bitset;
 
 /// A bit matrix similar to [`BitMatrix`](super::BitMatrix),
 /// but with columns of variable length like [`VarMatrix`](super::VarMatrix).
 #[derive(Debug, Clone)]
 pub struct VarBitMatrix {
     ends: Box<[u32]>,
-    bits: Box<[u32]>,
+    bits: Bitset<Box<[u32]>>,
 }
 impl VarBitMatrix {
     /// Iterate over all enabled bits in given `index` row.
@@ -52,7 +52,7 @@ impl VarBitMatrix {
 #[derive(Debug, Clone, Default)]
 pub struct VarBitMatrixBuilder {
     ends: Vec<u32>,
-    bits: Vec<u32>,
+    bits: Bitset<Vec<u32>>,
 }
 impl VarBitMatrixBuilder {
     /// Initialize a [`VarBitMatrixBuilder`].
@@ -61,13 +61,16 @@ impl VarBitMatrixBuilder {
     }
     /// Initialize a [`VarBitMatrixBuilder`] with capacity rows.
     pub fn with_capacity(cap: usize) -> Self {
-        VarBitMatrixBuilder { ends: Vec::with_capacity(cap), bits: Vec::new() }
+        VarBitMatrixBuilder {
+            ends: Vec::with_capacity(cap),
+            bits: Bitset(Vec::new()),
+        }
     }
     /// Create the immutable [`VarBitMatrix`], consuming this constructor.
     pub fn build(self) -> VarBitMatrix {
         VarBitMatrix {
             ends: self.ends.into_boxed_slice(),
-            bits: self.bits.into_boxed_slice(),
+            bits: Bitset(self.bits.0.into_boxed_slice()),
         }
     }
     /// Add a single row to this [`VarBitMatrixBuilder`],
@@ -80,7 +83,7 @@ impl VarBitMatrixBuilder {
             let cell_u = (cell + end) as usize;
             if self.bits.bit_len() <= cell_u {
                 let to_add = (cell_u - self.bits.bit_len()) / mem::size_of::<f32>() + 1;
-                self.bits.extend(iter::repeat(0).take(to_add));
+                self.bits.0.extend(iter::repeat(0).take(to_add));
             }
             self.bits.enable_bit(cell_u);
             this_row_length = this_row_length.max(cell);

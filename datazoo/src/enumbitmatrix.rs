@@ -2,7 +2,7 @@ use std::{marker::PhantomData, mem, ops::Range};
 
 use enumset::EnumSetType;
 
-use crate::{div_ceil, BitSetExtensions};
+use crate::{div_ceil, Bitset};
 
 // TODO(clean): Manual impl of Debug using braile to show internal state.
 // TODO(perf): inspect asm to see if Box's metadata store width rather than
@@ -10,7 +10,7 @@ use crate::{div_ceil, BitSetExtensions};
 /// A bitset similar to [`BitMatrix`][super::BitMatrix],
 /// but with a fixed column and row count, one row per `T` variant.
 #[derive(Debug)]
-pub struct EnumBitMatrix<T: EnumSetType>(Box<[u32]>, PhantomData<T>);
+pub struct EnumBitMatrix<T: EnumSetType>(Bitset<Box<[u32]>>, PhantomData<T>);
 
 impl<T: EnumSetType> EnumBitMatrix<T> {
     /// Create a new [`EnumBitMatrix`].
@@ -22,7 +22,7 @@ impl<T: EnumSetType> EnumBitMatrix<T> {
     pub fn new(width: u32) -> Self {
         let len = width.checked_mul(T::BIT_WIDTH).unwrap() as usize;
         let data = vec![0; div_ceil(len, mem::size_of::<u32>())];
-        Self(data.into_boxed_slice(), PhantomData)
+        Self(Bitset(data.into_boxed_slice()), PhantomData)
     }
     /// Enable bits from `iter` for given `change` row.
     ///
@@ -44,7 +44,7 @@ impl<T: EnumSetType> EnumBitMatrix<T> {
     }
     /// The width in bits of individual rows of this [`EnumBitMatrix`].
     pub const fn bit_width(&self) -> u32 {
-        self.0.len() as u32 / T::BIT_WIDTH
+        self.0 .0.len() as u32 / T::BIT_WIDTH
     }
     /// Iterate over enabled bits in `change` row, limited to provided `range`.
     ///

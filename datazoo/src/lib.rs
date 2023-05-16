@@ -17,7 +17,7 @@ const fn div_ceil(lhf: usize, rhs: usize) -> usize {
 
 pub use bitmatrix::BitMatrix;
 pub use bitmultimap::BitMultiMap;
-pub use bitset::BitSetExtensions;
+pub use bitset::Bitset;
 pub use enumbitmatrix::EnumBitMatrix;
 pub use enummultimap::{EnumMultiMap, EnumMultiMapBuilder};
 pub use varbitmatrix::{VarBitMatrix, VarBitMatrixBuilder};

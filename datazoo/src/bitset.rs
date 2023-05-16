@@ -10,25 +10,23 @@ impl BlockT for u32 {
 }
 type Block = u32;
 
-pub trait BitSetExtensions {
-    fn bit_len(&self) -> usize;
-    fn ones_in_range(&self, range: Range<usize>) -> Ones;
-    fn enable_bit(&mut self, bit: usize) -> Option<()>;
-}
-impl BitSetExtensions for [Block] {
-    fn bit_len(&self) -> usize {
-        self.len() * Block::BIT_COUNT
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Bitset<T: AsRef<[u32]> + AsMut<[u32]>>(pub T);
+
+impl<T: AsRef<[u32]> + AsMut<[u32]>> Bitset<T> {
+    pub fn bit_len(&self) -> usize {
+        self.0.as_ref().len() * Block::BIT_COUNT
     }
     /// Returns `None` if `bit` is out of range
-    fn enable_bit(&mut self, bit: usize) -> Option<()> {
+    pub fn enable_bit(&mut self, bit: usize) -> Option<()> {
         let block = bit / Block::BIT_COUNT;
         let offset = bit % Block::BIT_COUNT;
 
-        self.get_mut(block).map(|block| {
+        self.0.as_mut().get_mut(block).map(|block| {
             *block |= 1 << offset;
         })
     }
-    fn ones_in_range(&self, range: Range<usize>) -> Ones {
+    pub fn ones_in_range(&self, range: Range<usize>) -> Ones {
         let Range { start, end } = range;
         assert!(start <= self.bit_len());
         assert!(end <= self.bit_len());
@@ -45,7 +43,7 @@ impl BitSetExtensions for [Block] {
             start: start / Block::BIT_COUNT,
             end: div_ceil(end, Block::BIT_COUNT),
         };
-        let all_blocks = &self[range.clone()];
+        let all_blocks = &self.0.as_ref()[range.clone()];
 
         let (mut bitset, remaining_blocks) = all_blocks
             .split_first()
@@ -101,19 +99,23 @@ mod tests {
     use super::*;
 
     use pretty_assertions::assert_eq;
-    //                           16v  32v     48v  64v     80v  96v
-    const BLOCKS: &[u32] = &[0xf0f0_00ff, 0xfff0_000f, 0xfff0_0f0f];
+    //                            16v  32v     48v  64v     80v  96v
+    const BLOCKS: [u32; 3] = [0xf0f0_00ff, 0xfff0_000f, 0xfff0_0f0f];
+
+    fn blocks() -> Bitset<[u32; 3]> {
+        Bitset(BLOCKS.map(|i| i.reverse_bits()))
+    }
 
     #[test]
     fn empty_empty() {
-        let blocks: &[u32] = &[];
+        let blocks = Bitset([]);
         let actual: Vec<_> = blocks.ones_in_range(0..0).collect();
         let expected: &[u32] = &[];
         assert_eq!(expected, actual);
     }
     #[test]
     fn empty_range() {
-        let blocks = BLOCKS;
+        let blocks = blocks();
 
         let actual: Vec<_> = blocks.ones_in_range(17..17).collect();
         let expected: &[u32] = &[];
@@ -127,7 +129,7 @@ mod tests {
     }
     #[test]
     fn same_block() {
-        let blocks: Vec<_> = BLOCKS.iter().map(|i| i.reverse_bits()).collect();
+        let blocks = blocks();
 
         let actual: Vec<_> = blocks.ones_in_range(16..31).collect();
         let expected: Vec<u32> = (24..31).collect();
@@ -144,7 +146,7 @@ mod tests {
     #[test]
     fn both_unaligned() {
         let range = 24..76;
-        let blocks: Vec<_> = BLOCKS.iter().map(|i| i.reverse_bits()).collect();
+        let blocks = blocks();
         let actual: Vec<_> = blocks.ones_in_range(range).collect();
         let expected: Vec<u32> = (24..44).chain(60..76).collect();
         assert_eq!(&expected, &actual);
@@ -152,7 +154,7 @@ mod tests {
     #[test]
     fn first_unaligned() {
         let range = 24..64;
-        let blocks: Vec<_> = BLOCKS.iter().map(|i| i.reverse_bits()).collect();
+        let blocks = blocks();
         let actual: Vec<_> = blocks.ones_in_range(range).collect();
         let expected: Vec<u32> = (24..44).chain(60..64).collect();
         assert_eq!(&expected, &actual);
@@ -160,7 +162,7 @@ mod tests {
     #[test]
     fn last_unaligned() {
         let range = 32..76;
-        let blocks: Vec<_> = BLOCKS.iter().map(|i| i.reverse_bits()).collect();
+        let blocks = blocks();
         let actual: Vec<_> = blocks.ones_in_range(range).collect();
         let expected: Vec<u32> = (32..44).chain(60..76).collect();
         assert_eq!(&expected, &actual);
@@ -168,7 +170,7 @@ mod tests {
     #[test]
     fn none_unaligned() {
         let range = 32..64;
-        let blocks: Vec<_> = BLOCKS.iter().map(|i| i.reverse_bits()).collect();
+        let blocks = blocks();
         let actual: Vec<_> = blocks.ones_in_range(range).collect();
         let expected: Vec<u32> = (32..44).chain(60..64).collect();
         assert_eq!(&expected, &actual);
@@ -176,7 +178,7 @@ mod tests {
     #[test]
     fn full_range() {
         let range = 0..96;
-        let blocks: Vec<_> = BLOCKS.iter().map(|i| i.reverse_bits()).collect();
+        let blocks = blocks();
         let actual: Vec<_> = blocks.ones_in_range(range).collect();
         let expected: Vec<u32> = (0..4)
             .chain(8..12)
