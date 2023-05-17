@@ -454,7 +454,7 @@ impl IntoModify for UserColor {
 - [ ] Lean on reflection for Resource modifiers
     - [ ] Allow arbitrary modifiers from `Format`
     - [ ] Allow user-defined `Format`s
-    - [ ] Remove `ResourceTrackerExt`
+    - [X] Remove `ResourceTrackerExt`
     - [X] Consider using "starting by 'Res'" or "format applies to everything"
           in order to avoid `fmt:` prefix → Actually checking for closing
           delimiter is much easier.

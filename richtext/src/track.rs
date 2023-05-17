@@ -6,7 +6,7 @@ mod pull;
 mod reflect;
 mod resource;
 
-use bevy::{log::trace, prelude::World, reflect::Typed, utils::get_short_name};
+use bevy::{log::trace, prelude::World};
 
 use crate::ModifyBox;
 
@@ -21,15 +21,9 @@ fn some_content(input: impl std::fmt::Display) -> Option<ModifyBox> {
 pub use component::{update_tracked_components, Tracked};
 pub(crate) use pull::Target;
 pub(crate) use reflect::make_tracker;
-pub use resource::{update_tracked_resources, ResTrackers, ResourceTrackerExt};
+pub use resource::{update_tracked_resources, ResTrackers};
 
 pub struct Tracker {
     pub(crate) binding_name: String,
     pub(crate) fetch: FetchBox,
-}
-impl Tracker {
-    pub(crate) fn new<R: Typed>(fetch: FetchBox) -> Self {
-        let binding_name = get_short_name(<R as Typed>::type_info().type_name());
-        Self { binding_name, fetch }
-    }
 }

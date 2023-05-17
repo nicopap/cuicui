@@ -7,7 +7,6 @@
 //! - [ ] Update the [`RichText`]'s context. There is actually multiple approaches:
 //!     - Use the [`track!`] macro to make [`RichText`] binding's follow the value
 //!       of components you added to the ECS.
-//!     - Use the [`ResourceTrackerExt`] methods to track some [`Resource`]s.
 //!     - Manually use the [`RichTextData::set`],
 //!       [`set_typed`](RichTextData::set_typed) or [`set_content`](RichTextData::set_content)
 //!       to update a specific [`RichText`] context.
@@ -25,8 +24,7 @@
 //! # use std::fmt;
 //! use bevy::prelude::*;
 //! use cuicui_richtext::{
-//!     track, MakeRichTextBundle, IntoModify, ModifyBox,
-//!     modifiers, ResourceTrackerExt,
+//!     track, MakeRichTextBundle, IntoModify, ModifyBox, modifiers,
 //! };
 //! # #[derive(Component, Default)]
 //! # struct MaxValue(f32);
@@ -82,9 +80,6 @@
 //!         .spawn(SliderBundle { max: MaxValue(34.0), ..default() })
 //!         .insert(track!('d, slider2, Slider(value)));
 //!
-//!     commands.init_tracked_resource::<DeathCount>();
-//!     commands.insert_modify_resource(DeathLineColor(Color::RED));
-//!
 //!     // Rich text will automatically be updated.
 //!     commands.spawn(
 //!         MakeRichTextBundle::new(
@@ -120,4 +115,4 @@ pub use plugin::{
     make_rich, MakeRichText, MakeRichTextBundle, RichTextData, RichTextPlugin, WorldBindings,
 };
 pub use richtext::{RichText, RichTextBuilder};
-pub use track::{ResTrackers, ResourceTrackerExt, Tracked};
+pub use track::{ResTrackers, Tracked};

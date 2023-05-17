@@ -11,9 +11,7 @@ use bevy::{
     sprite::MaterialMesh2dBundle,
     utils::HashMap,
 };
-use cuicui_richtext::{
-    track, MakeRichTextBundle, ResourceTrackerExt, RichTextPlugin, WorldBindings,
-};
+use cuicui_richtext::{track, MakeRichTextBundle, RichTextPlugin, WorldBindings};
 
 const TIME_STEP: f32 = 1.0 / 60.0;
 
@@ -58,8 +56,10 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .init_resource::<FontHandles>()
         .add_plugin(RichTextPlugin)
-        .init_tracked_resource::<Score>()
-        .init_debug_tracked_resource::<Deaths>()
+        .register_type::<Score>()
+        .register_type::<Deaths>()
+        .init_resource::<Score>()
+        .init_resource::<Deaths>()
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .add_startup_system(setup)
         .add_event::<CollisionEvent>()
@@ -91,7 +91,8 @@ struct Ball;
 #[derive(Component, Deref, DerefMut)]
 struct Velocity(Vec2);
 
-#[derive(Component, Debug, Default)]
+#[derive(Component, Debug, Default, Reflect)]
+#[reflect(Component)]
 struct Collider {
     collision_count: usize,
 }
@@ -159,6 +160,7 @@ impl WallBundle {
 
 // This resource tracks the game's score
 #[derive(Resource, Default, Reflect)]
+#[reflect(Resource)]
 struct Score {
     score: usize,
 }
@@ -169,6 +171,7 @@ impl fmt::Display for Score {
 }
 // This resource tracks how many times the ball fell off the arena.
 #[derive(Resource, Default, Debug, Reflect)]
+#[reflect(Resource)]
 struct Deaths(usize);
 
 #[derive(Resource)]
@@ -230,8 +233,8 @@ fn setup(
     commands.spawn(
         MakeRichTextBundle::new(
             "Score: {Font: fonts/FiraMono-Medium.ttf, Color: rgb(1.0, 0.5, 0.5), \
-            RelSize: 1.5, Content: {Score}}\n\
-            {Color: rgb(1.0, 0.2, 0.2), Content: {Deaths}}\n\
+            RelSize: 1.5, Content: {Res.Score:?}}\n\
+            {Color: rgb(1.0, 0.2, 0.2), Content: {Res.Deaths:?}}\n\
             Paddle hits: {Color: pink, Content: {paddle_hits}}\n\
             Ball position: {Font: fonts/FiraMono-Medium.ttf, Color: pink|\
             \\{x: {ball_x}, y: {ball_y}\\}}",
