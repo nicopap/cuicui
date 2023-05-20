@@ -66,7 +66,7 @@ pub struct Resolver<P: Prefab, const MOD_COUNT: usize> {
     root_mask: EnumBitMatrix<P::Field>,
 }
 
-struct ConcreteResolver<'a, P: Prefab, const MC: usize> {
+struct Evaluator<'a, P: Prefab, const MC: usize> {
     root: &'a P,
     graph: &'a Resolver<P, MC>,
     ctx: &'a P::Context,
@@ -115,15 +115,15 @@ where
     ) {
         let bindings = bindings.changed();
         let Tracked { updated, value } = updates;
-        ConcreteResolver { graph: self, ctx, to_update, root: value }.update(*updated, bindings);
+        Evaluator { graph: self, ctx, to_update, root: value }.eval(*updated, bindings);
     }
 }
-impl<'a, P: Prefab, const MC: usize> ConcreteResolver<'a, P, MC>
+impl<'a, P: Prefab, const MC: usize> Evaluator<'a, P, MC>
 where
     P: Prefab + Clone + fmt::Debug,
     P::Field: fmt::Debug,
 {
-    fn apply_modify(
+    fn eval_exact(
         &mut self,
         index: ModifyIndex,
         mask: impl SortedIterator<Item = u32>,
@@ -141,20 +141,20 @@ where
         }
         Ok(())
     }
-    fn apply_modify_deps<I>(&mut self, index: ModifyIndex, mask: impl Fn() -> I)
+    fn eval_with_dependencies<I>(&mut self, index: ModifyIndex, mask: impl Fn() -> I)
     where
         I: SortedIterator<Item = u32>,
     {
-        if let Err(err) = self.apply_modify(index, mask(), true) {
+        if let Err(err) = self.eval_exact(index, mask(), true) {
             warn!("when applying {index:?}: {err}");
         }
         for &dep_index in self.graph.modify_deps.get(&index) {
-            if let Err(err) = self.apply_modify(dep_index, mask(), false) {
+            if let Err(err) = self.eval_exact(dep_index, mask(), false) {
                 warn!("when applying {dep_index:?} child of {index:?}: {err}");
             }
         }
     }
-    pub fn update<'b>(
+    pub fn eval<'b>(
         &mut self,
         changes: FieldsOf<P>,
         bindings: impl Iterator<Item = (BindingId, &'b P::Modifiers)>,
@@ -175,7 +175,7 @@ where
         for index in self.graph.change_modifies(changes) {
             let Modifier { inner: modify, range } = self.graph.modify_at(index);
             let mask = || self.graph.root_mask_for(modify.changes(), range.clone());
-            self.apply_modify_deps(index, mask);
+            self.eval_with_dependencies(index, mask);
         }
     }
 }

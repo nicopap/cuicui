@@ -1,3 +1,3 @@
 pub mod binding;
-pub mod deps;
 pub mod prefab;
+pub mod resolve;
