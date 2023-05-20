@@ -2,13 +2,8 @@
 
 use std::{any::Any, fmt};
 
-use bevy::{
-    prelude::{Font, Handle, TextSection},
-    text::TextStyle,
-};
+use bevy::prelude::{Font, Handle, TextSection};
 use enumset::EnumSetType;
-
-use crate::binding::BindingsView;
 
 pub use anyhow::Error as AnyError;
 pub use enumset::EnumSet;
@@ -19,6 +14,8 @@ pub use enumset::EnumSet;
 /// [`Resource`]: bevy::prelude::Resource
 /// [`Component`]: bevy::prelude::Component
 pub type ModifyBox = Box<dyn Modify + Send + Sync + 'static>;
+
+pub type GetFont<'a> = &'a dyn Fn(&str) -> Option<Handle<Font>>;
 
 /// Turn a type into a boxed [`Modify`] trait object.
 pub trait IntoModify {
@@ -51,7 +48,7 @@ impl IntoModify for ModifyBox {
 /// ```rust
 /// use std::{any::Any, fmt};
 /// use bevy::prelude::*;
-/// use cuicui_richtext::modify::{Modify, Context, ModifyBox, AnyError, Change, EnumSet};
+/// use cuicui_richtext::modify::{Modify, GetFont, ModifyBox, AnyError, Change, EnumSet};
 ///
 /// #[derive(Debug, PartialEq, Clone, Copy)]
 /// struct SetExactFontSize(f32);
@@ -59,7 +56,7 @@ impl IntoModify for ModifyBox {
 /// impl Modify for SetExactFontSize {
 ///
 ///     /// Set the size of the text.
-///     fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError> {
+///     fn apply(&self, _: GetFont, text: &mut TextSection) -> Result<(), AnyError> {
 ///         text.style.font_size = self.0;
 ///         Ok(())
 ///     }
@@ -83,14 +80,10 @@ impl IntoModify for ModifyBox {
 ///
 /// [`Section`]: crate::Section
 pub trait Modify: Any {
-    /// Apply this modifier to the `text`, given a [`Context`].
-    ///
-    /// Note that the order of application of modifiers in [`RichText`] is
-    /// **unspecified**, so you need to make sure your [`Modify`] is
-    /// order-independent.
+    /// Apply this modifier to the `text`.
     ///
     /// [`RichText`]: crate::RichText
-    fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError>;
+    fn apply(&self, fonts: GetFont, text: &mut TextSection) -> Result<(), AnyError>;
 
     /// On what data does this modifier depends?
     fn depends(&self) -> EnumSet<Change>;
@@ -149,25 +142,6 @@ impl fmt::Debug for dyn Modify {
 impl fmt::Debug for ModifyBox {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.debug_dyn(f)
-    }
-}
-
-// TODO(doc): more details, explain bindings.
-/// The context used in [`Modify`].
-#[derive(Clone, Copy)]
-pub struct Context<'a> {
-    pub bindings: BindingsView<'a>,
-    pub parent_style: &'a TextStyle,
-    // NOTE: we use a `&'a dyn` here instead of a type parameter because we intend
-    // for `Context` to be a parameter for a trait object method. If `Context` had
-    // a non-lifetime type parameter, it would require that method to have a type
-    // parameter itself, but this would make it non-dispatchable: ie not available
-    // on trait object.
-    pub fonts: &'a dyn Fn(&str) -> Option<Handle<Font>>,
-}
-impl<'a> Context<'a> {
-    pub fn get_binding(&self, id: BindingId) -> Option<&'a (dyn Modify + Send + Sync)> {
-        self.bindings.get(id)
     }
 }
 

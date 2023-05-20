@@ -10,7 +10,7 @@ use crate::{
     binding::{self, LocalBindings},
     change_text::ChangeTextStyle,
     modifiers::{self, Content},
-    modify::{BindingId, Context},
+    modify::BindingId,
     track::{update_tracked_components, update_tracked_resources},
     IntoModify, ResTrackers, RichText,
 };
@@ -63,13 +63,10 @@ pub fn update_text(
     for (mut rich, mut to_update) in &mut query {
         let RichTextData { text, bindings, base_style } = &mut *rich;
 
-        let view = world_bindings.0.view_with_local(bindings);
-        let ctx = Context {
-            bindings: view.unwrap(),
-            parent_style: &base_style.inner,
-            fonts: &|name| Some(fonts.get_handle(HandleId::from(name))),
-        };
-        text.update(&mut to_update, base_style.changes, ctx);
+        let view = world_bindings.0.view_with_local(bindings).unwrap();
+        text.update(&mut to_update, base_style, view, &|name| {
+            Some(fonts.get_handle(HandleId::from(name)))
+        });
         base_style.reset_changes();
         bindings.reset_changes();
     }

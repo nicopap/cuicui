@@ -3,17 +3,17 @@ mod make;
 use std::{fmt, iter, ops::Range};
 
 use bevy::{
-    prelude::{warn, Handle},
+    prelude::warn,
     reflect::{Reflect, Typed},
-    text::{BreakLineOn, Font, Text, TextAlignment, TextStyle},
+    text::{BreakLineOn, Text, TextAlignment, TextStyle},
     utils::HashMap,
 };
 use datazoo::{sorted, BitMultiMap, EnumBitMatrix, EnumMultiMap, SortedIterator};
 use enumset::{EnumSet, __internal::EnumSetTypePrivate};
 
 use crate::{
-    modify, modify::BindingId, modify::Change, parse, parse::interpret, show, show::ShowBox,
-    track::Tracker, AnyError, ModifyBox,
+    change_text::ChangeTextStyle, modify::BindingId, modify::Change, modify::GetFont, parse,
+    parse::interpret, show, show::ShowBox, track::Tracker, AnyError, BindingsView, ModifyBox,
 };
 
 /// Index in `modifies`.
@@ -49,8 +49,9 @@ pub struct RichText {
 }
 
 struct RichTextCtx<'a> {
+    style: &'a TextStyle,
     rich: &'a RichText,
-    ctx: modify::Context<'a>,
+    get_font: GetFont<'a>,
     to_update: &'a mut Text,
 }
 
@@ -59,12 +60,17 @@ impl<'a> RichTextCtx<'a> {
         &mut self,
         index: ModifyIndex,
         mask: impl SortedIterator<Item = u32>,
+        // TODO(clean)
+        should_reset_style: bool,
     ) -> Result<(), AnyError> {
         let Modifier { modify, range } = self.rich.modify_at(index);
 
         for section in range.clone().difference(mask) {
             let section = &mut self.to_update.sections[section as usize];
-            modify.apply(&self.ctx, section)?;
+            if should_reset_style {
+                section.style = self.style.clone();
+            }
+            modify.apply(&self.get_font, section)?;
         }
         Ok(())
     }
@@ -72,11 +78,11 @@ impl<'a> RichTextCtx<'a> {
     where
         I: SortedIterator<Item = u32>,
     {
-        if let Err(err) = self.apply_modify(index, mask()) {
+        if let Err(err) = self.apply_modify(index, mask(), true) {
             warn!("when applying {index:?}: {err}");
         }
         for &dep_index in self.rich.modify_deps.get(&index) {
-            if let Err(err) = self.apply_modify(dep_index, mask()) {
+            if let Err(err) = self.apply_modify(dep_index, mask(), false) {
                 warn!("when applying {dep_index:?} child of {index:?}: {err}");
             }
         }
@@ -92,7 +98,7 @@ impl<'a> RichTextCtx<'a> {
             };
             for section in range.difference(iter::empty()) {
                 let section = &mut self.to_update.sections[section as usize];
-                if let Err(err) = modify.apply(&self.ctx, section) {
+                if let Err(err) = modify.apply(&self.get_font, section) {
                     warn!("when applying {id:?}: {err}");
                 }
             }
@@ -129,11 +135,14 @@ impl RichText {
     pub fn update<'a>(
         &'a self,
         to_update: &'a mut Text,
-        style_changes: EnumSet<Change>,
-        ctx: modify::Context,
+        style_changes: &'a ChangeTextStyle,
+        bindings: BindingsView<'a>,
+        get_font: GetFont<'a>,
     ) {
-        let bindings = ctx.bindings.changed();
-        RichTextCtx { rich: self, ctx, to_update }.update(style_changes, bindings);
+        let bindings = bindings.changed();
+        let style = &style_changes.inner;
+        let changes = style_changes.changes;
+        RichTextCtx { rich: self, get_font, to_update, style }.update(changes, bindings);
     }
 }
 
@@ -161,8 +170,8 @@ pub struct RichTextBuilder<'a> {
     pub format_string: String,
     pub(crate) context: interpret::Context<'a>,
 
-    pub parent_style: &'a TextStyle,
-    pub fonts: &'a dyn Fn(&str) -> Option<Handle<Font>>,
+    pub parent_style: TextStyle,
+    pub get_font: GetFont<'a>,
     pub alignment: TextAlignment,
     pub linebreak_behaviour: BreakLineOn,
 
@@ -185,16 +194,11 @@ impl<'a> RichTextBuilder<'a> {
         self
     }
     pub fn build(self) -> Result<(Text, RichText, Vec<Tracker>), AnyError> {
-        let Self { format_string, mut context, .. } = self;
+        let Self { format_string, mut context, parent_style, .. } = self;
         let mut trackers = Vec::new();
         let modifiers = parse::richtext(&mut context, &format_string, &mut trackers)?;
 
-        let ctx = modify::Context {
-            bindings: context.bindings.view(),
-            parent_style: self.parent_style,
-            fonts: self.fonts,
-        };
-        let (sections, rich_text) = make::Make::new(modifiers).build(&ctx);
+        let (sections, rich_text) = make::Make::new(modifiers, parent_style).build(self.get_font);
         let text = Text {
             sections,
             alignment: self.alignment,

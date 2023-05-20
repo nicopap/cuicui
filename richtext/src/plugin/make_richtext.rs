@@ -77,8 +77,8 @@ pub fn make_rich(
         let builder = RichTextBuilder {
             format_string,
             context: interpret::Context::new(&mut world_bindings.0).with_defaults(),
-            parent_style: style,
-            fonts: &|name| Some(fonts.get_handle(HandleId::from(name))),
+            parent_style: style.clone(),
+            get_font: &|name| Some(fonts.get_handle(HandleId::from(name))),
             alignment: *alignment,
             linebreak_behaviour: *linebreak_behaviour,
             formatters: HashMap::default(),

@@ -1,21 +1,25 @@
 use std::{collections::BTreeSet, ops::Range};
 
-use bevy::{log::trace, text::TextSection};
+use bevy::{
+    log::trace,
+    text::{TextSection, TextStyle},
+};
 use datazoo::{enum_multimap, sorted, BitMultiMap, EnumBitMatrix};
 use enumset::EnumSet;
 
-use crate::modify::{self, BindingId, Change};
+use crate::modify::{BindingId, Change, GetFont};
 
 use super::{Modifier, ModifyIndex as Idx, ParseModifier, RichText};
 
 #[derive(Debug)]
 pub(super) struct Make {
+    init_style: TextStyle,
     modifiers: Vec<Modifier>,
     bindings: sorted::ByKeyBox<BindingId, Range<u32>>,
 }
 
 impl Make {
-    pub(super) fn new(parse_modifiers: Vec<ParseModifier>) -> Self {
+    pub(super) fn new(parse_modifiers: Vec<ParseModifier>, init_style: TextStyle) -> Self {
         let mut modifiers = Vec::new();
         let mut bindings = Vec::new();
 
@@ -25,7 +29,7 @@ impl Make {
                 super::ModifyKind::Modify(modify) => modifiers.push(Modifier { modify, range }),
             }
         }
-        Self { modifiers, bindings: bindings.into() }
+        Self { modifiers, bindings: bindings.into(), init_style }
     }
     fn change_root_mask(&self, change: Change) -> impl Iterator<Item = u32> + '_ {
         // TODO(bug): should handle things that depend on other things that themselves
@@ -54,7 +58,7 @@ impl Make {
     // TODO(clean): shouldn't need `ctx`, but since it would require creating
     // references, it is impossible to create an ad-hoc empty one.
     /// Apply all `Modify` that do depend on nothing and remove them from `modifiers`.
-    fn purge_static(&mut self, ctx: &modify::Context) -> Vec<TextSection> {
+    fn purge_static(&mut self, get_font: GetFont) -> Vec<TextSection> {
         let is_indy = |modify: &Modifier| modify.modify.depends() == EnumSet::EMPTY;
         let independents: BTreeSet<_> = self
             .modifiers
@@ -67,7 +71,7 @@ impl Make {
         // TODO(err): unwrap
         let section_count = self.modifiers.iter().map(|m| m.range.end).max().unwrap();
         let mut sections =
-            vec![TextSection::from_style(ctx.parent_style.clone()); section_count as usize];
+            vec![TextSection::from_style(self.init_style.clone()); section_count as usize];
 
         let mut i = 0;
         self.modifiers.retain(|modifier| {
@@ -80,7 +84,7 @@ impl Make {
             for section in modifier.range.clone() {
                 modifier
                     .modify
-                    .apply(ctx, &mut sections[section as usize])
+                    .apply(get_font, &mut sections[section as usize])
                     // TODO(err): unwrap
                     .unwrap();
             }
@@ -152,7 +156,7 @@ impl Make {
             .iter()
             .flat_map(|change| self.change_modify_deps(change))
     }
-    pub(super) fn build(mut self, ctx: &modify::Context) -> (Vec<TextSection>, RichText) {
+    pub(super) fn build(mut self, get_font: GetFont) -> (Vec<TextSection>, RichText) {
         trace!("Building a RichText from {self:?}");
         let old_count = self.modifiers.len();
 
@@ -161,7 +165,7 @@ impl Make {
         // let binding_masks = self.all_binding_masks();
         // trace!("binding mask is {binding_masks:?}");
 
-        let sections = self.purge_static(ctx);
+        let sections = self.purge_static(get_font);
         let new_count = self.modifiers.len();
         trace!("Removed {} static modifiers", old_count - new_count);
 

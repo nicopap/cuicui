@@ -7,7 +7,7 @@ use bevy::reflect::ReflectFromReflect;
 use enumset::EnumSet;
 use thiserror::Error;
 
-use crate::modify::{Change, Context};
+use crate::modify::{Change, GetFont};
 use crate::{modify, IntoModify, Modify, ModifyBox};
 
 macro_rules! common_modify_methods {
@@ -42,10 +42,10 @@ enum Errors {
 #[reflect(FromReflect)]
 pub struct Font(pub String);
 impl Modify for Font {
-    fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError> {
+    fn apply(&self, get_font: GetFont, text: &mut TextSection) -> Result<(), AnyError> {
         let err = || Errors::FontNotLoaded(self.0.clone());
         trace!("Apply =Font=: {:?}", self.0);
-        text.style.font = (ctx.fonts)(&self.0).ok_or_else(err)?;
+        text.style.font = get_font(&self.0).ok_or_else(err)?;
         Ok(())
     }
     fn depends(&self) -> EnumSet<Change> {
@@ -64,14 +64,14 @@ impl modify::Parse for Font {
     }
 }
 
-/// Size relative to global text size.
+/// Size relative to parent text size.
 #[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
 #[reflect(FromReflect)]
 pub struct RelSize(pub f32);
 impl Modify for RelSize {
-    fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError> {
+    fn apply(&self, _: GetFont, text: &mut TextSection) -> Result<(), AnyError> {
         trace!("Apply #RelSize#: {:?}", self.0);
-        text.style.font_size = ctx.parent_style.font_size * self.0;
+        text.style.font_size *= self.0;
         Ok(())
     }
     fn depends(&self) -> EnumSet<Change> {
@@ -94,7 +94,7 @@ impl modify::Parse for RelSize {
 #[reflect(FromReflect)]
 pub struct Color(pub bevy::prelude::Color);
 impl Modify for Color {
-    fn apply(&self, _ctx: &Context, text: &mut TextSection) -> Result<(), AnyError> {
+    fn apply(&self, _: GetFont, text: &mut TextSection) -> Result<(), AnyError> {
         // println!("Apply new color: {:?}", self.0);
         trace!("Apply ~COLOR~: {:?}", self.0);
         text.style.color = self.0;
@@ -125,7 +125,7 @@ impl IntoModify for bevy::prelude::Color {
 #[reflect(FromReflect)]
 pub struct Content(pub Cow<'static, str>);
 impl Modify for Content {
-    fn apply(&self, _ctx: &Context, text: &mut TextSection) -> Result<(), AnyError> {
+    fn apply(&self, _: GetFont, text: &mut TextSection) -> Result<(), AnyError> {
         trace!("Apply $CONTENT$: {:?}", self.0);
         text.value.clear();
         text.value.push_str(&self.0);

@@ -11,9 +11,9 @@ fn main() {
     App::new()
         .add_plugins(
             DefaultPlugins.set(bevy::log::LogPlugin {
-                level: bevy::log::Level::TRACE,
+                level: bevy::log::Level::DEBUG,
                 filter:
-                    "wgpu=warn,bevy_ecs=info,naga=info,bevy_app=info,gilrs_core=info,gilrs=info,cuicui_richtext::show=debug,cuicui_richtext::modifiers=trace"
+                    "wgpu=warn,bevy_ecs=info,naga=info,bevy_app=info,gilrs_core=info,gilrs=info,cuicui_richtext::show=debug,cuicui_richtext::modifiers=debug"
                         .to_string(),
             }),
         )
