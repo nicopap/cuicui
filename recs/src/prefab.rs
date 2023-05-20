@@ -2,8 +2,18 @@ use std::{any::Any, fmt};
 
 use enumset::{EnumSet, EnumSetType};
 
-pub trait Sequence<T: ?Sized> {
+pub trait Indexed<T: ?Sized> {
     fn get_mut(&mut self, index: usize) -> Option<&mut T>;
+}
+impl<T> Indexed<T> for [T] {
+    fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        <[T]>::get_mut(self, index)
+    }
+}
+impl<T> Indexed<T> for Vec<T> {
+    fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        <[T]>::get_mut(self, index)
+    }
 }
 
 pub type FieldsOf<P> = EnumSet<<P as Prefab>::Field>;
@@ -12,7 +22,7 @@ pub trait Prefab {
     type Modifiers: Modify<Self> + fmt::Debug;
     type Field: EnumSetType;
     type Context;
-    type Collection: Sequence<Self>;
+    type Collection: Indexed<Self>;
     type FieldValue<'a>
     where
         Self: 'a;
@@ -22,6 +32,24 @@ pub trait Prefab {
 pub struct Tracked<P: Prefab> {
     pub(crate) updated: FieldsOf<P>,
     pub(crate) value: P,
+}
+impl<P: Prefab> Tracked<P> {
+    pub fn new(value: P) -> Self {
+        Self { updated: EnumSet::EMPTY, value }
+    }
+    /// Update `self` with `f`, declaring that `update` is changed.
+    ///
+    /// If you change fields other than the ones in `updated`, they won't be
+    /// tracked as changed. So make sure to properly declare which fields
+    /// you are changing.
+    pub fn update(&mut self, updated: FieldsOf<P>, f: impl FnOnce(&mut Self)) {
+        self.updated |= updated;
+        f(self);
+    }
+    /// Reset the change tracker state.
+    pub fn reset_updated(&mut self) {
+        self.updated = EnumSet::EMPTY;
+    }
 }
 
 pub trait Modify<P: Prefab + ?Sized> {

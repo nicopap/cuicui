@@ -1,10 +1,12 @@
+mod make;
+
 use std::{fmt, iter, ops::Range};
 
 use bevy_log::warn;
 use datazoo::{sorted, BitMultiMap, EnumBitMatrix, EnumMultiMap, SortedIterator};
 
 use crate::binding::{BindingId, BindingsView};
-use crate::prefab::{FieldsOf, Modify, Prefab, Sequence, Tracked};
+use crate::prefab::{FieldsOf, Indexed, Modify, Prefab, Tracked};
 
 /// Index in `modifies`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -14,12 +16,28 @@ impl fmt::Debug for ModifyIndex {
         write!(f, "<M{}>", self.0)
     }
 }
+impl ModifyIndex {
+    fn new(value: usize) -> Self {
+        ModifyIndex(value as u32)
+    }
+}
+
+#[derive(Debug)]
+pub enum ModifyKind<P: Prefab> {
+    Bound(BindingId),
+    Modify(P::Modifiers),
+}
+#[derive(Debug)]
+pub struct MakeModifier<P: Prefab> {
+    pub kind: ModifyKind<P>,
+    pub range: Range<u32>,
+}
 
 /// A [`ModifyBox`] that apply to a given [`Range`] of [`TextSection`]s on a [`Text`].
 #[derive(Debug)]
 struct Modifier<P: Prefab> {
     /// The modifier to apply in the given `range`.
-    modify: P::Modifiers,
+    inner: P::Modifiers,
 
     /// The range to which to apply the `modify`.
     range: Range<u32>,
@@ -27,7 +45,7 @@ struct Modifier<P: Prefab> {
 
 #[derive(Debug)]
 pub struct Resolver<P: Prefab, const MOD_COUNT: usize> {
-    modifies: Box<[Modifier<P>]>,
+    modifiers: Box<[Modifier<P>]>,
 
     /// `Modify` that can be triggered by a context change
     direct_deps: EnumMultiMap<P::Field, ModifyIndex, MOD_COUNT>,
@@ -57,8 +75,16 @@ struct ConcreteResolver<'a, P: Prefab, const MC: usize> {
 
 impl<P: Prefab, const MC: usize> Resolver<P, MC>
 where
-    P: Clone,
+    P: Prefab + Clone + fmt::Debug,
+    P::Field: fmt::Debug,
 {
+    pub fn new(
+        modifiers: Vec<MakeModifier<P>>,
+        default_section: P,
+        ctx: &P::Context,
+    ) -> (Self, Vec<P>) {
+        make::Make::new(modifiers, default_section).build(ctx)
+    }
     fn binding_range(&self, binding: BindingId) -> Option<(usize, Range<u32>)> {
         // TODO(perf): binary search THE FIRST binding, then `intersected`
         // the slice from it to end of `dynamic` with the sorted Iterator of BindingId.
@@ -78,7 +104,7 @@ where
     }
     fn modify_at(&self, index: ModifyIndex) -> &Modifier<P> {
         // SAFETY: we kinda assume that it is not possible to build an invalid `ModifyIndex`.
-        unsafe { self.modifies.get_unchecked(index.0 as usize) }
+        unsafe { self.modifiers.get_unchecked(index.0 as usize) }
     }
     pub fn update<'a>(
         &'a self,
@@ -94,7 +120,8 @@ where
 }
 impl<'a, P: Prefab, const MC: usize> ConcreteResolver<'a, P, MC>
 where
-    P: Clone,
+    P: Prefab + Clone + fmt::Debug,
+    P::Field: fmt::Debug,
 {
     fn apply_modify(
         &mut self,
@@ -103,7 +130,7 @@ where
         // TODO(clean): flag argument
         uses_root: bool,
     ) -> anyhow::Result<()> {
-        let Modifier { modify, range } = self.graph.modify_at(index);
+        let Modifier { inner: modify, range } = self.graph.modify_at(index);
 
         for section in range.clone().difference(mask) {
             let section = self.to_update.get_mut(section as usize).unwrap();
@@ -146,7 +173,7 @@ where
             }
         }
         for index in self.graph.change_modifies(changes) {
-            let Modifier { modify, range } = self.graph.modify_at(index);
+            let Modifier { inner: modify, range } = self.graph.modify_at(index);
             let mask = || self.graph.root_mask_for(modify.changes(), range.clone());
             self.apply_modify_deps(index, mask);
         }

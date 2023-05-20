@@ -491,12 +491,15 @@ impl IntoModify for UserColor {
             - [ ] Make::binding_mask
     - [X] extract `store` module into individual crate.
     - [X] VarMatrix → JaggedArray
-    - [ ] Clean up `bindings.rs`, `richtext.rs`, `richtext/make.rs`, `modify.rs`
-        - [ ] A lot actually belong to `Modify`
-        - [ ] remove `ctx` arg from `Modify::apply` (yep)
-        - [ ] It should be generic over what is being modified
+    - [X] Clean up `bindings.rs`, `richtext.rs`, `richtext/make.rs`, `modify.rs`
+        - [X] A lot actually belong to `Modify`
+        - [X] remove `ctx` arg from `Modify::apply` (yep)
+        - [X] It should be generic over what is being modified
         - [X] `sort` type-safe slices for usage in `Modifiers` and `Dependencies`
               to ensure we indeed sort our stuff correctly
+- [ ] Provide a fork of `pl_lens` with change detection to replace the error-prone
+      `Tracked::update` and allow projections on `Modify::apply`
+- [ ] consider renaming `Modify`.
 - [ ] (unsure) optimization: take inspiration from https://github.com/Wallacoloo/jagged_array/blob/master/src/lib.rs#L68 for `VarMatrix`s impls
 - [ ] (unsure) better format string error messages
 - [ ] (unsure) Allow compile-time verification of rich text spec through a
