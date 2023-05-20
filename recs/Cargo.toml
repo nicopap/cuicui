@@ -1,0 +1,27 @@
+[package]
+name = "cuicui_recs"
+authors = ["Nicola Papale"]
+description = "A Bevy ECS reactive programming framework"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["bevy"]
+categories = ["game-development", "gui", "value-formatting"]
+repository = "https://github.com/nicopap/cuicui"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+no_tracked_debug = []
+
+[dependencies]
+anyhow = "1"
+bevy_log = "0.10"
+datazoo = { path = "../datazoo", package = "cuicui_datazoo" }
+enumset = { version = "1.1", features = ["std"] }
+smallvec = { version = "1.10", features = ["union", "const_generics", "const_new"] }
+string-interner = { version = "0.14", default-features = false, features = ["std", "inline-more", "backends"] }
+thiserror = "1"
+
+[dev-dependencies]
+pretty_assertions = "1.3"
