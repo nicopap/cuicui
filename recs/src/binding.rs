@@ -3,7 +3,7 @@
 use std::{collections::BTreeMap, fmt, mem};
 
 use anyhow::anyhow;
-use datazoo::{AssumeSortedByKeyExt, SortedPairIterator};
+use datazoo::SortedPairIterator;
 use smallvec::SmallVec;
 use string_interner::{backend::StringBackend, StringInterner, Symbol};
 
@@ -126,20 +126,12 @@ where
     }
 }
 impl<'a, P: Prefab> View<'a, P> {
-    pub(crate) fn changed(&self) -> impl Iterator<Item = (Id, &P::Modifiers)> + '_ {
-        // Due to Rust's poor type inference on closures, I must write this inline
-        // let only_updated = |(id, (changed, modify))| changed.then_some((*id, modify));
-        let overlay = self
-            .overlay
-            .iter()
-            .flat_map(|b| *b)
-            .filter_map(|(id, (changed, m))| changed.then_some((*id, m)))
-            .assume_sorted_by_key();
-        let root = self
-            .root
-            .iter()
-            .filter_map(|(id, (changed, m))| changed.then_some((*id, m)))
-            .assume_sorted_by_key();
+    pub(crate) fn changed(&self) -> impl Iterator<Item = (&Id, &P::Modifiers)> + '_ {
+        // Due to Rust's poor type inference on closures, I must write this inline:
+        // let changed = |(changed, modify): &(bool, _)| changed.then_some(modify);
+        let overlay = self.overlay.iter().flat_map(|b| *b);
+        let overlay = overlay.filter_map_values(|(c, m)| c.then(|| m));
+        let root = self.root.iter().filter_map_values(|(c, m)| c.then(|| m));
 
         overlay.outer_join(root).filter_map_values(|(l, r)| l.or(r))
     }

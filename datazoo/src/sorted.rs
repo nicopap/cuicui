@@ -1,20 +1,39 @@
+//! Types marking slices as being sorted.
+
 use std::{collections::BinaryHeap, marker::PhantomData, ops::Deref, slice};
 
 use sorted_iter::{sorted_iterator::SortedByItem, sorted_pair_iterator::SortedByKey};
 
+/// A `Vec<(K, V)>` where all elements are sorted in ascending ordeorder according
+/// to `K`.
 pub type ByKeyVec<K, V> = KeySorted<std::vec::Vec<(K, V)>, K, V>;
+
+/// A `Box<[(K, V)]>` where all elements are sorted in ascending ordeorder according
+/// to `K`.
 pub type ByKeyBox<K, V> = KeySorted<std::boxed::Box<[(K, V)]>, K, V>;
+
+/// A `&'a [(K, V)]` where all elements are sorted in ascending ordeorder according
+/// to `K`.
 pub type ByKeySlice<'a, K, V> = KeySorted<&'a [(K, V)], K, V>;
 
-/// A `Vec<T>` that is guarenteed to be sorted.
+/// A `Vec<T>` where all elements are sorted in ascending ordeorder according
+/// to `T: Ord`.
 pub type Vec<T> = Sorted<std::vec::Vec<T>, T>;
 
-/// A `Box<[T]>` that is guarenteed to be sorted.
+/// A `Box<[T]>` where all elements are sorted in ascending ordeorder according
+/// to `T: Ord`.
 pub type Box<T> = Sorted<std::boxed::Box<[T]>, T>;
 
-/// A `&'a [T]` that is guarenteed to be sorted.
+/// A `&'a [T]` where all elements are sorted in ascending ordeorder according
+/// to `T: Ord`.
 pub type Slice<'a, T> = Sorted<&'a [T], T>;
 
+// -------------------------
+//          KeySorted
+// -------------------------
+
+/// Slices where all elements are key-value pairs sorted in ascending ordeorder
+/// according to key's `K: Ord`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct KeySorted<A: AsRef<[(K, V)]>, K: Ord, V>(A, PhantomData<(K, V)>);
 
@@ -75,8 +94,12 @@ impl<K, V> ExactSizeIterator for KeysortedIter<'_, K, V> {
 }
 impl<K, V> SortedByKey for KeysortedIter<'_, K, V> {}
 
-// Sorted
+// -------------------------
+//           Sorted
+// -------------------------
 
+/// Slices where all elements are sorted in ascending ordeorder according
+/// to `T: Ord`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Sorted<A: AsRef<[T]>, T: Ord>(A, PhantomData<T>);
 impl<A: AsRef<[T]>, T: Ord> Sorted<A, T> {

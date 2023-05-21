@@ -167,12 +167,12 @@ where
     fn eval<'b>(
         &mut self,
         changes: FieldsOf<P>,
-        bindings: impl Iterator<Item = (Id, &'b P::Modifiers)>,
+        bindings: impl Iterator<Item = (&'b Id, &'b P::Modifiers)>,
     ) where
         P::Modifiers: 'b,
     {
         for (id, modify) in bindings {
-            let Some((_, range)) = self.graph.binding_range(id) else {
+            let Some((_, range)) = self.graph.binding_range(*id) else {
                 continue;
             };
             for section in range.difference(iter::empty()) {

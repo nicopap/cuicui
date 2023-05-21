@@ -1,4 +1,4 @@
-# Cuicui Data Zoo
+# The Cuicui Data Zoo
 
 A collection of data structures used in `cuicui_richtext`.
 Mostly used for dependency resolution and specialized graph traversal tasks.
