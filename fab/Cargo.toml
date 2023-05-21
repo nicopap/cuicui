@@ -1,5 +1,5 @@
 [package]
-name = "cuicui_recs"
+name = "cuicui_fab"
 authors = ["Nicola Papale"]
 description = "A Bevy ECS reactive programming framework"
 license = "MIT OR Apache-2.0"

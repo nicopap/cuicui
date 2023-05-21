@@ -24,7 +24,7 @@ thiserror = "1"
 winnow = "0.4.4"
 
 datazoo = { path = "../datazoo", package = "cuicui_datazoo" }
-recs = { path = "../recs", package = "cuicui_recs" }
+fab = { path = "../fab", package = "cuicui_fab" }
 
 [dev-dependencies]
 bevy = { version = "0.10", features = ["png", "x11", "bevy_asset", "bevy_render" ] }

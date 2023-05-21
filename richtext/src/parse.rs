@@ -14,7 +14,7 @@ mod structs;
 
 use std::borrow::Cow;
 
-use recs::resolve::MakeModifier as RecsModifier;
+use fab::resolve::MakeModifier as FabModifier;
 use winnow::{
     ascii::{alpha1, alphanumeric1, digit1, escaped, multispace0},
     branch::alt,
@@ -180,9 +180,9 @@ pub(super) fn richtext(
     ctx: &mut interpret::Context,
     input: &str,
     trackers: &mut Vec<Tracker>,
-) -> AnyResult<Vec<RecsModifier<TextPrefab>>> {
+) -> AnyResult<Vec<FabModifier<TextPrefab>>> {
     use crate::track::make_tracker;
-    use recs::resolve::ModifyKind;
+    use fab::resolve::ModifyKind;
     macro_rules! dynbox {
         ($name:expr) => {
             Ok(ModifyKind::Bound(ctx.bindings.get_or_add($name)))
@@ -224,7 +224,7 @@ pub(super) fn richtext(
                             parse(value).map(ModifyKind::Modify)
                         }
                     };
-                    let modifier = RecsModifier {
+                    let modifier = FabModifier {
                         kind: kind?,
                         range: try_u32(i)?..try_u32(i + subsection_count)?,
                     };

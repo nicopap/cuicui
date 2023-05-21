@@ -7,7 +7,7 @@ use bevy::{
     utils::HashMap,
 };
 use enumset::{EnumSetType, __internal::EnumSetTypePrivate};
-use recs::{
+use fab::{
     binding,
     prefab::{FieldsOf, Indexed, Prefab, PrefabSection, Tracked},
     resolve::Resolver,

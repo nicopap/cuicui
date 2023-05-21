@@ -2,7 +2,7 @@ use std::{any::Any, borrow::Cow};
 
 use anyhow::Error as AnyError;
 use bevy::utils::HashMap;
-use recs::binding;
+use fab::binding;
 use thiserror::Error;
 
 use crate::modifiers::{self, ModifyBox};

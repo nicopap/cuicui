@@ -31,7 +31,7 @@ cuicui defines its own layouting algorithm.
 
 See [`cuicui_layout`'s README](./layout).
 
-## Recs
+## Fab
 
 A Reactive programming framework with no state management.
 
@@ -39,7 +39,7 @@ Since we are building on bevy, there is absolutely no point in reinventing
 state mangement in our UI framework. For all intent and purposes, bevy's `World`
 is where the state is at.
 
-See [`cuicui_fab`'s README](./recs).
+See [`cuicui_fab`'s README](./fab).
 
 ## Rich text
 
@@ -73,8 +73,8 @@ Other plans:
 
 ### TODO
 
-- [ ] Rename `recs` to `fabs`
-- [ ] Split-out bevy integration of `fabs` into own crate
+- [X] Rename `recs` to `fab`
+- [ ] Split-out bevy integration of `fab` into own crate
 
 [bevy_2d_outline]: https://lib.rs/crates/bevy_simple_2d_outline
 [bevy_hanabi]: https://lib.rs/crates/bevy_hanabi

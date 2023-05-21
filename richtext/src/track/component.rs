@@ -1,7 +1,7 @@
 use std::fmt;
 
 use bevy::{ecs::world::EntityRef, prelude::*};
-use recs::prefab::Modify;
+use fab::prefab::Modify;
 
 use super::some_content;
 use crate::{modifiers::ModifyBox, plugin::WorldBindings, richtext::TextPrefab};

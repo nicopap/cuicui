@@ -5,7 +5,7 @@ use anyhow::Error as AnyError;
 use bevy::prelude::{trace, FromReflect, Reflect};
 use bevy::reflect::ReflectFromReflect;
 use enumset::EnumSet;
-use recs::prefab::Modify;
+use fab::prefab::Modify;
 use thiserror::Error;
 
 use crate::richtext::{self, GetFont, MyTextSection, TextFields, TextPrefab};
@@ -182,10 +182,10 @@ impl Modify<TextPrefab> for ModifyBox {
     fn apply(&self, ctx: &GetFont, prefab: &mut MyTextSection) -> anyhow::Result<()> {
         self.as_ref().apply(ctx, prefab)
     }
-    fn depends(&self) -> EnumSet<<TextPrefab as recs::prefab::Prefab>::Field> {
+    fn depends(&self) -> EnumSet<<TextPrefab as fab::prefab::Prefab>::Field> {
         self.as_ref().depends()
     }
-    fn changes(&self) -> EnumSet<<TextPrefab as recs::prefab::Prefab>::Field> {
+    fn changes(&self) -> EnumSet<<TextPrefab as fab::prefab::Prefab>::Field> {
         self.as_ref().changes()
     }
     fn as_any(&self) -> &dyn Any {

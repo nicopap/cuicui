@@ -5,7 +5,7 @@ mod make_richtext;
 use std::fmt;
 
 use bevy::{asset::HandleId, prelude::*};
-use recs::binding;
+use fab::binding;
 
 use crate::{
     modifiers::{self, Content, ModifyBox},
