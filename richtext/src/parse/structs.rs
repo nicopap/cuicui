@@ -1,10 +1,10 @@
 //! Intermediate parsing representation.
 
-use crate::{modifiers, show::RuntimeFormat, modify};
+use crate::{modifiers, show::RuntimeFormat};
 
 use winnow::stream::Accumulate;
 
-const CONTENT_NAME: &str = <modifiers::Content as modify::Parse>::NAME;
+const CONTENT_NAME: &str = <modifiers::Content as modifiers::Parse>::NAME;
 
 #[derive(Debug, PartialEq, Clone)]
 pub(super) struct Section<'a> {

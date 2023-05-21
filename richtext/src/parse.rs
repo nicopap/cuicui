@@ -12,6 +12,9 @@ mod error;
 pub(crate) mod interpret;
 mod structs;
 
+use std::borrow::Cow;
+
+use recs::resolve::MakeModifier as RecsModifier;
 use winnow::{
     ascii::{alpha1, alphanumeric1, digit1, escaped, multispace0},
     branch::alt,
@@ -25,14 +28,13 @@ use winnow::{
     Parser,
 };
 
-use crate::AnyError;
-use crate::{show::RuntimeFormat, track::Tracker};
+use crate::{richtext::TextPrefab, show::RuntimeFormat, track::Tracker};
 use structs::{flatten_section, Binding, Dyn, Format, Modifier, Section, Sections};
 
 pub(crate) use color::parse as color;
 
 type IResult<'a, O> = winnow::IResult<&'a str, O>;
-type AnyResult<T> = Result<T, AnyError>;
+type AnyResult<T> = anyhow::Result<T>;
 
 // How to read the following code:
 // Look at the variable names for match with the grammar linked in module doc,
@@ -160,19 +162,77 @@ fn sections_inner(input: &str) -> IResult<Sections> {
         .map(Sections::tail)
         .parse_next(input)
 }
+fn escape_backslashes(input: &mut Cow<str>) {
+    if !input.contains('\\') {
+        return;
+    }
+    let input = input.to_mut();
+    let mut prev_normal = true;
+    input.retain(|c| {
+        let backslash = c == '\\';
+        let remove = prev_normal && backslash;
+        let normal = !remove;
+        prev_normal = normal || !backslash;
+        normal
+    });
+}
 pub(super) fn richtext(
     ctx: &mut interpret::Context,
     input: &str,
     trackers: &mut Vec<Tracker>,
-) -> AnyResult<Vec<crate::richtext::ParseModifier>> {
-    let parsed = sections_inner.parse(input).map_err(|e| e.into_owned())?;
-
-    let mut modifiers = Vec::with_capacity(parsed.0.len() * 2);
-
-    for (i, sec) in parsed.0.into_iter().enumerate() {
-        interpret::section(i, sec, ctx, trackers, &mut modifiers)?;
+) -> AnyResult<Vec<RecsModifier<TextPrefab>>> {
+    use crate::track::make_tracker;
+    use recs::resolve::ModifyKind;
+    macro_rules! dynbox {
+        ($name:expr) => {
+            Ok(ModifyKind::Bound(ctx.bindings.get_or_add($name)))
+        };
     }
-    Ok(modifiers)
+    let parsed = sections_inner.parse(input).map_err(|e| e.into_owned())?;
+    parsed
+        .0
+        .into_iter()
+        .enumerate()
+        .flat_map(|(i, sec)| {
+            sec.modifiers
+                .into_iter()
+                // NOTE: `ParseModifier` are sorted in ascending order (most specific
+                // to most general), but we want the reverse, most general to most specific,
+                // so that, when we iterate through it, we can apply general, the specific etc.
+                .rev()
+                .map(|Modifier { name, value, subsection_count }| {
+                    let err = || interpret::Error::UnknownModifier(name.to_string());
+                    let parse = ctx.modify_builders.get(name).ok_or_else(err)?;
+                    let try_u32 = u32::try_from;
+                    let kind = match value {
+                        Dyn::Dynamic(Binding::Name(name)) => dynbox!(name),
+                        Dyn::Dynamic(Binding::Format { path, format }) => {
+                            let show = match format {
+                                Format::Fmt(format) => Box::new(format),
+                                Format::UserDefined(_) => {
+                                    todo!("TODO(feat): user-specified formatters")
+                                }
+                            };
+                            // TODO(err): unwrap
+                            let tracker = make_tracker(path.to_string(), path, show).unwrap();
+                            trackers.push(tracker);
+                            dynbox!(path)
+                        }
+                        Dyn::Static(value) => {
+                            let mut value: Cow<'static, str> = value.to_owned().into();
+                            escape_backslashes(&mut value);
+                            parse(value).map(ModifyKind::Modify)
+                        }
+                    };
+                    let modifier = RecsModifier {
+                        kind: kind?,
+                        range: try_u32(i)?..try_u32(i + subsection_count)?,
+                    };
+                    Ok(modifier)
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 #[cfg(test)]

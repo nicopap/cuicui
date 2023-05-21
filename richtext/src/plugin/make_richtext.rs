@@ -2,18 +2,26 @@ use std::mem;
 
 use bevy::{asset::HandleId, prelude::*, text::BreakLineOn, utils::HashMap};
 
-use crate::{
-    change_text::ChangeTextStyle, parse::interpret, ResTrackers, RichTextBuilder, RichTextData,
-};
+use crate::{parse::interpret, richtext::RichTextData, ResTrackers, RichTextBuilder};
 
 use super::WorldBindings;
 
 #[derive(Component)]
 pub struct MakeRichText {
-    pub style: TextStyle,
+    pub base_section: TextSection,
     pub alignment: TextAlignment,
     pub linebreak_behaviour: BreakLineOn,
     pub format_string: String,
+}
+impl MakeRichText {
+    fn take(&mut self) -> Self {
+        Self {
+            base_section: mem::take(&mut self.base_section),
+            alignment: self.alignment,
+            linebreak_behaviour: self.linebreak_behaviour,
+            format_string: mem::take(&mut self.format_string),
+        }
+    }
 }
 
 #[derive(Bundle)]
@@ -27,7 +35,7 @@ impl MakeRichTextBundle {
     pub fn new(format_string: impl Into<String>) -> Self {
         MakeRichTextBundle {
             make_richtext: MakeRichText {
-                style: default(),
+                base_section: default(),
                 alignment: TextAlignment::Left,
                 linebreak_behaviour: BreakLineOn::WordBoundary,
                 format_string: format_string.into(),
@@ -36,7 +44,7 @@ impl MakeRichTextBundle {
         }
     }
     pub fn with_text_style(mut self, style: TextStyle) -> Self {
-        self.make_richtext.style = style;
+        self.make_richtext.base_section.style = style;
         self
     }
     /// Returns this [`MakeRichTextBundle`] with a new [`TextAlignment`] on [`Text`].
@@ -68,30 +76,26 @@ pub fn make_rich(
     // TODO(perf): batch commands update.
     for (entity, mut make_rich) in &mut awaiting_fortune {
         let MakeRichText {
-            style,
+            base_section,
             alignment,
             linebreak_behaviour,
             format_string,
-        } = &mut *make_rich;
-        let format_string = mem::take(format_string);
+        } = make_rich.take();
+
         let builder = RichTextBuilder {
             format_string,
             context: interpret::Context::new(&mut world_bindings.0).with_defaults(),
-            parent_style: style.clone(),
+            base_section: base_section.clone(),
             get_font: &|name| Some(fonts.get_handle(HandleId::from(name))),
-            alignment: *alignment,
-            linebreak_behaviour: *linebreak_behaviour,
+            alignment,
+            linebreak_behaviour,
             formatters: HashMap::default(),
         };
         match builder.build() {
             Ok((default_text, text, mut trackers)) => {
                 res_trackers.extend(trackers.drain(..));
 
-                let richtext_data = RichTextData {
-                    text,
-                    base_style: ChangeTextStyle::new(mem::take(style)),
-                    bindings: default(),
-                };
+                let richtext_data = RichTextData::new(text, base_section);
                 cmds.entity(entity)
                     .insert((richtext_data, default_text))
                     .remove::<MakeRichText>();

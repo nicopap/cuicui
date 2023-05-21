@@ -1,9 +1,10 @@
 use std::fmt;
 
 use bevy::{ecs::world::EntityRef, prelude::*};
+use recs::prefab::Modify;
 
 use super::some_content;
-use crate::{plugin::WorldBindings, IntoModify, ModifyBox};
+use crate::{modifiers::ModifyBox, plugin::WorldBindings, richtext::TextPrefab};
 
 /// Add a component and keep track of its value in [`WorldBindings`],
 /// this is a soft wrapper around [`Tracked`] methods.
@@ -175,9 +176,9 @@ impl<T: Component> Tracked<T> {
     /// [`Modify`]: crate::Modify
     pub fn modifier(binding_name: &'static str, t: T) -> Self
     where
-        T: IntoModify + Clone,
+        T: Modify<TextPrefab> + Clone,
     {
-        let proto_fetch: ProtoFetch = |entity| Some(entity.get::<T>()?.clone().into_modify());
+        let proto_fetch: ProtoFetch = |entity| Some(Box::new(entity.get::<T>()?.clone()));
         Self { t, tracker: Tracker { binding_name, proto_fetch } }
     }
 }

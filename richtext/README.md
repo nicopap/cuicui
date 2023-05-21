@@ -477,6 +477,7 @@ impl IntoModify for UserColor {
 - [ ] Optimization: update Cow instead of creating new one => no alloc
 - [ ] Extract `Modify<T>` to be generic over what it modifies
       + `Context` as associated type of `T` most likely.
+    - [ ] Make `plugin` generic over `Prefab` and extract into own crate.
     - [ ] Nested Modifiers
         - [X] Support downstream change trigger (`Modify::changes` method)
         - [X] Keep ordering of `Modify` that affect the same region

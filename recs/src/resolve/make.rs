@@ -3,28 +3,40 @@
 use std::fmt;
 use std::{collections::BTreeSet, ops::Range};
 
-use bevy_log::trace;
 use datazoo::{enum_multimap, sorted, BitMultiMap, EnumBitMatrix};
 use enumset::EnumSet;
+use log::trace;
 
-use crate::binding::BindingId;
+use crate::binding::Id;
 use crate::prefab::{Modify, Prefab};
 
 use super::{MakeModifier as Modifier, ModifyIndex as Idx, ModifyKind, Resolver};
 
-#[derive(Debug)]
-pub(super) struct Make<P: Prefab> {
-    default_section: P,
+pub(super) struct Make<'a, P: Prefab> {
+    default_section: &'a P::Section,
     modifiers: Vec<super::Modifier<P>>,
-    bindings: sorted::ByKeyBox<BindingId, Range<u32>>,
+    bindings: sorted::ByKeyBox<Id, Range<u32>>,
+}
+impl<P: Prefab> fmt::Debug for Make<'_, P>
+where
+    P::Field: fmt::Debug,
+    P::Section: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Make")
+            .field("default_section", &self.default_section)
+            .field("modifiers", &self.modifiers)
+            .field("bindings", &self.bindings)
+            .finish()
+    }
 }
 
-impl<P> Make<P>
+impl<'a, P: Prefab> Make<'a, P>
 where
-    P: Prefab + Clone + fmt::Debug,
+    P::Section: Clone + fmt::Debug,
     P::Field: fmt::Debug,
 {
-    pub(super) fn new(make_modifiers: Vec<Modifier<P>>, default_section: P) -> Self {
+    pub(super) fn new(make_modifiers: Vec<Modifier<P>>, default_section: &'a P::Section) -> Self {
         let mut modifiers = Vec::with_capacity(make_modifiers.len());
         let mut bindings = Vec::with_capacity(make_modifiers.len());
 
@@ -69,7 +81,7 @@ where
     // TODO(clean): shouldn't need `ctx`, but since it would require creating
     // references, it is impossible to create an ad-hoc empty one.
     /// Apply all `Modify` that do depend on nothing and remove them from `modifiers`.
-    fn purge_static(&mut self, ctx: &P::Context) -> Vec<P> {
+    fn purge_static(&mut self, ctx: &P::Context<'_>) -> Vec<P::Section> {
         let is_indy = |modify: &super::Modifier<P>| modify.inner.depends() == EnumSet::EMPTY;
         let independents: BTreeSet<_> = self
             .modifiers
@@ -166,7 +178,10 @@ where
             .iter()
             .flat_map(|change| self.change_modify_deps(change))
     }
-    pub(super) fn build<const MC: usize>(mut self, ctx: &P::Context) -> (Resolver<P, MC>, Vec<P>) {
+    pub(super) fn build<const MC: usize>(
+        mut self,
+        ctx: &P::Context<'_>,
+    ) -> (Resolver<P, MC>, Vec<P::Section>) {
         trace!("Building a RichText from {self:?}");
         let old_count = self.modifiers.len();
 

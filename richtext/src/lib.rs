@@ -23,9 +23,7 @@
 //! ```rust
 //! # use std::fmt;
 //! use bevy::prelude::*;
-//! use cuicui_richtext::{
-//!     track, MakeRichTextBundle, IntoModify, ModifyBox, modifiers,
-//! };
+//! use cuicui_richtext::{track, MakeRichTextBundle, modifiers};
 //! # #[derive(Component, Default)]
 //! # struct MaxValue(f32);
 //! #
@@ -53,22 +51,13 @@
 //!     slider: Slider,
 //! }
 //! #[derive(Resource, Clone, Copy, Reflect, Default)]
+//! #[reflect(Resource)]
 //! struct DeathCount(u32);
 //!
-//! impl fmt::Display for DeathCount {
-//!     // ...
-//! #    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//! #        write!(f, "{:}", self.0)
-//! #    }
-//! }
-//! #[derive(Resource, Clone, Reflect)]
+//! #[derive(Resource, Clone, Default, Reflect)]
+//! #[reflect(Resource)]
 //! struct DeathLineColor(Color);
 //!
-//! impl IntoModify for DeathLineColor {
-//!     fn into_modify(self) -> ModifyBox {
-//!         Box::new(modifiers::Color(self.0))
-//!     }
-//! }
 //! fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 //!     let value = 3.41;
 //!
@@ -83,7 +72,7 @@
 //!     // Rich text will automatically be updated.
 //!     commands.spawn(
 //!         MakeRichTextBundle::new(
-//!             "{Color:{DeathLineColor}|Death count: {DeathCount}}\n\
+//!             "{Color:{Res.DeathLineColor.0}|Death count: {Res.DeathCount.0}}\n\
 //!          slider1 value: {slider1}\n\
 //!          slider2 debug text: {slider2}",
 //!         )
@@ -99,20 +88,13 @@
 //! [`Resource`]: bevy::prelude::Resource
 
 // mod hlist_madness;
-mod binding;
-pub mod change_text;
 pub mod modifiers;
-pub mod modify;
 mod parse;
 mod plugin;
 mod richtext;
 pub mod show;
 pub mod track;
 
-pub use binding::{BindingsView, LocalBindings};
-pub use modify::{AnyError, IntoModify, Modify, ModifyBox};
-pub use plugin::{
-    make_rich, MakeRichText, MakeRichTextBundle, RichTextData, RichTextPlugin, WorldBindings,
-};
-pub use richtext::{RichText, RichTextBuilder};
+pub use plugin::{make_rich, MakeRichText, MakeRichTextBundle, RichTextPlugin, WorldBindings};
+pub use richtext::{RichText, RichTextBuilder, RichTextData};
 pub use track::{ResTrackers, Tracked};

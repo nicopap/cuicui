@@ -101,11 +101,11 @@ fn text_color_system(
             blue: (0.50 * seconds).sin() / 2.0 + 0.5,
             alpha: 1.0,
         };
-        text.set("color", new_color);
+        text.set("color", Box::new(modifiers::Color(new_color)));
         if at_interval(1.3) {
             *current_guest = (*current_guest + 1) % GUESTS.len();
             let new_content = modifiers::Content::from(&GUESTS[*current_guest]);
-            text.set("greeted", new_content);
+            text.set("greeted", Box::new(new_content));
         }
     }
 }

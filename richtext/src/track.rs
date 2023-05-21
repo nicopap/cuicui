@@ -8,7 +8,7 @@ mod resource;
 
 use bevy::{log::trace, prelude::World};
 
-use crate::ModifyBox;
+use crate::modifiers::ModifyBox;
 
 pub(crate) type FetchBox = Box<dyn Fn(&World) -> Option<ModifyBox> + Send + Sync + 'static>;
 

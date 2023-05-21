@@ -31,6 +31,16 @@ cuicui defines its own layouting algorithm.
 
 See [`cuicui_layout`'s README](./layout).
 
+## Recs
+
+A Reactive programming framework with no state management.
+
+Since we are building on bevy, there is absolutely no point in reinventing
+state mangement in our UI framework. For all intent and purposes, bevy's `World`
+is where the state is at.
+
+See [`cuicui_fab`'s README](./recs).
+
 ## Rich text
 
 cuicui defines a `RichText` component.
@@ -45,7 +55,7 @@ See [`cuicui_richtext`'s README](./richtext).
 1. [X] Implement change detection
 2. [X] Study documentation, best way of presenting the crate
 3. [ ] Advertise to bevy community richtext and potential for `Modify` trait
-4. [ ] Abstract `Modify`, Create a `cuicui_fab` crate, dedicated to `Modify`.
+4. [X] Abstract `Modify`, Create a `cuicui_fab` crate, dedicated to `Modify`.
 5. [ ] Study bevy_proto, how could the `Modify` trait be integrated?
 6. [ ] Go back to cuicui_layout, shortcomings, usage limitations
 7. [ ] Improve cuicui_layout based on that.
@@ -60,6 +70,11 @@ Other plans:
 
 - Integrate `bevy-ui-navigation`.
 - Integrate `bevy_mod_picking` once beta branch is mainlined.
+
+### TODO
+
+- [ ] Rename `recs` to `fabs`
+- [ ] Split-out bevy integration of `fabs` into own crate
 
 [bevy_2d_outline]: https://lib.rs/crates/bevy_simple_2d_outline
 [bevy_hanabi]: https://lib.rs/crates/bevy_hanabi

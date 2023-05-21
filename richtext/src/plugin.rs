@@ -5,14 +5,13 @@ mod make_richtext;
 use std::fmt;
 
 use bevy::{asset::HandleId, prelude::*};
+use recs::binding;
 
 use crate::{
-    binding::{self, LocalBindings},
-    change_text::ChangeTextStyle,
-    modifiers::{self, Content},
-    modify::BindingId,
+    modifiers::{self, Content, ModifyBox},
+    richtext::{RichTextData, TextPrefab},
     track::{update_tracked_components, update_tracked_resources},
-    IntoModify, ResTrackers, RichText,
+    ResTrackers,
 };
 
 pub use make_richtext::{make_rich, MakeRichText, MakeRichTextBundle};
@@ -22,13 +21,13 @@ pub use make_richtext::{make_rich, MakeRichText, MakeRichTextBundle};
 /// Unlike [`RichTextData`], this doesn't support type binding, because they
 /// would necessarily be shared between all
 #[derive(Resource, Default)]
-pub struct WorldBindings(binding::WorldBindings);
+pub struct WorldBindings(binding::World<TextPrefab>);
 impl WorldBindings {
     /// Set a named modifier binding.
     ///
     /// Unlike [`RichTextData`] this doesn't check that the key exists or that
     /// `value` is of the right type.
-    pub fn set(&mut self, key: &str, value: impl IntoModify) {
+    pub fn set(&mut self, key: &str, value: ModifyBox) {
         self.0.set(key, value);
     }
     /// Set a named content binding.
@@ -36,22 +35,7 @@ impl WorldBindings {
     /// Unlike [`RichTextData`] this doesn't check that the key exists or that
     /// `value` is of the right type.
     pub fn set_content(&mut self, key: &str, value: &impl fmt::Display) {
-        self.0.set(key, Content::from(value));
-    }
-}
-
-#[derive(Component)]
-pub struct RichTextData {
-    text: RichText,
-    bindings: LocalBindings,
-    base_style: ChangeTextStyle,
-}
-impl RichTextData {
-    pub fn set(&mut self, binding_name: impl Into<String>, value: impl IntoModify) {
-        self.bindings.set(binding_name, value)
-    }
-    pub fn set_by_id(&mut self, id: BindingId, value: impl IntoModify) {
-        self.bindings.set_by_id(id, value)
+        self.0.set(key, Box::new(Content::from(value)));
     }
 }
 
@@ -61,14 +45,9 @@ pub fn update_text(
     fonts: Res<Assets<Font>>,
 ) {
     for (mut rich, mut to_update) in &mut query {
-        let RichTextData { text, bindings, base_style } = &mut *rich;
-
-        let view = world_bindings.0.view_with_local(bindings).unwrap();
-        text.update(&mut to_update, base_style, view, &|name| {
+        rich.update(&mut to_update, &world_bindings.0, &|name| {
             Some(fonts.get_handle(HandleId::from(name)))
         });
-        base_style.reset_changes();
-        bindings.reset_changes();
     }
 }
 

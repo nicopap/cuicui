@@ -10,41 +10,50 @@ use string_interner::{backend::StringBackend, StringInterner, Symbol};
 use crate::prefab::Prefab;
 
 #[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct BindingId(pub(crate) u32);
+pub struct Id(pub(crate) u32);
 
-impl fmt::Debug for BindingId {
+impl fmt::Debug for Id {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "<B{}>", self.0)
     }
 }
 
-#[derive(Debug, Default)]
-pub struct LocalBindings<P: Prefab> {
-    bindings: BTreeMap<BindingId, (bool, P::Modifiers)>,
+#[derive(Debug)]
+pub struct Local<P: Prefab> {
+    bindings: BTreeMap<Id, (bool, P::Modifiers)>,
     buffered: Vec<(Box<str>, P::Modifiers)>,
-    resolved: SmallVec<[(Box<str>, BindingId); 2]>,
+    resolved: SmallVec<[(Box<str>, Id); 2]>,
 }
 #[derive(Debug)]
-pub struct WorldBindings<P: Prefab> {
-    bindings: BTreeMap<BindingId, (bool, P::Modifiers)>,
-    interner: StringInterner<StringBackend<BindingId>>,
+pub struct World<P: Prefab> {
+    bindings: BTreeMap<Id, (bool, P::Modifiers)>,
+    interner: StringInterner<StringBackend<Id>>,
 }
-impl<P: Prefab> Default for WorldBindings<P> {
+impl<P: Prefab> Default for Local<P> {
     fn default() -> Self {
-        WorldBindings {
+        Local {
+            bindings: Default::default(),
+            buffered: Default::default(),
+            resolved: Default::default(),
+        }
+    }
+}
+impl<P: Prefab> Default for World<P> {
+    fn default() -> Self {
+        World {
             bindings: BTreeMap::default(),
             interner: StringInterner::new(),
         }
     }
 }
 #[derive(Clone, Copy)]
-pub struct BindingsView<'a, P: Prefab> {
-    root: &'a BTreeMap<BindingId, (bool, P::Modifiers)>,
-    overlay: Option<&'a BTreeMap<BindingId, (bool, P::Modifiers)>>,
+pub struct View<'a, P: Prefab> {
+    root: &'a BTreeMap<Id, (bool, P::Modifiers)>,
+    overlay: Option<&'a BTreeMap<Id, (bool, P::Modifiers)>>,
 }
 
-impl<P: Prefab> LocalBindings<P> {
-    pub fn set_by_id(&mut self, id: BindingId, value: P::Modifiers) {
+impl<P: Prefab> Local<P> {
+    pub fn set_by_id(&mut self, id: Id, value: P::Modifiers) {
         self.bindings.insert(id, (true, value));
     }
     pub fn set(&mut self, binding_name: impl Into<String>, value: P::Modifiers) {
@@ -57,8 +66,8 @@ impl<P: Prefab> LocalBindings<P> {
             self.buffered.push((name.into(), value));
         }
     }
-    pub fn sync(&mut self, global: &WorldBindings<P>) -> anyhow::Result<()> {
-        let LocalBindings { buffered, bindings: inner, resolved } = self;
+    pub fn sync(&mut self, global: &World<P>) -> anyhow::Result<()> {
+        let Local { buffered, bindings: inner, resolved } = self;
         for (new_name, new_modify) in buffered.drain(..) {
             let err = || anyhow!("tried to bind a name that doesn't exist");
             let id = global.interner.get(&*new_name).ok_or_else(err)?;
@@ -74,7 +83,7 @@ impl<P: Prefab> LocalBindings<P> {
         self.bindings.values_mut().for_each(|v| v.0 = false);
     }
 }
-impl<P: Prefab> WorldBindings<P>
+impl<P: Prefab> World<P>
 where
     P::Modifiers: PartialEq,
 {
@@ -90,7 +99,7 @@ where
         self.set_id(id, value);
         Some(())
     }
-    pub fn set_id(&mut self, id: BindingId, value: P::Modifiers) {
+    pub fn set_id(&mut self, id: Id, value: P::Modifiers) {
         match self.bindings.get_mut(&id) {
             Some(old_value) => {
                 if old_value.1 != value {
@@ -102,25 +111,22 @@ where
             }
         }
     }
-    pub(crate) fn get_or_add(&mut self, name: impl AsRef<str>) -> BindingId {
+    pub fn get_or_add(&mut self, name: impl AsRef<str>) -> Id {
         self.interner.get_or_intern(name)
     }
-    pub fn view(&self) -> BindingsView<P> {
-        BindingsView { root: &self.bindings, overlay: None }
+    pub fn view(&self) -> View<P> {
+        View { root: &self.bindings, overlay: None }
     }
-    pub fn view_with_local<'a>(
-        &'a self,
-        local: &'a mut LocalBindings<P>,
-    ) -> anyhow::Result<BindingsView<'a, P>> {
+    pub fn view_with_local<'a>(&'a self, local: &'a mut Local<P>) -> anyhow::Result<View<'a, P>> {
         local.sync(self)?;
-        Ok(BindingsView {
+        Ok(View {
             overlay: Some(&local.bindings),
             root: &self.bindings,
         })
     }
 }
-impl<'a, P: Prefab> BindingsView<'a, P> {
-    pub(crate) fn changed(&self) -> impl Iterator<Item = (BindingId, &P::Modifiers)> + '_ {
+impl<'a, P: Prefab> View<'a, P> {
+    pub(crate) fn changed(&self) -> impl Iterator<Item = (Id, &P::Modifiers)> + '_ {
         // Due to Rust's poor type inference on closures, I must write this inline
         // let only_updated = |(id, (changed, modify))| changed.then_some((*id, modify));
         let overlay = self
@@ -137,7 +143,7 @@ impl<'a, P: Prefab> BindingsView<'a, P> {
 
         overlay.outer_join(root).filter_map_values(|(l, r)| l.or(r))
     }
-    pub fn get(&self, id: BindingId) -> Option<&'a P::Modifiers> {
+    pub fn get(&self, id: Id) -> Option<&'a P::Modifiers> {
         self.overlay
             .and_then(|btm| btm.get(&id))
             .or_else(|| self.root.get(&id))
@@ -145,10 +151,10 @@ impl<'a, P: Prefab> BindingsView<'a, P> {
     }
 }
 
-impl Symbol for BindingId {
+impl Symbol for Id {
     fn try_from_usize(index: usize) -> Option<Self> {
         let u32 = u32::try_from(index).ok()?;
-        Some(BindingId(u32))
+        Some(Id(u32))
     }
 
     fn to_usize(self) -> usize {

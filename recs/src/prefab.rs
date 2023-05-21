@@ -17,24 +17,32 @@ impl<T> Indexed<T> for Vec<T> {
 }
 
 pub type FieldsOf<P> = EnumSet<<P as Prefab>::Field>;
+pub type Keys<T> = EnumSet<<T as PrefabSection>::Key>;
+
+/// A prefab is built of several sections, each section may have several
+/// components (`Key`).
+pub trait PrefabSection {
+    type Key: EnumSetType;
+    type Value;
+    fn get_mut(&mut self, field: Self::Key) -> &mut Self::Value;
+}
 
 pub trait Prefab {
+    type Section: PrefabSection<Key = Self::Field>;
     type Modifiers: Modify<Self> + fmt::Debug;
     type Field: EnumSetType;
-    type Context;
-    type Collection: Indexed<Self>;
-    type FieldValue<'a>
+    type Context<'a>
     where
         Self: 'a;
-
-    fn get_mut(&mut self, field: Self::Field) -> Self::FieldValue<'_>;
+    type Sections: Indexed<Self::Section>;
 }
-pub struct Tracked<P: Prefab> {
-    pub(crate) updated: FieldsOf<P>,
-    pub(crate) value: P,
+// TODO(clean): Rename this to ChangeTracked or smth
+pub struct Tracked<T: PrefabSection> {
+    pub(crate) updated: Keys<T>,
+    pub(crate) value: T,
 }
-impl<P: Prefab> Tracked<P> {
-    pub fn new(value: P) -> Self {
+impl<T: PrefabSection> Tracked<T> {
+    pub fn new(value: T) -> Self {
         Self { updated: EnumSet::EMPTY, value }
     }
     /// Update `self` with `f`, declaring that `update` is changed.
@@ -42,7 +50,7 @@ impl<P: Prefab> Tracked<P> {
     /// If you change fields other than the ones in `updated`, they won't be
     /// tracked as changed. So make sure to properly declare which fields
     /// you are changing.
-    pub fn update(&mut self, updated: FieldsOf<P>, f: impl FnOnce(&mut Self)) {
+    pub fn update(&mut self, updated: Keys<T>, f: impl FnOnce(&mut Self)) {
         self.updated |= updated;
         f(self);
     }
@@ -52,9 +60,23 @@ impl<P: Prefab> Tracked<P> {
     }
 }
 
+/// A [`TextSection`] modifier.
+///
+/// A rich text [`Section`] may have an arbitary number of `Modify`s, modifying
+/// the styling and content of a given section.
+///
+/// # Implementing `Modify`
+///
+/// You can create your own modifiers, the `as_any`, `eq_dyn` and
+/// `debug_dyn` cannot be implemented at the trait level due to rust's trait object
+/// rules, but they should all look similar.
+///
+/// The `apply` method is what should be interesting for you.
+///
+/// [`Section`]: crate::Section
 pub trait Modify<P: Prefab + ?Sized> {
     /// Apply this modifier to the `prefab`.
-    fn apply(&self, ctx: &P::Context, prefab: &mut P) -> anyhow::Result<()>;
+    fn apply(&self, ctx: &P::Context<'_>, prefab: &mut P::Section) -> anyhow::Result<()>;
 
     /// On what data does this modifier depends?
     fn depends(&self) -> EnumSet<P::Field>;

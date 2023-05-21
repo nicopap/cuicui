@@ -1,176 +1,124 @@
-mod make;
-
-use std::{fmt, iter, ops::Range};
+use std::{fmt, mem, ptr::NonNull};
 
 use bevy::{
-    prelude::warn,
+    prelude::{Component, Deref, DerefMut, Handle},
     reflect::{Reflect, Typed},
-    text::{BreakLineOn, Text, TextAlignment, TextStyle},
+    text::{BreakLineOn, Font, Text, TextAlignment, TextSection},
     utils::HashMap,
 };
-use datazoo::{sorted, BitMultiMap, EnumBitMatrix, EnumMultiMap, SortedIterator};
-use enumset::{EnumSet, __internal::EnumSetTypePrivate};
-
-use crate::{
-    change_text::ChangeTextStyle, modify::BindingId, modify::Change, modify::GetFont, parse,
-    parse::interpret, show, show::ShowBox, track::Tracker, AnyError, BindingsView, ModifyBox,
+use enumset::{EnumSetType, __internal::EnumSetTypePrivate};
+use recs::{
+    binding,
+    prefab::{FieldsOf, Indexed, Prefab, PrefabSection, Tracked},
+    resolve::Resolver,
 };
 
-/// Index in `modifies`.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct ModifyIndex(u32);
-impl fmt::Debug for ModifyIndex {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<M{}>", self.0)
+use crate::{modifiers::ModifyBox, parse, parse::interpret, show, show::ShowBox, track::Tracker};
+
+// TODO(clean): Cleanup API, only make pub opaque newtypes.
+
+pub type GetFont<'a> = &'a dyn Fn(&str) -> Option<Handle<Font>>;
+pub type TextFields = FieldsOf<TextPrefab>;
+
+#[doc(hidden)]
+pub struct MyTextSections(Vec<TextSection>);
+
+impl Indexed<MyTextSection> for MyTextSections {
+    fn get_mut(&mut self, index: usize) -> Option<&mut MyTextSection> {
+        self.0.get_mut(index).map(MyTextSection::sidecast_from)
     }
 }
+#[doc(hidden)]
+#[repr(transparent)]
+#[derive(Clone, Debug, Deref, DerefMut)]
+pub struct MyTextSection(TextSection);
+impl MyTextSection {
+    fn sidecast_from(inner: &mut TextSection) -> &mut Self {
+        // SAFETY: Self is `repr(transparent) TextSection`
+        unsafe { NonNull::<TextSection>::from(inner).cast::<Self>().as_mut() }
+    }
+}
+impl PrefabSection for MyTextSection {
+    type Key = Field;
+    type Value = TextSection;
 
+    fn get_mut(&mut self, _: Self::Key) -> &mut Self::Value {
+        &mut self.0
+    }
+}
+#[derive(EnumSetType, Debug, PartialOrd, Ord)]
+pub enum Field {
+    FontSize,
+    Font,
+    Color,
+}
+pub struct TrackedText(Tracked<MyTextSection>);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TextPrefab;
+impl Prefab for TextPrefab {
+    type Modifiers = ModifyBox;
+    type Field = Field;
+    type Context<'a> = GetFont<'a>;
+    type Section = MyTextSection;
+    type Sections = MyTextSections;
+}
 #[derive(Debug)]
-pub struct RichText {
-    modifies: Box<[Modifier]>,
-
-    /// `Modify` that can be triggered by a context change
-    direct_deps: EnumMultiMap<Change, ModifyIndex, { (Change::BIT_WIDTH - 1) as usize }>,
-
-    // TODO(feat): RichText without m2m dependency. This is fairly costly to
-    // build and uses several kilobytes of memory.
-    /// `Modify` that depends on other `Modify`.
-    ///
-    /// When a `Modify` changes, sometimes, other `Modify` need to run.
-    modify_deps: BitMultiMap<ModifyIndex, ModifyIndex>,
-
-    // TODO(feat): Multiple bindings, see `nested_modify.md#bindings-representation`
-    /// Binding ranges.
-    ///
-    /// Note that this prevents having 1 binding to N instances.
-    bindings: sorted::ByKeyBox<BindingId, Range<u32>>,
-
-    root_mask: EnumBitMatrix<Change>,
-}
-
-struct RichTextCtx<'a> {
-    style: &'a TextStyle,
-    rich: &'a RichText,
-    get_font: GetFont<'a>,
-    to_update: &'a mut Text,
-}
-
-impl<'a> RichTextCtx<'a> {
-    fn apply_modify(
-        &mut self,
-        index: ModifyIndex,
-        mask: impl SortedIterator<Item = u32>,
-        // TODO(clean)
-        should_reset_style: bool,
-    ) -> Result<(), AnyError> {
-        let Modifier { modify, range } = self.rich.modify_at(index);
-
-        for section in range.clone().difference(mask) {
-            let section = &mut self.to_update.sections[section as usize];
-            if should_reset_style {
-                section.style = self.style.clone();
-            }
-            modify.apply(&self.get_font, section)?;
-        }
-        Ok(())
-    }
-    fn apply_modify_deps<I>(&mut self, index: ModifyIndex, mask: impl Fn() -> I)
-    where
-        I: SortedIterator<Item = u32>,
-    {
-        if let Err(err) = self.apply_modify(index, mask(), true) {
-            warn!("when applying {index:?}: {err}");
-        }
-        for &dep_index in self.rich.modify_deps.get(&index) {
-            if let Err(err) = self.apply_modify(dep_index, mask(), false) {
-                warn!("when applying {dep_index:?} child of {index:?}: {err}");
-            }
-        }
-    }
-    pub fn update<'b>(
-        &mut self,
-        changes: EnumSet<Change>,
-        bindings: impl Iterator<Item = (BindingId, &'b ModifyBox)>,
-    ) {
-        for (id, modify) in bindings {
-            let Some((_, range)) = self.rich.binding_range(id) else {
-                continue;
-            };
-            for section in range.difference(iter::empty()) {
-                let section = &mut self.to_update.sections[section as usize];
-                if let Err(err) = modify.apply(&self.get_font, section) {
-                    warn!("when applying {id:?}: {err}");
-                }
-            }
-        }
-        for index in self.rich.change_modifies(changes) {
-            let Modifier { modify, range } = self.rich.modify_at(index);
-            let mask = || self.rich.root_mask_for(modify.changes(), range.clone());
-            self.apply_modify_deps(index, mask);
-        }
-    }
-}
+pub struct RichText(Resolver<TextPrefab, { (Field::BIT_WIDTH - 1) as usize }>);
 impl RichText {
-    fn binding_range(&self, binding: BindingId) -> Option<(usize, Range<u32>)> {
-        // TODO(perf): binary search THE FIRST binding, then `intersected`
-        // the slice from it to end of `dynamic` with the sorted Iterator of BindingId.
-        let index = self.bindings.binary_search_by_key(&binding, |d| d.0).ok()?;
-        Some((index, self.bindings[index].1.clone()))
-    }
-    fn change_modifies(&self, changes: EnumSet<Change>) -> impl Iterator<Item = ModifyIndex> + '_ {
-        self.direct_deps.all_rows(changes).copied()
-    }
-    fn root_mask_for(
+    pub fn update(
         &self,
-        _changes: EnumSet<Change>,
-        _range: Range<u32>,
-    ) -> impl SortedIterator<Item = u32> + '_ {
-        // TODO(bug): need to get all change masks and merge them
-        iter::empty()
-    }
-    fn modify_at(&self, index: ModifyIndex) -> &Modifier {
-        // SAFETY: we kinda assume that it is not possible to build an invalid `ModifyIndex`.
-        unsafe { self.modifies.get_unchecked(index.0 as usize) }
-    }
-    pub fn update<'a>(
-        &'a self,
-        to_update: &'a mut Text,
-        style_changes: &'a ChangeTextStyle,
-        bindings: BindingsView<'a>,
-        get_font: GetFont<'a>,
+        to_update: &mut Text,
+        updates: &TrackedText,
+        bindings: binding::View<TextPrefab>,
+        ctx: &GetFont,
     ) {
-        let bindings = bindings.changed();
-        let style = &style_changes.inner;
-        let changes = style_changes.changes;
-        RichTextCtx { rich: self, get_font, to_update, style }.update(changes, bindings);
+        let mut sections = MyTextSections(mem::take(&mut to_update.sections));
+        self.0.update(&mut sections, &updates.0, bindings, ctx);
+        to_update.sections = sections.0;
     }
 }
 
-#[derive(Debug)]
-pub(crate) enum ModifyKind {
-    Bound(BindingId),
-    Modify(ModifyBox),
+#[derive(Component)]
+pub struct RichTextData {
+    pub text: RichText,
+    pub inner: TrackedText,
+    pub bindings: binding::Local<TextPrefab>,
 }
-#[derive(Debug)]
-pub(crate) struct ParseModifier {
-    pub(crate) kind: ModifyKind,
-    pub(crate) range: Range<u32>,
+impl RichTextData {
+    pub fn update(
+        &mut self,
+        to_update: &mut Text,
+        world: &binding::World<TextPrefab>,
+        ctx: GetFont,
+    ) {
+        let Self { text, bindings, inner } = self;
+
+        let view = world.view_with_local(bindings).unwrap();
+        text.update(to_update, inner, view, &ctx);
+        inner.0.reset_updated();
+        bindings.reset_changes();
+    }
+    pub fn new(text: RichText, inner: TextSection) -> Self {
+        RichTextData {
+            inner: TrackedText(Tracked::new(MyTextSection(inner))),
+            bindings: Default::default(),
+            text,
+        }
+    }
+    pub fn set(&mut self, binding_name: impl Into<String>, value: ModifyBox) {
+        self.bindings.set(binding_name, value)
+    }
+    pub fn set_by_id(&mut self, id: binding::Id, value: ModifyBox) {
+        self.bindings.set_by_id(id, value)
+    }
 }
 
-/// A [`ModifyBox`] that apply to a given [`Range`] of [`TextSection`]s on a [`Text`].
-#[derive(Debug)]
-struct Modifier {
-    /// The modifier to apply in the given `range`.
-    modify: ModifyBox,
-
-    /// The range to which to apply the `modify`.
-    range: Range<u32>,
-}
 pub struct RichTextBuilder<'a> {
     pub format_string: String,
     pub(crate) context: interpret::Context<'a>,
 
-    pub parent_style: TextStyle,
+    pub base_section: TextSection,
     pub get_font: GetFont<'a>,
     pub alignment: TextAlignment,
     pub linebreak_behaviour: BreakLineOn,
@@ -193,20 +141,21 @@ impl<'a> RichTextBuilder<'a> {
             .insert(name, show::Convert::<I, O, F>::new(convert));
         self
     }
-    pub fn build(self) -> Result<(Text, RichText, Vec<Tracker>), AnyError> {
-        let Self { format_string, mut context, parent_style, .. } = self;
+    pub fn build(self) -> anyhow::Result<(Text, RichText, Vec<Tracker>)> {
+        let Self { format_string, mut context, base_section, .. } = self;
         let mut trackers = Vec::new();
         let modifiers = parse::richtext(&mut context, &format_string, &mut trackers)?;
+        let default_section = MyTextSection(base_section);
 
-        let (sections, rich_text) = make::Make::new(modifiers, parent_style).build(self.get_font);
+        let (rich_text, sections) = Resolver::new(modifiers, &default_section, &self.get_font);
         let text = Text {
-            sections,
+            sections: sections.into_iter().map(|n| n.0).collect(),
             alignment: self.alignment,
             linebreak_behaviour: self.linebreak_behaviour,
         };
 
         // debug!("Making RichText: {format_string:?}");
         // partial.print_bindings();
-        Ok((text, rich_text, trackers))
+        Ok((text, RichText(rich_text), trackers))
     }
 }
