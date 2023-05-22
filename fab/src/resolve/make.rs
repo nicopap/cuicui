@@ -13,14 +13,14 @@ use crate::prefab::{Context, Field, Modify, Prefab};
 use super::{MakeModifier as Modifier, ModifyIndex as Idx, ModifyKind, Resolver};
 
 pub(super) struct Make<'a, P: Prefab> {
-    default_section: &'a P::Section,
+    default_section: &'a P::Item,
     modifiers: Vec<super::Modifier<P>>,
     bindings: sorted::ByKeyBox<Id, Range<u32>>,
 }
 impl<P: Prefab> fmt::Debug for Make<'_, P>
 where
     Field<P>: fmt::Debug,
-    P::Section: fmt::Debug,
+    P::Item: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Make")
@@ -33,10 +33,10 @@ where
 
 impl<'a, P: Prefab> Make<'a, P>
 where
-    P::Section: Clone + fmt::Debug,
+    P::Item: Clone + fmt::Debug,
     Field<P>: fmt::Debug,
 {
-    pub(super) fn new(make_modifiers: Vec<Modifier<P>>, default_section: &'a P::Section) -> Self {
+    pub(super) fn new(make_modifiers: Vec<Modifier<P>>, default_section: &'a P::Item) -> Self {
         let mut modifiers = Vec::with_capacity(make_modifiers.len());
         let mut bindings = Vec::with_capacity(make_modifiers.len());
 
@@ -81,7 +81,7 @@ where
     // TODO(clean): shouldn't need `ctx`, but since it would require creating
     // references, it is impossible to create an ad-hoc empty one.
     /// Apply all `Modify` that do depend on nothing and remove them from `modifiers`.
-    fn purge_static(&mut self, ctx: &Context<'_, P>) -> Vec<P::Section> {
+    fn purge_static(&mut self, ctx: &Context<'_, P>) -> Vec<P::Item> {
         let is_indy = |modify: &super::Modifier<P>| modify.inner.depends() == EnumSet::EMPTY;
         let independents: BTreeSet<_> = self
             .modifiers
@@ -181,7 +181,7 @@ where
     pub(super) fn build<const MC: usize>(
         mut self,
         ctx: &Context<'_, P>,
-    ) -> (Resolver<P, MC>, Vec<P::Section>) {
+    ) -> (Resolver<P, MC>, Vec<P::Item>) {
         trace!("Building a RichText from {self:?}");
         let old_count = self.modifiers.len();
 

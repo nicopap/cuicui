@@ -77,22 +77,22 @@ pub struct Resolver<P: Prefab, const MOD_COUNT: usize> {
 }
 
 struct Evaluator<'a, P: Prefab, const MC: usize> {
-    root: &'a P::Section,
+    root: &'a P::Item,
     graph: &'a Resolver<P, MC>,
     ctx: &'a Context<'a, P>,
-    to_update: &'a mut P::Sections,
+    to_update: &'a mut P::Items,
 }
 
 impl<P: Prefab, const MC: usize> Resolver<P, MC>
 where
-    P::Section: Clone + fmt::Debug,
+    P::Item: Clone + fmt::Debug,
     Field<P>: fmt::Debug,
 {
     pub fn new(
         modifiers: Vec<MakeModifier<P>>,
-        default_section: &P::Section,
+        default_section: &P::Item,
         ctx: &Context<'_, P>,
-    ) -> (Self, Vec<P::Section>) {
+    ) -> (Self, Vec<P::Item>) {
         make::Make::new(modifiers, default_section).build(ctx)
     }
     fn binding_range(&self, binding: Id) -> Option<(usize, Range<u32>)> {
@@ -118,7 +118,7 @@ where
     }
     pub fn update<'a>(
         &'a self,
-        to_update: &'a mut P::Sections,
+        to_update: &'a mut P::Items,
         updates: &'a Tracked<P>,
         bindings: View<'a, P>,
         ctx: &'a Context<'a, P>,
@@ -130,7 +130,7 @@ where
 }
 impl<'a, P: Prefab, const MC: usize> Evaluator<'a, P, MC>
 where
-    P::Section: Clone + fmt::Debug,
+    P::Item: Clone + fmt::Debug,
     Field<P>: fmt::Debug,
 {
     fn eval_exact(

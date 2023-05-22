@@ -31,8 +31,8 @@ pub struct TrackedText(Tracked<TextPrefab>);
 pub enum TextPrefab {}
 impl Prefab for TextPrefab {
     type Modifiers = ModifyBox;
-    type Section = TextSection;
-    type Sections = Vec<TextSection>;
+    type Item = TextSection;
+    type Items = Vec<TextSection>;
 }
 #[derive(Debug)]
 pub struct RichText(Resolver<TextPrefab, { (Field::BIT_WIDTH - 1) as usize }>);

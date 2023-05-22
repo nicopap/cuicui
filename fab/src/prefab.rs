@@ -16,23 +16,23 @@ impl<T> Indexed<T> for Vec<T> {
     }
 }
 
-type Keys<S, M> = EnumSet<Key<S, M>>;
-type Key<S, M> = <M as Modify<S>>::Field;
-type Ctx<'a, S, M> = <M as Modify<S>>::Context<'a>;
-pub type FieldsOf<P> = Keys<<P as Prefab>::Section, <P as Prefab>::Modifiers>;
-pub type Field<P> = Key<<P as Prefab>::Section, <P as Prefab>::Modifiers>;
-pub type Context<'a, P> = Ctx<'a, <P as Prefab>::Section, <P as Prefab>::Modifiers>;
+type Keys<M, I> = EnumSet<Key<M, I>>;
+type Key<M, I> = <M as Modify<I>>::Field;
+type Ctx<'a, M, I> = <M as Modify<I>>::Context<'a>;
+pub type FieldsOf<P> = Keys<<P as Prefab>::Modifiers, <P as Prefab>::Item>;
+pub type Field<P> = Key<<P as Prefab>::Modifiers, <P as Prefab>::Item>;
+pub type Context<'a, P> = Ctx<'a, <P as Prefab>::Modifiers, <P as Prefab>::Item>;
 
-pub trait Modify<S: ?Sized> {
+pub trait Modify<I: ?Sized> {
     type Field: EnumSetType;
     type Context<'a>
     where
         Self: 'a;
 
-    /// Apply this modifier to the `section`.
-    fn apply(&self, ctx: &Self::Context<'_>, section: &mut S) -> anyhow::Result<()>;
+    /// Apply this modifier to the `item`.
+    fn apply(&self, ctx: &Self::Context<'_>, section: &mut I) -> anyhow::Result<()>;
 
-    /// On what data does this modifier depends?
+    /// On what data in `item` does this modifier depends?
     fn depends(&self) -> EnumSet<Self::Field>;
 
     /// What data does this `Modify` changes?
@@ -40,16 +40,16 @@ pub trait Modify<S: ?Sized> {
 }
 
 pub trait Prefab {
-    type Modifiers: Modify<Self::Section> + fmt::Debug;
-    type Section;
-    type Sections: Indexed<Self::Section>;
+    type Modifiers: Modify<Self::Item> + fmt::Debug;
+    type Item;
+    type Items: Indexed<Self::Item>;
 }
 pub struct Tracked<P: Prefab> {
     pub(crate) updated: FieldsOf<P>,
-    pub(crate) value: P::Section,
+    pub(crate) value: P::Item,
 }
 impl<P: Prefab> Tracked<P> {
-    pub fn new(value: P::Section) -> Self {
+    pub fn new(value: P::Item) -> Self {
         Self { updated: EnumSet::EMPTY, value }
     }
     /// Update `self` with `f`, declaring that `update` is changed.
