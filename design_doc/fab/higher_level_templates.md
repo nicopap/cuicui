@@ -27,3 +27,9 @@ Supposedly, they inherit a subset of fields of their parent, and operate on thos
 
 We actually don't need heterogenous list,
 we could do with a "heterogenous" thing be really just a single element.
+
+## How would it look like?
+
+→ Let's leave this for later.
+
+Seems like the best way of approaching it is to contribute to bevy_proto.
