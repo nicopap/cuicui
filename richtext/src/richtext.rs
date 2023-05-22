@@ -1,7 +1,7 @@
-use std::{fmt, mem, ptr::NonNull};
+use std::fmt;
 
 use bevy::{
-    prelude::{Component, Deref, DerefMut, Handle},
+    prelude::{Component, Handle},
     reflect::{Reflect, Typed},
     text::{BreakLineOn, Font, Text, TextAlignment, TextSection},
     utils::HashMap,
@@ -9,7 +9,7 @@ use bevy::{
 use enumset::{EnumSetType, __internal::EnumSetTypePrivate};
 use fab::{
     binding,
-    prefab::{FieldsOf, Indexed, Prefab, PrefabSection, Tracked},
+    prefab::{Prefab, Tracked},
     resolve::Resolver,
 };
 
@@ -18,50 +18,21 @@ use crate::{modifiers::ModifyBox, parse, parse::interpret, show, show::ShowBox, 
 // TODO(clean): Cleanup API, only make pub opaque newtypes.
 
 pub type GetFont<'a> = &'a dyn Fn(&str) -> Option<Handle<Font>>;
-pub type TextFields = FieldsOf<TextPrefab>;
 
-#[doc(hidden)]
-pub struct MyTextSections(Vec<TextSection>);
-
-impl Indexed<MyTextSection> for MyTextSections {
-    fn get_mut(&mut self, index: usize) -> Option<&mut MyTextSection> {
-        self.0.get_mut(index).map(MyTextSection::sidecast_from)
-    }
-}
-#[doc(hidden)]
-#[repr(transparent)]
-#[derive(Clone, Debug, Deref, DerefMut)]
-pub struct MyTextSection(TextSection);
-impl MyTextSection {
-    fn sidecast_from(inner: &mut TextSection) -> &mut Self {
-        // SAFETY: Self is `repr(transparent) TextSection`
-        unsafe { NonNull::<TextSection>::from(inner).cast::<Self>().as_mut() }
-    }
-}
-impl PrefabSection for MyTextSection {
-    type Key = Field;
-    type Value = TextSection;
-
-    fn get_mut(&mut self, _: Self::Key) -> &mut Self::Value {
-        &mut self.0
-    }
-}
 #[derive(EnumSetType, Debug, PartialOrd, Ord)]
 pub enum Field {
     FontSize,
     Font,
     Color,
 }
-pub struct TrackedText(Tracked<MyTextSection>);
+pub struct TrackedText(Tracked<TextPrefab>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct TextPrefab;
+pub enum TextPrefab {}
 impl Prefab for TextPrefab {
     type Modifiers = ModifyBox;
-    type Field = Field;
-    type Context<'a> = GetFont<'a>;
-    type Section = MyTextSection;
-    type Sections = MyTextSections;
+    type Section = TextSection;
+    type Sections = Vec<TextSection>;
 }
 #[derive(Debug)]
 pub struct RichText(Resolver<TextPrefab, { (Field::BIT_WIDTH - 1) as usize }>);
@@ -73,9 +44,8 @@ impl RichText {
         bindings: binding::View<TextPrefab>,
         ctx: &GetFont,
     ) {
-        let mut sections = MyTextSections(mem::take(&mut to_update.sections));
-        self.0.update(&mut sections, &updates.0, bindings, ctx);
-        to_update.sections = sections.0;
+        self.0
+            .update(&mut to_update.sections, &updates.0, bindings, ctx);
     }
 }
 
@@ -101,7 +71,7 @@ impl RichTextData {
     }
     pub fn new(text: RichText, inner: TextSection) -> Self {
         RichTextData {
-            inner: TrackedText(Tracked::new(MyTextSection(inner))),
+            inner: TrackedText(Tracked::new(inner)),
             bindings: Default::default(),
             text,
         }
@@ -145,11 +115,11 @@ impl<'a> RichTextBuilder<'a> {
         let Self { format_string, mut context, base_section, .. } = self;
         let mut trackers = Vec::new();
         let modifiers = parse::richtext(&mut context, &format_string, &mut trackers)?;
-        let default_section = MyTextSection(base_section);
+        let default_section = base_section;
 
         let (rich_text, sections) = Resolver::new(modifiers, &default_section, &self.get_font);
         let text = Text {
-            sections: sections.into_iter().map(|n| n.0).collect(),
+            sections,
             alignment: self.alignment,
             linebreak_behaviour: self.linebreak_behaviour,
         };

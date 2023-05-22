@@ -28,14 +28,14 @@ impl WorldBindings {
     /// Unlike [`RichTextData`] this doesn't check that the key exists or that
     /// `value` is of the right type.
     pub fn set(&mut self, key: &str, value: ModifyBox) {
-        self.0.set(key, value);
+        self.0.set_neq(key, value);
     }
     /// Set a named content binding.
     ///
     /// Unlike [`RichTextData`] this doesn't check that the key exists or that
     /// `value` is of the right type.
     pub fn set_content(&mut self, key: &str, value: &impl fmt::Display) {
-        self.0.set(key, Box::new(Content::from(value)));
+        self.0.set_neq(key, Box::new(Content::from(value)));
     }
 }
 

@@ -1,4 +1,5 @@
-use std::{marker::PhantomData, mem, ops::Range};
+use core::fmt;
+use std::{any, marker::PhantomData, mem, ops::Range};
 
 use enumset::EnumSetType;
 
@@ -9,8 +10,15 @@ use crate::{div_ceil, Bitset};
 // total len.
 /// A bitset similar to [`BitMatrix`][super::BitMatrix],
 /// but with a fixed column and row count, one row per `T` variant.
-#[derive(Debug)]
 pub struct EnumBitMatrix<T: EnumSetType>(Bitset<Box<[u32]>>, PhantomData<T>);
+impl<T: EnumSetType> fmt::Debug for EnumBitMatrix<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EnumBitMatrix")
+            .field("T", &any::type_name::<T>())
+            .field("inner", &self.0)
+            .finish()
+    }
+}
 
 impl<T: EnumSetType> EnumBitMatrix<T> {
     /// Create a new [`EnumBitMatrix`].

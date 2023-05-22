@@ -8,7 +8,7 @@ use enumset::EnumSet;
 use log::trace;
 
 use crate::binding::Id;
-use crate::prefab::{Modify, Prefab};
+use crate::prefab::{Context, Field, Modify, Prefab};
 
 use super::{MakeModifier as Modifier, ModifyIndex as Idx, ModifyKind, Resolver};
 
@@ -19,7 +19,7 @@ pub(super) struct Make<'a, P: Prefab> {
 }
 impl<P: Prefab> fmt::Debug for Make<'_, P>
 where
-    P::Field: fmt::Debug,
+    Field<P>: fmt::Debug,
     P::Section: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -34,7 +34,7 @@ where
 impl<'a, P: Prefab> Make<'a, P>
 where
     P::Section: Clone + fmt::Debug,
-    P::Field: fmt::Debug,
+    Field<P>: fmt::Debug,
 {
     pub(super) fn new(make_modifiers: Vec<Modifier<P>>, default_section: &'a P::Section) -> Self {
         let mut modifiers = Vec::with_capacity(make_modifiers.len());
@@ -54,7 +54,7 @@ where
             default_section,
         }
     }
-    fn change_root_mask(&self, change: P::Field) -> impl Iterator<Item = u32> + '_ {
+    fn change_root_mask(&self, change: Field<P>) -> impl Iterator<Item = u32> + '_ {
         // TODO(bug): should handle things that depend on other things that themselves
         // have no dependencies (typically bindings)
         let no_deps = move |modify: &&super::Modifier<P>| {
@@ -68,7 +68,7 @@ where
     /// The mask of static sections.
     ///
     /// If the bit is enabled, then it shouldn't be updated.
-    fn root_mask(&self) -> EnumBitMatrix<P::Field> {
+    fn root_mask(&self) -> EnumBitMatrix<Field<P>> {
         // TODO(err): unwrap
         let section_count = self.modifiers.iter().map(|m| m.range.end).max().unwrap();
         let mut root_mask = EnumBitMatrix::new(section_count);
@@ -81,7 +81,7 @@ where
     // TODO(clean): shouldn't need `ctx`, but since it would require creating
     // references, it is impossible to create an ad-hoc empty one.
     /// Apply all `Modify` that do depend on nothing and remove them from `modifiers`.
-    fn purge_static(&mut self, ctx: &P::Context<'_>) -> Vec<P::Section> {
+    fn purge_static(&mut self, ctx: &Context<'_, P>) -> Vec<P::Section> {
         let is_indy = |modify: &super::Modifier<P>| modify.inner.depends() == EnumSet::EMPTY;
         let independents: BTreeSet<_> = self
             .modifiers
@@ -125,7 +125,7 @@ where
     /// The list of `Modify`s that directly depend on a root property.
     ///
     /// `change` is the property in question. A root property is the "parent style".
-    fn change_direct_deps(&self, change: P::Field) -> impl Iterator<Item = Idx> + '_ {
+    fn change_direct_deps(&self, change: Field<P>) -> impl Iterator<Item = Idx> + '_ {
         let mut parent_change_range_end = 0;
 
         self.indices().filter_map(move |(i, modify)| {
@@ -145,7 +145,7 @@ where
     /// The list of `Modify`s that depend on other `Modify` for their value on `change` property.
     ///
     /// This is a list of parent→child tuples.
-    fn change_modify_deps(&self, change: P::Field) -> impl Iterator<Item = (Idx, Idx)> + '_ {
+    fn change_modify_deps(&self, change: Field<P>) -> impl Iterator<Item = (Idx, Idx)> + '_ {
         let mut parent = Vec::new();
 
         self.indices().filter_map(move |(i, modify)| {
@@ -180,7 +180,7 @@ where
     }
     pub(super) fn build<const MC: usize>(
         mut self,
-        ctx: &P::Context<'_>,
+        ctx: &Context<'_, P>,
     ) -> (Resolver<P, MC>, Vec<P::Section>) {
         trace!("Building a RichText from {self:?}");
         let old_count = self.modifiers.len();
@@ -198,7 +198,7 @@ where
         trace!("m2m deps: {modify_deps:?}");
 
         let mut direct_deps = enum_multimap::Builder::new();
-        for change in EnumSet::<P::Field>::ALL {
+        for change in EnumSet::<Field<P>>::ALL {
             direct_deps.insert(change, self.change_direct_deps(change));
         }
         // TODO(err): unwrap

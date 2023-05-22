@@ -83,23 +83,32 @@ impl<P: Prefab> Local<P> {
         self.bindings.values_mut().for_each(|v| v.0 = false);
     }
 }
-impl<P: Prefab> World<P>
-where
-    P::Modifiers: PartialEq,
-{
+impl<P: Prefab> World<P> {
     // TODO(err): Should return Result
-    /// Set a named modifier binding.
-    ///
-    /// Returns `None` if the `key` has no binding.
-    ///
-    /// Unlike [`RichTextData`] this doesn't check that the key exists or that
-    /// `value` is of the right type.
     pub fn set(&mut self, key: &str, value: P::Modifiers) -> Option<()> {
         let id = self.interner.get(key)?;
         self.set_id(id, value);
         Some(())
     }
     pub fn set_id(&mut self, id: Id, value: P::Modifiers) {
+        self.bindings.insert(id, (true, value));
+    }
+    /// Like `set` but do not mark as modified if `value` is same as previous
+    /// value for `key`.
+    pub fn set_neq(&mut self, key: &str, value: P::Modifiers) -> Option<()>
+    where
+        P::Modifiers: PartialEq,
+    {
+        let id = self.interner.get(key)?;
+        self.set_id_neq(id, value);
+        Some(())
+    }
+    /// Like `set_id` but do not mark as modified if `value` is same as previous
+    /// value for `id`.
+    pub fn set_id_neq(&mut self, id: Id, value: P::Modifiers)
+    where
+        P::Modifiers: PartialEq,
+    {
         match self.bindings.get_mut(&id) {
             Some(old_value) => {
                 if old_value.1 != value {

@@ -4,18 +4,19 @@ use std::{any::Any, borrow::Cow, fmt};
 use anyhow::Error as AnyError;
 use bevy::prelude::{trace, FromReflect, Reflect};
 use bevy::reflect::ReflectFromReflect;
+use bevy::text::TextSection;
 use enumset::EnumSet;
 use fab::prefab::Modify;
 use thiserror::Error;
 
-use crate::richtext::{self, GetFont, MyTextSection, TextFields, TextPrefab};
+use crate::richtext::{self, Field, GetFont};
 
 /// A Boxed [`Modify<TextPrefab>`] trait object, with all necessary bounds to make it work
 /// with bevy's [`Resource`] and [`Component`] types.
 ///
 /// [`Resource`]: bevy::prelude::Resource
 /// [`Component`]: bevy::prelude::Component
-pub type ModifyBox = Box<dyn Modify<TextPrefab> + Send + Sync + 'static>;
+pub type ModifyBox = Box<dyn TextModify + Send + Sync + 'static>;
 
 pub(crate) trait Parse {
     /// The name to use when parsing metadata in the format string.
@@ -46,7 +47,7 @@ macro_rules! common_modify_methods {
         fn as_any(&self) -> &dyn Any {
             self
         }
-        fn eq_dyn(&self, other: &dyn Modify<TextPrefab>) -> bool {
+        fn eq_dyn(&self, other: &dyn TextModify) -> bool {
             let any = other.as_any();
             let Some(right) = any.downcast_ref::<Self>() else { return false; };
             self == right
@@ -72,17 +73,17 @@ enum Errors {
 #[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
 #[reflect(FromReflect)]
 pub struct Font(pub String);
-impl Modify<TextPrefab> for Font {
-    fn apply(&self, get_font: &GetFont, text: &mut MyTextSection) -> Result<(), AnyError> {
+impl TextModify for Font {
+    fn apply(&self, get_font: &GetFont, text: &mut TextSection) -> Result<(), AnyError> {
         let err = || Errors::FontNotLoaded(self.0.clone());
         trace!("Apply =Font=: {:?}", self.0);
         text.style.font = get_font(&self.0).ok_or_else(err)?;
         Ok(())
     }
-    fn depends(&self) -> TextFields {
+    fn depends(&self) -> EnumSet<Field> {
         EnumSet::EMPTY
     }
-    fn changes(&self) -> TextFields {
+    fn changes(&self) -> EnumSet<Field> {
         richtext::Field::Font.into()
     }
     common_modify_methods! {}
@@ -99,16 +100,16 @@ impl Parse for Font {
 #[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
 #[reflect(FromReflect)]
 pub struct RelSize(pub f32);
-impl Modify<TextPrefab> for RelSize {
-    fn apply(&self, _: &GetFont, text: &mut MyTextSection) -> Result<(), AnyError> {
+impl TextModify for RelSize {
+    fn apply(&self, _: &GetFont, text: &mut TextSection) -> Result<(), AnyError> {
         trace!("Apply #RelSize#: {:?}", self.0);
         text.style.font_size *= self.0;
         Ok(())
     }
-    fn depends(&self) -> TextFields {
+    fn depends(&self) -> EnumSet<Field> {
         richtext::Field::FontSize.into()
     }
-    fn changes(&self) -> TextFields {
+    fn changes(&self) -> EnumSet<Field> {
         richtext::Field::FontSize.into()
     }
     common_modify_methods! {}
@@ -124,17 +125,17 @@ impl Parse for RelSize {
 #[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
 #[reflect(FromReflect)]
 pub struct Color(pub bevy::prelude::Color);
-impl Modify<TextPrefab> for Color {
-    fn apply(&self, _: &GetFont, text: &mut MyTextSection) -> Result<(), AnyError> {
+impl TextModify for Color {
+    fn apply(&self, _: &GetFont, text: &mut TextSection) -> Result<(), AnyError> {
         // println!("Apply new color: {:?}", self.0);
         trace!("Apply ~COLOR~: {:?}", self.0);
         text.style.color = self.0;
         Ok(())
     }
-    fn depends(&self) -> TextFields {
+    fn depends(&self) -> EnumSet<Field> {
         EnumSet::EMPTY
     }
-    fn changes(&self) -> TextFields {
+    fn changes(&self) -> EnumSet<Field> {
         richtext::Field::Color.into()
     }
     common_modify_methods! {}
@@ -150,17 +151,17 @@ impl Parse for Color {
 #[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
 #[reflect(FromReflect)]
 pub struct Content(pub Cow<'static, str>);
-impl Modify<TextPrefab> for Content {
-    fn apply(&self, _: &GetFont, text: &mut MyTextSection) -> Result<(), AnyError> {
+impl TextModify for Content {
+    fn apply(&self, _: &GetFont, text: &mut TextSection) -> Result<(), AnyError> {
         trace!("Apply $CONTENT$: {:?}", self.0);
         text.value.clear();
         text.value.push_str(&self.0);
         Ok(())
     }
-    fn depends(&self) -> TextFields {
+    fn depends(&self) -> EnumSet<Field> {
         EnumSet::EMPTY
     }
-    fn changes(&self) -> TextFields {
+    fn changes(&self) -> EnumSet<Field> {
         // TODO(clean): It is not true that it doesnt' changee anything, but
         // Content is special-cased RichText so as to avoid extra storage
         EnumSet::EMPTY
@@ -178,23 +179,47 @@ impl<T: fmt::Display> From<T> for Content {
         Content(value.to_string().into())
     }
 }
-impl Modify<TextPrefab> for ModifyBox {
-    fn apply(&self, ctx: &GetFont, prefab: &mut MyTextSection) -> anyhow::Result<()> {
+pub trait TextModify {
+    fn apply(&self, ctx: &GetFont, prefab: &mut TextSection) -> anyhow::Result<()>;
+    fn depends(&self) -> EnumSet<Field>;
+    fn changes(&self) -> EnumSet<Field>;
+
+    fn as_any(&self) -> &dyn Any;
+    fn eq_dyn(&self, other: &dyn TextModify) -> bool;
+    fn debug_dyn(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
+}
+impl Modify<TextSection> for ModifyBox {
+    type Field = Field;
+    type Context<'a> = GetFont<'a>;
+
+    fn apply(&self, ctx: &GetFont, prefab: &mut TextSection) -> anyhow::Result<()> {
         self.as_ref().apply(ctx, prefab)
     }
-    fn depends(&self) -> EnumSet<<TextPrefab as fab::prefab::Prefab>::Field> {
+    fn depends(&self) -> EnumSet<Field> {
         self.as_ref().depends()
     }
-    fn changes(&self) -> EnumSet<<TextPrefab as fab::prefab::Prefab>::Field> {
+    fn changes(&self) -> EnumSet<Field> {
         self.as_ref().changes()
     }
-    fn as_any(&self) -> &dyn Any {
-        self.as_ref().as_any()
+}
+
+impl PartialEq for dyn TextModify {
+    fn eq(&self, other: &Self) -> bool {
+        self.eq_dyn(other)
     }
-    fn eq_dyn(&self, other: &dyn Modify<TextPrefab>) -> bool {
-        self.as_ref().eq_dyn(other)
+}
+impl PartialEq for ModifyBox {
+    fn eq(&self, other: &Self) -> bool {
+        self.eq_dyn(&**other)
     }
-    fn debug_dyn(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.as_ref().debug_dyn(f)
+}
+impl fmt::Debug for dyn TextModify {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.debug_dyn(f)
+    }
+}
+impl fmt::Debug for ModifyBox {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.debug_dyn(f)
     }
 }

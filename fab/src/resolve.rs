@@ -6,7 +6,7 @@ use datazoo::{sorted, BitMultiMap, EnumBitMatrix, EnumMultiMap, SortedIterator};
 use log::warn;
 
 use crate::binding::{Id, View};
-use crate::prefab::{FieldsOf, Indexed, Modify, Prefab, Tracked};
+use crate::prefab::{Context, Field, FieldsOf, Indexed, Modify, Prefab, Tracked};
 
 /// Index in `modifies`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -58,7 +58,7 @@ pub struct Resolver<P: Prefab, const MOD_COUNT: usize> {
     modifiers: Box<[Modifier<P>]>,
 
     /// `Modify` that can be triggered by a context change
-    direct_deps: EnumMultiMap<P::Field, ModifyIndex, MOD_COUNT>,
+    direct_deps: EnumMultiMap<Field<P>, ModifyIndex, MOD_COUNT>,
 
     // TODO(feat): RichText without m2m dependency. This is fairly costly to
     // build and uses several kilobytes of memory.
@@ -73,25 +73,25 @@ pub struct Resolver<P: Prefab, const MOD_COUNT: usize> {
     /// Note that this prevents having 1 binding to N instances.
     bindings: sorted::ByKeyBox<Id, Range<u32>>,
 
-    root_mask: EnumBitMatrix<P::Field>,
+    root_mask: EnumBitMatrix<Field<P>>,
 }
 
 struct Evaluator<'a, P: Prefab, const MC: usize> {
     root: &'a P::Section,
     graph: &'a Resolver<P, MC>,
-    ctx: &'a P::Context<'a>,
+    ctx: &'a Context<'a, P>,
     to_update: &'a mut P::Sections,
 }
 
 impl<P: Prefab, const MC: usize> Resolver<P, MC>
 where
     P::Section: Clone + fmt::Debug,
-    P::Field: fmt::Debug,
+    Field<P>: fmt::Debug,
 {
     pub fn new(
         modifiers: Vec<MakeModifier<P>>,
         default_section: &P::Section,
-        ctx: &P::Context<'_>,
+        ctx: &Context<'_, P>,
     ) -> (Self, Vec<P::Section>) {
         make::Make::new(modifiers, default_section).build(ctx)
     }
@@ -119,9 +119,9 @@ where
     pub fn update<'a>(
         &'a self,
         to_update: &'a mut P::Sections,
-        updates: &'a Tracked<P::Section>,
+        updates: &'a Tracked<P>,
         bindings: View<'a, P>,
-        ctx: &'a P::Context<'a>,
+        ctx: &'a Context<'a, P>,
     ) {
         let bindings = bindings.changed();
         let Tracked { updated, value } = updates;
@@ -131,7 +131,7 @@ where
 impl<'a, P: Prefab, const MC: usize> Evaluator<'a, P, MC>
 where
     P::Section: Clone + fmt::Debug,
-    P::Field: fmt::Debug,
+    Field<P>: fmt::Debug,
 {
     fn eval_exact(
         &mut self,

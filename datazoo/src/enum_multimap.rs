@@ -1,3 +1,4 @@
+use core::fmt;
 use std::marker::PhantomData;
 
 use enumset::{EnumSet, EnumSetType};
@@ -13,10 +14,14 @@ use crate::{jagged_array, JaggedArray};
 /// `EnumMultiMap<MyEnumSet, ModifyIndex, { (MyEnumSet::BIT_WIDTH - 1) as usize }>`
 ///
 /// [multimap]: https://en.wikipedia.org/wiki/Multimap
-#[derive(Debug)]
 pub struct EnumMultiMap<K: EnumSetType, V, const CLM: usize> {
     inner: JaggedArray<V, CLM>,
     _key: PhantomData<K>,
+}
+impl<K: EnumSetType, V: fmt::Debug, const CLM: usize> fmt::Debug for EnumMultiMap<K, V, CLM> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("EnumMultiMap").field(&self.inner).finish()
+    }
 }
 #[allow(clippy::let_unit_value)] // false positive: we just want to inline the panic
 impl<K: EnumSetType, V, const CLM: usize> EnumMultiMap<K, V, CLM> {
