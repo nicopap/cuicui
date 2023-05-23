@@ -59,9 +59,9 @@ impl BlockT for u32 {
 ///
 /// [bitset]: https://en.wikipedia.org/wiki/Bit_array
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Bitset<T: AsRef<[u32]>>(pub T);
+pub struct Bitset<B: AsRef<[u32]>>(pub B);
 
-impl<T: AsRef<[u32]> + AsMut<[u32]>> Bitset<T> {
+impl<B: AsRef<[u32]> + AsMut<[u32]>> Bitset<B> {
     /// Returns `None` if `bit` is out of range
     pub fn enable_bit(&mut self, bit: usize) -> Option<()> {
         let block = bit / u32::BITS64;
@@ -72,7 +72,7 @@ impl<T: AsRef<[u32]> + AsMut<[u32]>> Bitset<T> {
         })
     }
 }
-impl<T: AsRef<[u32]>> Bitset<T> {
+impl<B: AsRef<[u32]>> Bitset<B> {
     pub fn bit_len(&self) -> usize {
         self.0.as_ref().len() * u32::BITS64
     }
@@ -104,21 +104,23 @@ impl<T: AsRef<[u32]>> Bitset<T> {
             bitset &= (1 << crop.end) - 1;
         }
         Ones {
-            crop: crop.end,
-            remaining_blocks,
-            bitset,
             block_idx: u32::try_from(range.start).unwrap(),
+            crop: crop.end,
+
+            bitset,
+            remaining_blocks,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ones<'a> {
-    bitset: u32,
     /// Index in u32 of `bitset`.
     block_idx: u32,
     /// How many bits to keep in the last block.
     crop: u32,
+
+    bitset: u32,
     remaining_blocks: &'a [u32],
 }
 impl Iterator for Ones<'_> {

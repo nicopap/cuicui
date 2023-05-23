@@ -6,7 +6,7 @@ mod bitmatrix;
 mod bitmultimap;
 mod bitset;
 pub mod enum_multimap;
-mod enumbitmatrix;
+pub mod enumbitmatrix;
 pub mod jagged_array;
 pub mod jagged_bitset;
 pub mod sorted;

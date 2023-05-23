@@ -1,7 +1,8 @@
 use core::fmt;
 use std::{any, marker::PhantomData, mem, ops::Range};
 
-use enumset::EnumSetType;
+use enumset::{EnumSet, EnumSetType};
+use sorted_iter::{assume::AssumeSortedByItemExt, sorted_iterator::SortedByItem, SortedIterator};
 
 use crate::{div_ceil, Bitset};
 
@@ -9,18 +10,19 @@ use crate::{div_ceil, Bitset};
 // TODO(perf): inspect asm to see if Box's metadata store width rather than
 // total len.
 /// A bitset similar to [`BitMatrix`][super::BitMatrix],
-/// but with a fixed column and row count, one row per `T` variant.
-pub struct EnumBitMatrix<T: EnumSetType>(Bitset<Box<[u32]>>, PhantomData<T>);
-impl<T: EnumSetType> fmt::Debug for EnumBitMatrix<T> {
+/// but with a fixed column and row count, one row per `R` variant.
+#[derive(Clone, PartialEq, Eq)]
+pub struct EnumBitMatrix<R: EnumSetType>(Bitset<Box<[u32]>>, PhantomData<R>);
+impl<R: EnumSetType> fmt::Debug for EnumBitMatrix<R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("EnumBitMatrix")
-            .field("T", &any::type_name::<T>())
+            .field("R", &any::type_name::<R>())
             .field("inner", &self.0)
             .finish()
     }
 }
 
-impl<T: EnumSetType> EnumBitMatrix<T> {
+impl<R: EnumSetType> EnumBitMatrix<R> {
     /// Create a new [`EnumBitMatrix`].
     ///
     /// # Panics
@@ -28,19 +30,17 @@ impl<T: EnumSetType> EnumBitMatrix<T> {
     /// When `width * #Variant(T) > u32::MAX`.
     #[must_use]
     pub fn new(width: u32) -> Self {
-        let len = width.checked_mul(T::BIT_WIDTH).unwrap() as usize;
+        let len = width.checked_mul(R::BIT_WIDTH).unwrap() as usize;
         let data = vec![0; div_ceil(len, mem::size_of::<u32>())];
         Self(Bitset(data.into_boxed_slice()), PhantomData)
     }
-    /// Enable bits from `iter` for given `change` row.
+    /// Enable bits from `iter` for given `row`.
     ///
     /// Note that items of `iter` not within [`bit_width`](Self::bit_width) are ignored,
     /// and already enabled bits stay enabled.
     #[allow(clippy::missing_panics_doc)] // False positive, see inline comment
-    pub fn set_row(&mut self, change: T, iter: impl Iterator<Item = u32>) {
-        let row = change.enum_into_u32();
-        // unwrap: this will never fails, as when constructing with `new`, we
-        // verify that `len` is within bound of u32.
+    pub fn set_row(&mut self, row: R, iter: impl Iterator<Item = u32>) {
+        let row = row.enum_into_u32();
         let width = self.bit_width();
 
         let start = row * width;
@@ -52,15 +52,14 @@ impl<T: EnumSetType> EnumBitMatrix<T> {
     }
     /// The width in bits of individual rows of this [`EnumBitMatrix`].
     pub const fn bit_width(&self) -> u32 {
-        self.0 .0.len() as u32 / T::BIT_WIDTH
+        self.0 .0.len() as u32 / R::BIT_WIDTH
     }
-    /// Iterate over enabled bits in `change` row, limited to provided `range`.
+    /// Iterate over enabled bits in `row`, limited to provided `range`.
     ///
-    /// The iterator is ordered ascending, no duplicates.
     /// If the range doesn't fit within [`0..bit_width`](Self::bit_width),
     /// it will be truncated to fit within that range.
-    pub fn row(&self, change: T, mut range: Range<u32>) -> impl Iterator<Item = u32> + '_ {
-        let row = change.enum_into_u32();
+    pub fn row(&self, row: R, mut range: Range<u32>) -> impl SortedIterator<Item = u32> + '_ {
+        let row = row.enum_into_u32();
         let width = self.bit_width();
 
         range.end = range.end.min(range.start + width);
@@ -74,5 +73,38 @@ impl<T: EnumSetType> EnumBitMatrix<T> {
         self.0
             .ones_in_range(subrange_start..subrange_end)
             .map(move |i| i - start)
+            .assume_sorted_by_item()
+    }
+
+    /// Iterate over enabled bits in all `rows`, limited to provided `range`.
+    ///
+    /// [`Rows`] is a sorted iterator.
+    pub const fn rows(&self, rows: EnumSet<R>, range: Range<u32>) -> Rows<R> {
+        Rows { range, rows, bitset: self }
     }
 }
+
+/// Iterator from [`EnumBitMatrix::rows`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rows<'a, R: EnumSetType> {
+    range: Range<u32>,
+    rows: EnumSet<R>,
+
+    bitset: &'a EnumBitMatrix<R>,
+}
+impl<'a, R: EnumSetType> Iterator for Rows<'a, R> {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.range.is_empty() {
+            return None;
+        }
+        let range = self.range.clone();
+        self.range.start += 1;
+
+        self.rows
+            .iter()
+            .find_map(|row| self.bitset.row(row, range.clone()).next())
+    }
+}
+impl<R: EnumSetType> SortedByItem for Rows<'_, R> {}
