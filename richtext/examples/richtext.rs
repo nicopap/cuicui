@@ -13,7 +13,7 @@ fn main() {
             DefaultPlugins.set(bevy::log::LogPlugin {
                 level: bevy::log::Level::DEBUG,
                 filter:
-                    "wgpu=warn,bevy_ecs=info,naga=info,bevy_app=info,gilrs_core=info,gilrs=info,cuicui_richtext::show=debug,cuicui_richtext::modifiers=debug"
+                    "wgpu=warn,bevy_ecs=info,naga=info,bevy_app=info,gilrs_core=info,gilrs=info,cuicui_richtext::show=debug,cuicui_richtext::modifiers=trace"
                         .to_string(),
             }),
         )
@@ -23,8 +23,9 @@ fn main() {
         .init_resource::<Fps>()
         .register_type::<Fps>()
         .add_startup_system(setup)
-        .add_system(text_update_system)
-        .add_system(text_color_system)
+        .add_system(fps_update)
+        .add_system(greet_update)
+        .add_system(color_update)
         .run();
 }
 
@@ -85,14 +86,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 const GUESTS: &[&str] = &["bevy", "boovy", "noovy", "groovy", "bavy", "cuicui"];
-fn text_color_system(
-    time: Res<Time>,
-    mut query: Query<&mut RichTextData, With<ColorText>>,
-    mut current_guest: Local<usize>,
-) {
-    let delta = time.delta_seconds_f64();
-    let current_time = time.elapsed_seconds_f64();
-    let at_interval = |t: f64| current_time % t < delta;
+fn color_update(time: Res<Time>, mut query: Query<&mut RichTextData, With<ColorText>>) {
     for mut text in &mut query {
         let seconds = time.elapsed_seconds();
         let new_color = Color::Rgba {
@@ -102,6 +96,17 @@ fn text_color_system(
             alpha: 1.0,
         };
         text.set("color", Box::new(modifiers::Color(new_color)));
+    }
+}
+fn greet_update(
+    time: Res<Time>,
+    mut query: Query<&mut RichTextData, With<ColorText>>,
+    mut current_guest: Local<usize>,
+) {
+    let delta = time.delta_seconds_f64();
+    let current_time = time.elapsed_seconds_f64();
+    let at_interval = |t: f64| current_time % t < delta;
+    for mut text in &mut query {
         if at_interval(1.3) {
             *current_guest = (*current_guest + 1) % GUESTS.len();
             let new_content = modifiers::Content::from(&GUESTS[*current_guest]);
@@ -110,10 +115,15 @@ fn text_color_system(
     }
 }
 
-fn text_update_system(diagnostics: Res<Diagnostics>, mut fps: ResMut<Fps>) {
+fn fps_update(diagnostics: Res<Diagnostics>, mut fps: ResMut<Fps>, time: Res<Time>) {
+    let delta = time.delta_seconds_f64();
+    let current_time = time.elapsed_seconds_f64();
+    let at_interval = |t: f64| current_time % t < delta;
     if let Some(diag) = diagnostics.get(FrameTimeDiagnosticsPlugin::FPS) {
         if let Some(value) = diag.smoothed() {
-            fps.fps = value;
+            if at_interval(0.5) {
+                fps.fps = value;
+            }
         }
     }
 }
