@@ -1,0 +1,19 @@
+[package]
+name = "cuicui_fab_derive"
+authors = ["Nicola Papale"]
+description = "Proc macros for the cuicui_fab crate"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["bevy"]
+categories = ["game-development", "gui", "value-formatting"]
+repository = "https://github.com/nicopap/cuicui"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2.0", features = ["full", "extra-traits"] }
+proc-macro2 = "1.0"
+quote = "1.0"
