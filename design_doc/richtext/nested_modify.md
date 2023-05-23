@@ -1,6 +1,8 @@
 # Nested `Modify`
 
-Previous design forbade multiple of the same `Modify` affecting the same section.
+A `Prefab` applies to a series of items. `Modify` are operations on items.
+
+Previous design forbade multiple of the same `Modify` affecting the same item.
 This presumes that `Modify` doesn't step on each other's toes. Which is wrong!
 There could be a `SetColor` followed by a `LightenColor` `Modify` for example.
 
@@ -41,7 +43,7 @@ Then, we will use the list of changes + range of `Modify` in `update` to look up
 what other `Modify` in `Modifiers` to trigger, and trigger them.
 
 The other aspect to consider is that it seems like I'm building my own ad-hoc ECS.
-A section is an entity, a quantum of update is a component, and a `Modify` is a system.
+An item is an entity, a quantum of update is a component, and a `Modify` is a system.
 
 Finally, most `Modify`s do not depend on output of other `Modify`s
 
@@ -76,16 +78,16 @@ We need to build a graph of "if this change, then change that".
 The graph has several roots: each component of the context, including individual
 bindings.
 
-The graph's leaves are the components of `Section`.
+The graph's leaves are the components of `item`.
 
-Each `Section` has the same _NC_ components, one component per existing `Changes`.
-So the graph has _NSC_ leaves: _NC * NS_ (_NS_ = number of sections)
+Each `item` has the same _NC_ components, one component per existing `Changes`.
+So the graph has _NSC_ leaves: _NC * NS_ (_NS_ = number of items)
 
 #### Edges
 
 Edges are the DependsOn and Changes relationship. 
 
-Changes is a subset of DependsOn. Each individual root is a distinct DependsOn,
+Each individual root is a distinct DependsOn,
 and all DependsOn has a single root.
 
 Changes are the output of `Modify`s.
@@ -95,44 +97,79 @@ Changes are the output of `Modify`s.
 - A graph node _M_ is either a root, a `Modify`, or a leaf.
 - A node has _0 to N_ inputs _D_, the "DependsOn".
 - It has _1 to N_ outputs _C_, the "Changes".
-- It has _1 to N_ sections _S_ of influence.
+- It has _1 to N_ items _I_ of influence.
 
 #### `Modify` layout
 
 _M1 child of M2_
-when (_M1_ is declared after _M2_ in the same section)
-or (_M1_ is a subsection of _M2_).
+when (_M1_ is declared after _M2_ in the same item)
+or (_M1_'s items of influence is a subset of _M2_
+    and not a subset of any other _M3_ child of _M2_).
 
-Exception: The first section of `Content` specified after `|`
-_is a parent of_ all other `Modify`s declared in the same section.
+Exception: The first item of `Content` specified after `|`
+_is a parent of_ all other `Modify`s declared in the same item.
 
 > **Note**
 > TODO(feat): all `Content` should always run before every other `Modify`s:
 > This would allow `Modify`s like `Uppercase` to work with nested `Content`s.
 
-A _child_ `Modify`'s sections of influence is always a subset of its parent's.
+A _child_ `Modify`'s items of influence is always a subset of its parent's.
 
 #### Edge building
 
 _M1 depends(c) on M0_ 
-when _M1 child of M0_ and _c_ ∈ _D(M1)_ and _c_ ∈ _C(M0)_.
+when _M1 child of M0_ and _c_ ∈ _M1.D_ and _c_ ∈ _M0.C_.
 
-_s depends(c) on M_
-when ∄ _M0_ such as _M0 child of M_ and _s_ ∈ _S(M0)_ and _c_ ∈ _C(M0)_.
+_i depends(c) on M_
+when ∄ _M0_ such as _M0 child of M_ and _i_ ∈ _M0.I_ and _c_ ∈ _M0.C_.
 
-_s depends(c) on Root(c)_
-when ∄ _M_ such as _s_ ∈ _S(M)_ and _c_ ∈ _C(M)_.
+_i depends(c) on Root.c_
+when ∄ _M_ such as _i_ ∈ _M.I_ and _c_ ∈ _M.C_.
 
 ### Heuristics
 
-- k depends(c) on Root(c) for most k (section, `Modify`).
-- s depends(Content) on a leaf `Modify` always
+- k depends(c) on Root(c) for most k (item, `Modify`).
+- i depends(Content) on a leaf `Modify` always
 - Content is always leaf.
 - dependencies of different c often do not interleave (ie: distinct trees)
 - `Modify`s that do not DependOn a Root (recursively) can be culled, as long
-  as we don't touch the final section component they Change.
+  as we don't touch the final item component they Change.
 
 ### What proofs do I need?
+
+- It is fine to cull static modifiers.
+
+#### Mask system works
+
+Static modifiers are modifiers that:
+
+- changes a component and either depends on nothing or depends on the output of a static modifier.  
+- changes a component, and for all items of influences, that component is changed
+  by a static modifier child of itself.
+
+This means that whatever changes in the future, the component will always have
+the same value, we can just apply them once and forget their value.
+
+We cull "static" modifiers from the `Resolver`. 
+That means that if we ever modify that item component,
+we forever lose its initial value, entering a wrong unrecoverable state.
+
+Static modifiers can be nested in a non-static modifier.
+Since we store modifier application range as a range rather than a list of
+indices, we need to be careful to not overwrite the value of static modifiers
+nested within that range.
+
+This is why we have a mask. The mask keeps track of item indices of culled modifiers.
+We check against it when applying a modifier, skipping the indices we know we
+shouldn't apply.
+
+_M0 masks(c)_
+when _c_ ∈ _M0.C_ and _M0.D_ = ∅
+
+When we update _M1_, we update all component _c_ ∈ _M1.C_ of _M1.I_
+
+_Upd(M1)_
+implies ∀ _i_ ∈ _M1.I_, _c_ ∈ _M1.C_: _changed(i.c)_
 
 The tricky bit is the colored relations. Can I abstract it away?
 Saying X depends on Y, or update X always follow update Y allows using
@@ -180,15 +217,15 @@ so it isn't possible.
 
 #### Range dependency mask
 
-We store the range of sections a `Modify` influences. But within that range,
-some section components are masked by other child `Modify`s, the question on
+We store the range of items a `Modify` influences. But within that range,
+some item components are masked by other child `Modify`s, the question on
 how to solve this is open.
 
 Supposedly,
-we store a bitset containing the mask of sections with which depends on
+we store a bitset containing the mask of items with which depends on
 `Modify`s that themselves depend on nothing.
 This way, we never update them.
-Updating other sections is actually necessary, as we run the depending `Modify`
+Updating other items is actually necessary, as we run the depending `Modify`
 with the new values.
 
 #### `Binding`s representation

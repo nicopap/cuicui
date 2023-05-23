@@ -485,7 +485,7 @@ impl IntoModify for UserColor {
         - [X] Remove `Dynamic` as a modifier
         - [ ] Remove `Content` as a modifier
         - [ ] Complete implementation
-            - [ ] RichText::root_mask_for
+            - [X] RichText::root_mask_for
             - [ ] RichText::binding_modify
             - [ ] Make::purge_static
             - [ ] Make::modify_deps

@@ -2,7 +2,9 @@ mod make;
 
 use std::{fmt, iter, ops::Range};
 
-use datazoo::{sorted, BitMultiMap, EnumBitMatrix, EnumMultiMap, SortedIterator};
+use datazoo::{
+    enumbitmatrix::Rows, sorted, BitMultiMap, EnumBitMatrix, EnumMultiMap, SortedIterator,
+};
 use log::warn;
 
 use crate::binding::{Id, View};
@@ -79,6 +81,7 @@ pub struct Resolver<P: Prefab, const MOD_COUNT: usize> {
     /// Note that this prevents having 1 binding to N instances.
     bindings: sorted::ByKeyBox<Id, Range<u32>>,
 
+    /// Sections **not** to update for a given field when a root component changes.
     root_mask: EnumBitMatrix<PrefabField<P>>,
 }
 
@@ -110,13 +113,8 @@ where
     fn change_modifies(&self, changes: FieldsOf<P>) -> impl Iterator<Item = ModifyIndex> + '_ {
         self.direct_deps.all_rows(changes).copied()
     }
-    fn root_mask_for(
-        &self,
-        _changes: FieldsOf<P>,
-        _range: Range<u32>,
-    ) -> impl SortedIterator<Item = u32> + '_ {
-        // TODO(bug): need to get all change masks and merge them
-        iter::empty()
+    fn root_mask_for(&self, changes: FieldsOf<P>, range: Range<u32>) -> Rows<PrefabField<P>> {
+        self.root_mask.rows(changes, range)
     }
     fn modify_at(&self, index: ModifyIndex) -> &Modifier<P> {
         // SAFETY: we kinda assume that it is not possible to build an invalid `ModifyIndex`.
@@ -182,7 +180,8 @@ where
                 continue;
             };
             for section in range.difference(iter::empty()) {
-                let section = self.to_update.get_mut(section as usize).unwrap();
+                let idx = section as usize;
+                let section = self.to_update.get_mut(idx).expect("Section within range");
                 if let Err(err) = modify.apply(self.ctx, section) {
                     warn!("when applying {id:?}: {err}");
                 }
