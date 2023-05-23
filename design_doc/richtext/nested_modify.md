@@ -80,8 +80,8 @@ bindings.
 
 The graph's leaves are the components of `item`.
 
-Each `item` has the same _NC_ components, one component per existing `Changes`.
-So the graph has _NSC_ leaves: _NC * NS_ (_NS_ = number of items)
+Each `item` has the same _nºc_ components, one component per existing `Changes`.
+So the graph has _nºI.c_ leaves: _nºc * nºI_ (_nºI_ = number of items)
 
 #### Edges
 
@@ -117,8 +117,15 @@ A _child_ `Modify`'s items of influence is always a subset of its parent's.
 
 #### Edge building
 
-_M1 depends(c) on M0_ 
-when _M1 child of M0_ and _c_ ∈ _M1.D_ and _c_ ∈ _M0.C_.
+_M1 depends(c) on M0_  when:
+
+_M1 child of M0_
+and ∄ _M2_,
+  _M1 child of M2_
+  and _M2 child of M0_
+  and _c_ ∈ _M2.C_
+and _c_ ∈ _M1.D_
+and _c_ ∈ _M0.C_.
 
 _i depends(c) on M_
 when ∄ _M0_ such as _M0 child of M_ and _i_ ∈ _M0.I_ and _c_ ∈ _M0.C_.
@@ -141,11 +148,23 @@ when ∄ _M_ such as _i_ ∈ _M.I_ and _c_ ∈ _M.C_.
 
 #### Mask system works
 
-Static modifiers are modifiers that:
+_M_ does nothing when:
 
-- changes a component and either depends on nothing or depends on the output of a static modifier.  
-- changes a component, and for all items of influences, that component is changed
-  by a static modifier child of itself.
+∀ _i_ ∈ _M.I_, ∀ _c_ ∈ _M.C_,
+  ∃ _M1_,
+    _M1 child of M_
+    and _i_ ∈ _M1.I_
+    and _c_ ∈ _M1.C_
+and ∀ _c_ ∈ _M.C_,
+  ∀ _M1 child of M_,
+    _c_ ∉ _M1.D_.
+
+_M_ is static when:
+
+∀ _d_ ∈ _M.D_,
+  ∃ _M1 is static_,
+    _M depends(c) on M1_
+or _M does nothing_
 
 This means that whatever changes in the future, the component will always have
 the same value, we can just apply them once and forget their value.

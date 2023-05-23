@@ -487,8 +487,8 @@ impl IntoModify for UserColor {
         - [ ] Complete implementation
             - [X] RichText::root_mask_for
             - [ ] RichText::binding_modify
-            - [ ] Make::purge_static
-            - [ ] Make::modify_deps
+            - [X] Make::purge_static
+            - [X] Make::modify_deps
             - [ ] Make::binding_mask
     - [X] extract `store` module into individual crate.
     - [X] VarMatrix → JaggedArray

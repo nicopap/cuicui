@@ -1,11 +1,12 @@
 //! Create a dependency tree
 
 use std::fmt;
-use std::{collections::BTreeSet, ops::Range};
+use std::ops::Range;
 
 use datazoo::{enum_multimap, sorted, BitMultiMap, EnumBitMatrix};
 use enumset::EnumSet;
 use log::trace;
+use smallvec::SmallVec;
 
 use crate::binding::Id;
 use crate::prefab::{FieldsOf, Modify, Prefab, PrefabContext, PrefabField};
@@ -16,6 +17,7 @@ pub(super) struct Make<'a, P: Prefab> {
     default_section: &'a P::Item,
     modifiers: Vec<super::Modifier<P>>,
     bindings: sorted::ByKeyBox<Id, Range<u32>>,
+    errors: Vec<anyhow::Error>,
 }
 impl<P: Prefab> fmt::Debug for Make<'_, P>
 where
@@ -36,6 +38,12 @@ where
     P::Item: Clone + fmt::Debug,
     PrefabField<P>: fmt::Debug,
 {
+    /// Initialize a [`Make`] to create a [`Resolver`] using [`Make::build`].
+    ///
+    /// # Limitations
+    ///
+    /// - All [`Modify::changes`] of `make_modifiers` **must** be a subset of [`Modify::depends`].
+    /// - [`Modify::depends`] may have exactly 1 or 0 components.
     pub(super) fn new(make_modifiers: Vec<MakeModify<P>>, default_section: &'a P::Item) -> Self {
         let mut modifiers = Vec::with_capacity(make_modifiers.len());
         let mut bindings = Vec::with_capacity(make_modifiers.len());
@@ -52,6 +60,7 @@ where
             modifiers,
             bindings: bindings.into(),
             default_section,
+            errors: Vec::new(),
         }
     }
     fn change_root_mask(&self, change: PrefabField<P>) -> impl Iterator<Item = u32> + '_ {
@@ -69,46 +78,46 @@ where
     ///
     /// If the bit is enabled, then it shouldn't be updated.
     fn root_mask(&self) -> EnumBitMatrix<PrefabField<P>> {
-        // TODO(err): unwrap
-        let section_count = self.modifiers.iter().map(|m| m.range.end).max().unwrap();
-        let mut root_mask = EnumBitMatrix::new(section_count);
+        let section_count = self.modifiers.iter().map(|m| m.range.end).max();
+        let mut root_mask = EnumBitMatrix::new(section_count.unwrap_or(0));
 
         for change in EnumSet::ALL {
             root_mask.set_row(change, self.change_root_mask(change));
         }
         root_mask
     }
-    // TODO(clean): shouldn't need `ctx`, but since it would require creating
-    // references, it is impossible to create an ad-hoc empty one.
-    /// Apply all `Modify` that do depend on nothing and remove them from `modifiers`.
+    /// Apply all static `Modify` and remove them from `modifiers`.
+    ///
+    /// A `Modify` is static when:
+    /// - Either depends on nothing or depends on the
+    ///    output of a static modifier.  
+    /// - For all its items of influences, the components it changes are changed
+    ///    by a static modifier child of itself. (TODO(pref))
+    ///
+    /// Note that if there is no `modifiers`, this does nothing.
     fn purge_static(&mut self, ctx: &PrefabContext<'_, P>) -> Vec<P::Item> {
-        let is_indy = |modify: &super::Modifier<P>| modify.inner.depends() == EnumSet::EMPTY;
-        let independents: BTreeSet<_> = self
-            .modifiers
-            .iter()
-            .enumerate()
-            .filter_map(|(i, modify)| is_indy(modify).then_some(i))
-            .map(Idx::new)
-            .collect();
+        let Some(section_count) = self.modifiers.iter().map(|m| m.range.end).max() else {
+            return vec![]
+        };
+        let section_count = usize::try_from(section_count).unwrap();
+        let mut sections = vec![self.default_section.clone(); section_count];
 
-        // TODO(err): unwrap
-        let section_count = self.modifiers.iter().map(|m| m.range.end).max().unwrap();
-        let mut sections = vec![self.default_section.clone(); section_count as usize];
-
-        let mut i = 0;
+        let mut checker = CheckStatic::new();
         self.modifiers.retain(|modifier| {
-            let is_dependent = !independents.contains(&Idx(i));
+            let is_static = checker.is_static(modifier);
 
-            i += 1;
-            if is_dependent {
+            if !is_static {
                 return true;
             }
             for section in modifier.range.clone() {
-                modifier
-                    .inner
-                    .apply(ctx, sections.get_mut(section as usize).unwrap())
-                    // TODO(err): unwrap
-                    .unwrap();
+                let section = usize::try_from(section).unwrap();
+
+                // SAFETY: sections.len() == max(modifiers.range.end)
+                let section = unsafe { sections.get_unchecked_mut(section) };
+
+                if let Err(err) = modifier.inner.apply(ctx, section) {
+                    self.errors.push(err);
+                };
             }
             false
         });
@@ -120,7 +129,7 @@ where
         self.modifiers
             .iter()
             .enumerate()
-            .map(|(i, m)| (Idx(i as u32), m))
+            .map(|(i, m)| (Idx::new(i), m))
     }
     /// The list of `Modify`s that directly depend on a root property.
     ///
@@ -168,7 +177,6 @@ where
             ret
         })
     }
-    // TODO(clean): verify that I can do that independently of the change.
     /// The list of `Modify`s that depend on other `Modify` for their value.
     ///
     /// This is a list of parent→child tuples.
@@ -216,5 +224,81 @@ where
             root_mask,
         };
         (with_deps, sections)
+    }
+}
+struct CheckStatic<P: Prefab> {
+    parent_influence_ends: SmallVec<[u32; 4]>,
+    static_parent_fields: SmallVec<[FieldsOf<P>; 4]>,
+    all_static_fields: FieldsOf<P>,
+}
+impl<P: Prefab> CheckStatic<P> {
+    fn new() -> Self {
+        CheckStatic {
+            parent_influence_ends: SmallVec::default(),
+            static_parent_fields: SmallVec::default(),
+            all_static_fields: EnumSet::EMPTY,
+        }
+    }
+    fn ends_before_last(&self, modify: &super::Modifier<P>) -> bool {
+        self.parent_influence_ends
+            .last()
+            .map_or(true, |end| modify.range.end < *end)
+    }
+    fn pop_parent(&mut self) {
+        if let Some(to_reset) = self.static_parent_fields.pop() {
+            // unwrap: `parent_influence_ends` and `static_parent_fields` always
+            // have the same size
+            self.parent_influence_ends.pop().unwrap();
+
+            self.all_static_fields -= to_reset;
+        }
+    }
+    fn push_parent(&mut self, modify: &super::Modifier<P>) {
+        let changes = modify.inner.changes();
+        let old_changes = self.all_static_fields;
+
+        let new_changes = changes - old_changes;
+        let new_layer = self.ends_before_last(modify);
+
+        if !new_changes.is_empty() {
+            self.all_static_fields |= changes;
+
+            if new_layer {
+                // Keep track of fields we added to `all_static_fields` so that
+                // we can remove them later
+                self.static_parent_fields.push(new_changes);
+                self.parent_influence_ends.push(modify.range.end);
+            } else {
+                // unwrap: never fails because of `ends_before_last`
+                let last_changes = self.static_parent_fields.last_mut().unwrap();
+                *last_changes |= changes;
+            }
+        }
+    }
+    fn update_parents(&mut self, modify: &super::Modifier<P>) {
+        let end = modify.range.end;
+        // any parent that has an end smaller than modify is actually not a parent,
+        // so we pop them.
+        let first_real_parent = self
+            .parent_influence_ends
+            .iter()
+            .rposition(|p_end| *p_end <= end);
+        let len = self.parent_influence_ends.len();
+
+        let pop_count = first_real_parent.map_or(len, |i| len - i);
+        for _ in 0..pop_count {
+            self.pop_parent();
+        }
+    }
+    fn is_static(&mut self, modify: &super::Modifier<P>) -> bool {
+        self.update_parents(modify);
+
+        let mut depends = modify.inner.depends().iter();
+        let is_static = depends.all(|dep| self.all_static_fields.contains(dep));
+
+        if is_static {
+            self.push_parent(modify);
+        }
+        is_static
     }
 }
