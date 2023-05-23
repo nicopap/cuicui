@@ -41,14 +41,16 @@ impl WorldBindings {
 
 pub fn update_text(
     mut query: Query<(&mut RichTextData, &mut Text)>,
-    world_bindings: ResMut<WorldBindings>,
+    mut world_bindings: ResMut<WorldBindings>,
     fonts: Res<Assets<Font>>,
 ) {
     for (mut rich, mut to_update) in &mut query {
         rich.update(&mut to_update, &world_bindings.0, &|name| {
             Some(fonts.get_handle(HandleId::from(name)))
         });
+        rich.bindings.reset_changes();
     }
+    world_bindings.0.reset_changes();
 }
 
 /// Plugin to update bevy [`Text`] component based on [`WorldBindings`]

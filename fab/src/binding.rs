@@ -142,6 +142,10 @@ impl<P: Prefab> World<P> {
             root: &self.bindings,
         })
     }
+
+    pub fn reset_changes(&mut self) {
+        self.bindings.values_mut().for_each(|v| v.0 = false);
+    }
 }
 impl<'a, P: Prefab> View<'a, P> {
     pub(crate) fn changed(&self) -> impl Iterator<Item = (&Id, &P::Modify)> + '_ {

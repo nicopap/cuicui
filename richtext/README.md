@@ -465,7 +465,7 @@ impl IntoModify for UserColor {
   - [X] Replace hackish implementation of `Bundle` with simple macros
   - [X] Remove dead code (existed only so that it can be stored in git history for later retrieval)
 - [ ] Optimization: Early abort on resource extracted is not changed.
-- [ ] Optimization: CRITICAL: fix bindng change bit not being reset after application.
+- [X] Optimization: CRITICAL: fix bindng change bit not being reset after application.
 - [ ] (unsure) Optimization: Consider `inplace_it` crate for some arrays.
 - [ ] Optimization: compare Target values _before_ formatting them
 - [ ] Optimization: do not create a string, but instead `clear` and `write!` to 
@@ -498,8 +498,10 @@ impl IntoModify for UserColor {
         - [X] It should be generic over what is being modified
         - [X] `sort` type-safe slices for usage in `Modifiers` and `Dependencies`
               to ensure we indeed sort our stuff correctly
-- [ ] Provide a fork of `pl_lens` with change detection to replace the error-prone
-      `Tracked::update` and allow projections on `Modify::apply`
+- [X] ~~Provide a fork of `pl_lens` with change detection to replace the error-prone
+      `Tracked::update` and allow projections on `Modify::apply`~~
+      There is a better way, see `design_doc/fab/track_a_field.md`
+- [ ] Complete `fab_derive`
 - [ ] consider renaming `Modify`.
 - [ ] (unsure) optimization: take inspiration from https://github.com/Wallacoloo/jagged_array/blob/master/src/lib.rs#L68 for `VarMatrix`s impls
 - [ ] (unsure) better format string error messages
