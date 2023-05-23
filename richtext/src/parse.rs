@@ -14,7 +14,7 @@ mod structs;
 
 use std::borrow::Cow;
 
-use fab::resolve::MakeModifier as FabModifier;
+use fab::resolve::MakeModify as FabModifier;
 use winnow::{
     ascii::{alpha1, alphanumeric1, digit1, escaped, multispace0},
     branch::alt,

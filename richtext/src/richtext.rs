@@ -9,7 +9,7 @@ use bevy::{
 use enumset::{EnumSetType, __internal::EnumSetTypePrivate};
 use fab::{
     binding,
-    prefab::{Prefab, Tracked},
+    prefab::{Changing, Prefab},
     resolve::Resolver,
 };
 
@@ -25,12 +25,12 @@ pub enum Field {
     Font,
     Color,
 }
-pub struct TrackedText(Tracked<TextPrefab>);
+pub struct TrackedText(Changing<TextPrefab>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TextPrefab {}
 impl Prefab for TextPrefab {
-    type Modifiers = ModifyBox;
+    type Modify = ModifyBox;
     type Item = TextSection;
     type Items = Vec<TextSection>;
 }
@@ -71,7 +71,7 @@ impl RichTextData {
     }
     pub fn new(text: RichText, inner: TextSection) -> Self {
         RichTextData {
-            inner: TrackedText(Tracked::new(inner)),
+            inner: TrackedText(Changing::new(inner)),
             bindings: Default::default(),
             text,
         }

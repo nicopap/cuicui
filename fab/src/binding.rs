@@ -7,8 +7,17 @@ use datazoo::SortedPairIterator;
 use smallvec::SmallVec;
 use string_interner::{backend::StringBackend, StringInterner, Symbol};
 
+#[cfg(doc)]
+use crate::prefab::Modify;
+
 use crate::prefab::Prefab;
 
+/// A binding id used in [`World`] and [`Local`] to associate a name to a
+/// [`Modify`].
+///
+/// [`World`] [interns] strings used to identify bindings for efficiency.
+///
+/// [interns]: https://en.wikipedia.org/wiki/String_interning
 #[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Id(pub(crate) u32);
 
@@ -20,13 +29,13 @@ impl fmt::Debug for Id {
 
 #[derive(Debug)]
 pub struct Local<P: Prefab> {
-    bindings: BTreeMap<Id, (bool, P::Modifiers)>,
-    buffered: Vec<(Box<str>, P::Modifiers)>,
+    bindings: BTreeMap<Id, (bool, P::Modify)>,
+    buffered: Vec<(Box<str>, P::Modify)>,
     resolved: SmallVec<[(Box<str>, Id); 2]>,
 }
 #[derive(Debug)]
 pub struct World<P: Prefab> {
-    bindings: BTreeMap<Id, (bool, P::Modifiers)>,
+    bindings: BTreeMap<Id, (bool, P::Modify)>,
     interner: StringInterner<StringBackend<Id>>,
 }
 impl<P: Prefab> Default for Local<P> {
@@ -48,15 +57,15 @@ impl<P: Prefab> Default for World<P> {
 }
 #[derive(Clone, Copy)]
 pub struct View<'a, P: Prefab> {
-    root: &'a BTreeMap<Id, (bool, P::Modifiers)>,
-    overlay: Option<&'a BTreeMap<Id, (bool, P::Modifiers)>>,
+    root: &'a BTreeMap<Id, (bool, P::Modify)>,
+    overlay: Option<&'a BTreeMap<Id, (bool, P::Modify)>>,
 }
 
 impl<P: Prefab> Local<P> {
-    pub fn set_by_id(&mut self, id: Id, value: P::Modifiers) {
+    pub fn set_by_id(&mut self, id: Id, value: P::Modify) {
         self.bindings.insert(id, (true, value));
     }
-    pub fn set(&mut self, binding_name: impl Into<String>, value: P::Modifiers) {
+    pub fn set(&mut self, binding_name: impl Into<String>, value: P::Modify) {
         let name = binding_name.into();
         let is_name = |(known, _): &(Box<str>, _)| known.as_ref().cmp(&name);
         if let Ok(resolved) = self.resolved.binary_search_by(is_name) {
@@ -85,19 +94,19 @@ impl<P: Prefab> Local<P> {
 }
 impl<P: Prefab> World<P> {
     // TODO(err): Should return Result
-    pub fn set(&mut self, key: &str, value: P::Modifiers) -> Option<()> {
+    pub fn set(&mut self, key: &str, value: P::Modify) -> Option<()> {
         let id = self.interner.get(key)?;
         self.set_id(id, value);
         Some(())
     }
-    pub fn set_id(&mut self, id: Id, value: P::Modifiers) {
+    pub fn set_id(&mut self, id: Id, value: P::Modify) {
         self.bindings.insert(id, (true, value));
     }
     /// Like `set` but do not mark as modified if `value` is same as previous
     /// value for `key`.
-    pub fn set_neq(&mut self, key: &str, value: P::Modifiers) -> Option<()>
+    pub fn set_neq(&mut self, key: &str, value: P::Modify) -> Option<()>
     where
-        P::Modifiers: PartialEq,
+        P::Modify: PartialEq,
     {
         let id = self.interner.get(key)?;
         self.set_id_neq(id, value);
@@ -105,9 +114,9 @@ impl<P: Prefab> World<P> {
     }
     /// Like `set_id` but do not mark as modified if `value` is same as previous
     /// value for `id`.
-    pub fn set_id_neq(&mut self, id: Id, value: P::Modifiers)
+    pub fn set_id_neq(&mut self, id: Id, value: P::Modify)
     where
-        P::Modifiers: PartialEq,
+        P::Modify: PartialEq,
     {
         match self.bindings.get_mut(&id) {
             Some(old_value) => {
@@ -135,7 +144,7 @@ impl<P: Prefab> World<P> {
     }
 }
 impl<'a, P: Prefab> View<'a, P> {
-    pub(crate) fn changed(&self) -> impl Iterator<Item = (&Id, &P::Modifiers)> + '_ {
+    pub(crate) fn changed(&self) -> impl Iterator<Item = (&Id, &P::Modify)> + '_ {
         // Due to Rust's poor type inference on closures, I must write this inline:
         // let changed = |(changed, modify): &(bool, _)| changed.then_some(modify);
         let overlay = self.overlay.iter().flat_map(|b| *b);
@@ -144,7 +153,7 @@ impl<'a, P: Prefab> View<'a, P> {
 
         overlay.outer_join(root).filter_map_values(|(l, r)| l.or(r))
     }
-    pub fn get(&self, id: Id) -> Option<&'a P::Modifiers> {
+    pub fn get(&self, id: Id) -> Option<&'a P::Modify> {
         self.overlay
             .and_then(|btm| btm.get(&id))
             .or_else(|| self.root.get(&id))

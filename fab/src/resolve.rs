@@ -6,7 +6,7 @@ use datazoo::{sorted, BitMultiMap, EnumBitMatrix, EnumMultiMap, SortedIterator};
 use log::warn;
 
 use crate::binding::{Id, View};
-use crate::prefab::{Context, Field, FieldsOf, Indexed, Modify, Prefab, Tracked};
+use crate::prefab::{Changing, FieldsOf, Indexed, Modify, Prefab, PrefabContext, PrefabField};
 
 /// Index in `modifies`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -22,13 +22,19 @@ impl ModifyIndex {
     }
 }
 
+/// A [`Modify`] either described as a [`Prefab::Modify`] or a binding [`Id`].
 #[derive(Debug)]
 pub enum ModifyKind<P: Prefab> {
     Bound(Id),
-    Modify(P::Modifiers),
+    Modify(P::Modify),
 }
+
+/// Describes a [`Modify`] affecting a range of items in the [`Prefab`]
+/// and dependency described as [`ModifyKind`].
+///
+/// Used in [`Resolver::new`] to create a [`Resolver`].
 #[derive(Debug)]
-pub struct MakeModifier<P: Prefab> {
+pub struct MakeModify<P: Prefab> {
     pub kind: ModifyKind<P>,
     pub range: Range<u32>,
 }
@@ -36,14 +42,14 @@ pub struct MakeModifier<P: Prefab> {
 /// A [`ModifyBox`] that apply to a given [`Range`] of [`TextSection`]s on a [`Text`].
 struct Modifier<P: Prefab> {
     /// The modifier to apply in the given `range`.
-    inner: P::Modifiers,
+    inner: P::Modify,
 
     /// The range to which to apply the `modify`.
     range: Range<u32>,
 }
 impl<P: Prefab> fmt::Debug for Modifier<P>
 where
-    P::Modifiers: fmt::Debug,
+    P::Modify: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Modifier")
@@ -58,7 +64,7 @@ pub struct Resolver<P: Prefab, const MOD_COUNT: usize> {
     modifiers: Box<[Modifier<P>]>,
 
     /// `Modify` that can be triggered by a context change
-    direct_deps: EnumMultiMap<Field<P>, ModifyIndex, MOD_COUNT>,
+    direct_deps: EnumMultiMap<PrefabField<P>, ModifyIndex, MOD_COUNT>,
 
     // TODO(feat): RichText without m2m dependency. This is fairly costly to
     // build and uses several kilobytes of memory.
@@ -73,25 +79,25 @@ pub struct Resolver<P: Prefab, const MOD_COUNT: usize> {
     /// Note that this prevents having 1 binding to N instances.
     bindings: sorted::ByKeyBox<Id, Range<u32>>,
 
-    root_mask: EnumBitMatrix<Field<P>>,
+    root_mask: EnumBitMatrix<PrefabField<P>>,
 }
 
 struct Evaluator<'a, P: Prefab, const MC: usize> {
     root: &'a P::Item,
     graph: &'a Resolver<P, MC>,
-    ctx: &'a Context<'a, P>,
+    ctx: &'a PrefabContext<'a, P>,
     to_update: &'a mut P::Items,
 }
 
 impl<P: Prefab, const MC: usize> Resolver<P, MC>
 where
     P::Item: Clone + fmt::Debug,
-    Field<P>: fmt::Debug,
+    PrefabField<P>: fmt::Debug,
 {
     pub fn new(
-        modifiers: Vec<MakeModifier<P>>,
+        modifiers: Vec<MakeModify<P>>,
         default_section: &P::Item,
-        ctx: &Context<'_, P>,
+        ctx: &PrefabContext<'_, P>,
     ) -> (Self, Vec<P::Item>) {
         make::Make::new(modifiers, default_section).build(ctx)
     }
@@ -119,19 +125,19 @@ where
     pub fn update<'a>(
         &'a self,
         to_update: &'a mut P::Items,
-        updates: &'a Tracked<P>,
+        updates: &'a Changing<P>,
         bindings: View<'a, P>,
-        ctx: &'a Context<'a, P>,
+        ctx: &'a PrefabContext<'a, P>,
     ) {
         let bindings = bindings.changed();
-        let Tracked { updated, value } = updates;
+        let Changing { updated, value } = updates;
         Evaluator { graph: self, ctx, to_update, root: value }.eval(*updated, bindings);
     }
 }
 impl<'a, P: Prefab, const MC: usize> Evaluator<'a, P, MC>
 where
     P::Item: Clone + fmt::Debug,
-    Field<P>: fmt::Debug,
+    PrefabField<P>: fmt::Debug,
 {
     fn eval_exact(
         &mut self,
@@ -167,9 +173,9 @@ where
     fn eval<'b>(
         &mut self,
         changes: FieldsOf<P>,
-        bindings: impl Iterator<Item = (&'b Id, &'b P::Modifiers)>,
+        bindings: impl Iterator<Item = (&'b Id, &'b P::Modify)>,
     ) where
-        P::Modifiers: 'b,
+        P::Modify: 'b,
     {
         for (id, modify) in bindings {
             let Some((_, range)) = self.graph.binding_range(*id) else {

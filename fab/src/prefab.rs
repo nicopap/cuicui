@@ -1,5 +1,8 @@
 use std::fmt;
 
+#[cfg(doc)]
+use crate::resolve::Resolver;
+
 use enumset::{EnumSet, EnumSetType};
 
 pub trait Indexed<T: ?Sized> {
@@ -16,21 +19,50 @@ impl<T> Indexed<T> for Vec<T> {
     }
 }
 
-type Keys<M, I> = EnumSet<Key<M, I>>;
+/// The [`Modify::Field`] of the [`Prefab::Modify`] of `P`.
+pub type PrefabField<P> = Key<<P as Prefab>::Modify, <P as Prefab>::Item>;
 type Key<M, I> = <M as Modify<I>>::Field;
-type Ctx<'a, M, I> = <M as Modify<I>>::Context<'a>;
-pub type FieldsOf<P> = Keys<<P as Prefab>::Modifiers, <P as Prefab>::Item>;
-pub type Field<P> = Key<<P as Prefab>::Modifiers, <P as Prefab>::Item>;
-pub type Context<'a, P> = Ctx<'a, <P as Prefab>::Modifiers, <P as Prefab>::Item>;
 
+/// Several [`Modify::Field`] of the [`Prefab::Modify`] of `P`.
+pub type FieldsOf<P> = EnumSet<PrefabField<P>>;
+
+/// The [`Modify::Context`] of the [`Prefab::Modify`] of `P`.
+pub type PrefabContext<'a, P> = Ctx<'a, <P as Prefab>::Modify, <P as Prefab>::Item>;
+type Ctx<'a, M, I> = <M as Modify<I>>::Context<'a>;
+
+/// A set of operations on `I`.
+///
+/// A type `T` that implements `Modify<I>` represents a set of operations
+/// possible on `I` — an `item`.
+///
+/// A `Modify` value declares which fields of `I` it will [read] and [update].
+/// [`Modify::apply`] takes an `I` and updates its.
+/// This allows fine grained update propagation in [`Resolver`].
+///
+/// `cuicui_fab` provides the [`impl_modify!`] macro to define [`Modify`]
+/// more concisely and with less footguns.
+///
+/// [read]: Modify::depends
+/// [update]: Modify::changes
 pub trait Modify<I: ?Sized> {
+    /// The [set](EnumSet) elements of fields that `Self` accesses on `I`.
     type Field: EnumSetType;
+
+    /// An additional context **outside of `I`** that is relevant to operations
+    /// on `I`.
     type Context<'a>
     where
         Self: 'a;
 
     /// Apply this modifier to the `item`.
-    fn apply(&self, ctx: &Self::Context<'_>, section: &mut I) -> anyhow::Result<()>;
+    ///
+    /// It is important that `apply`:
+    ///
+    /// - only reads [`Self::Field`]s returned by [`Self::depends`].
+    /// - only updates [`Self::Field`]s returned by [`Self::changes`].
+    ///
+    /// Otherwise, [`Resolver`] will fail to work properly.
+    fn apply(&self, ctx: &Self::Context<'_>, item: &mut I) -> anyhow::Result<()>;
 
     /// On what data in `item` does this modifier depends?
     fn depends(&self) -> EnumSet<Self::Field>;
@@ -39,16 +71,33 @@ pub trait Modify<I: ?Sized> {
     fn changes(&self) -> EnumSet<Self::Field>;
 }
 
+/// A series of [`Prefab::Item`] that allow [`Prefab::Modify`] operations.
+///
+/// A `Prefab` may never exists. It's an interface to work with [`Modify`]
+/// in a principled way through [`Resolver`]s.
 pub trait Prefab {
-    type Modifiers: Modify<Self::Item> + fmt::Debug;
+    /// The individual element of the `Prefab`.
     type Item;
+
+    /// Operations allowed on [`Self::Item`].
+    type Modify: Modify<Self::Item> + fmt::Debug;
+
+    /// The underlying [`Self::Item`] storage.
     type Items: Indexed<Self::Item>;
 }
-pub struct Tracked<P: Prefab> {
+
+/// Holds a [`Prefab::Item`] and keeps track of changes to it.
+///
+/// You need to use [`Changing::update`] to access the `Item`, this will keep
+/// track of the updated fields.
+///
+/// To reset the field update tracking, use [`Changing::reset_updated`].
+pub struct Changing<P: Prefab> {
     pub(crate) updated: FieldsOf<P>,
     pub(crate) value: P::Item,
 }
-impl<P: Prefab> Tracked<P> {
+impl<P: Prefab> Changing<P> {
+    /// Store this `value` in a `Changing`, with no updated field.
     pub fn new(value: P::Item) -> Self {
         Self { updated: EnumSet::EMPTY, value }
     }
