@@ -3,7 +3,7 @@
 | ❗ **THIS IS A WIP, MOST FEATURES ARE NOT IMPLEMENTED YET, SEE TODO** ❗ |
 |--------------------------------------------------------------------------|
 
-A quick and dirty UI lib for bevy built on bevy's excellent 2d primitives.
+A mad experiment in making a principled UI that integrates with bevy.
 
 ## Why?
 

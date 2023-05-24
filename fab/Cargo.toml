@@ -23,6 +23,7 @@ string-interner = { version = "0.14", default-features = false, features = ["std
 thiserror = "1"
 
 datazoo = { path = "../datazoo", package = "cuicui_datazoo" }
+fab_derive  = { path = "../fab_derive", package = "cuicui_fab_derive" }
 
 [dev-dependencies]
 pretty_assertions = "1.3"

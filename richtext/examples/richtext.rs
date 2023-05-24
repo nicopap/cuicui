@@ -13,7 +13,7 @@ fn main() {
             DefaultPlugins.set(bevy::log::LogPlugin {
                 level: bevy::log::Level::DEBUG,
                 filter:
-                    "wgpu=warn,bevy_ecs=info,naga=info,bevy_app=info,gilrs_core=info,gilrs=info,cuicui_richtext::show=debug,cuicui_richtext::modifiers=trace"
+                    "wgpu=warn,bevy_ecs=info,naga=info,bevy_app=info,gilrs_core=info,gilrs=info,cuicui_richtext::show=debug,cuicui_fab=trace"
                         .to_string(),
             }),
         )

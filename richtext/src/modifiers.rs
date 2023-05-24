@@ -6,7 +6,7 @@ use bevy::prelude::{trace, FromReflect, Reflect};
 use bevy::reflect::ReflectFromReflect;
 use bevy::text::TextSection;
 use enumset::EnumSet;
-use fab::prefab::Modify;
+use fab::{impl_modify, prefab::Modify};
 use thiserror::Error;
 
 use crate::richtext::{self, Field, GetFont};
@@ -69,25 +69,6 @@ enum Errors {
     FontNotLoaded(String),
 }
 
-/// A file path to a font, loaded through other means.
-#[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
-#[reflect(FromReflect)]
-pub struct Font(pub String);
-impl TextModify for Font {
-    fn apply(&self, get_font: &GetFont, text: &mut TextSection) -> Result<(), AnyError> {
-        let err = || Errors::FontNotLoaded(self.0.clone());
-        trace!("Apply =Font=: {:?}", self.0);
-        text.style.font = get_font(&self.0).ok_or_else(err)?;
-        Ok(())
-    }
-    fn depends(&self) -> EnumSet<Field> {
-        EnumSet::EMPTY
-    }
-    fn changes(&self) -> EnumSet<Field> {
-        richtext::Field::Font.into()
-    }
-    common_modify_methods! {}
-}
 impl Parse for Font {
     const NAME: &'static str = "Font";
 
@@ -95,50 +76,11 @@ impl Parse for Font {
         Ok(Box::new(Font(input.to_string())))
     }
 }
-
-/// Size relative to parent text size.
-#[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
-#[reflect(FromReflect)]
-pub struct RelSize(pub f32);
-impl TextModify for RelSize {
-    fn apply(&self, _: &GetFont, text: &mut TextSection) -> Result<(), AnyError> {
-        trace!("Apply #RelSize#: {:?}", self.0);
-        text.style.font_size *= self.0;
-        Ok(())
-    }
-    fn depends(&self) -> EnumSet<Field> {
-        richtext::Field::FontSize.into()
-    }
-    fn changes(&self) -> EnumSet<Field> {
-        richtext::Field::FontSize.into()
-    }
-    common_modify_methods! {}
-}
 impl Parse for RelSize {
     const NAME: &'static str = "RelSize";
     fn parse(input: &str) -> Result<ModifyBox, AnyError> {
         Ok(Box::new(RelSize(input.parse()?)))
     }
-}
-
-/// Color.
-#[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
-#[reflect(FromReflect)]
-pub struct Color(pub bevy::prelude::Color);
-impl TextModify for Color {
-    fn apply(&self, _: &GetFont, text: &mut TextSection) -> Result<(), AnyError> {
-        // println!("Apply new color: {:?}", self.0);
-        trace!("Apply ~COLOR~: {:?}", self.0);
-        text.style.color = self.0;
-        Ok(())
-    }
-    fn depends(&self) -> EnumSet<Field> {
-        EnumSet::EMPTY
-    }
-    fn changes(&self) -> EnumSet<Field> {
-        richtext::Field::Color.into()
-    }
-    common_modify_methods! {}
 }
 impl Parse for Color {
     const NAME: &'static str = "Color";
@@ -147,27 +89,46 @@ impl Parse for Color {
     }
 }
 
-/// A section text, may either be preset or extracted.
-#[derive(Reflect, PartialEq, Debug, Clone, FromReflect)]
-#[reflect(FromReflect)]
-pub struct Content(pub Cow<'static, str>);
-impl TextModify for Content {
-    fn apply(&self, _: &GetFont, text: &mut TextSection) -> Result<(), AnyError> {
-        trace!("Apply $CONTENT$: {:?}", self.0);
-        text.value.clear();
-        text.value.push_str(&self.0);
+#[impl_modify]
+#[modify(derive(Reflect, PartialEq, Debug, Clone, FromReflect))]
+impl Modify<TextSection> for TextModifiers {
+    type Context<'a> = GetFont<'a>;
+
+    #[modify(context(ctx), write(.style.font))]
+    fn font(path: Cow<'static, str>, ctx: &GetFont) -> anyhow::Result<Handle<Font>> {
+        let err = || Errors::FontNotLoaded(self.0.clone());
+        trace!("Apply =font=: {path:?}");
+        get_font(&self.0).ok_or_else(err)
+    }
+    #[modify(read_write(.style.font_size))]
+    fn rel_size(relative_size: f32, font_size: &mut f32) -> anyhow::Result<()> {
+        trace!("Apply =rel_size=: {relative_size:?}");
+        *font_size *= relative_size;
         Ok(())
     }
-    fn depends(&self) -> EnumSet<Field> {
-        EnumSet::EMPTY
+    #[modify(write(.style.color))]
+    fn color(new: Color) -> anyhow::Result<Color> {
+        trace!("Apply ~COLOR~: {new:?}");
+        Ok(new)
     }
-    fn changes(&self) -> EnumSet<Field> {
-        // TODO(clean): It is not true that it doesnt' changee anything, but
-        // Content is special-cased RichText so as to avoid extra storage
-        EnumSet::EMPTY
+    #[modify(write_mut(.value))]
+    fn content(new: Cow<'static, str>, value: &mut String) -> anyhow::Result<()> {
+        trace!("Apply $CONTENT$: {new:?}");
+        value.clear();
+        value.push_str(&self.0);
+        Ok(())
     }
-    common_modify_methods! {}
+    #[modify(dynamic_read_write(depends, changes), context(ctx))]
+    fn dynamic(boxed: ModifyBox, ctx: &GetFont, it: &mut TextSection) -> anyhow::Result<()> {
+        boxed.apply(ctx, it)
+    }
 }
+impl<T: TextModify> From<T> for TextModifiers {
+    fn from(value: T) -> Self {
+        TextModifiers::Dynamic { depends: value.depends(), changes: value.changes() }
+    }
+}
+
 impl Parse for Content {
     const NAME: &'static str = "Content";
     fn parse(input: &str) -> Result<ModifyBox, AnyError> {

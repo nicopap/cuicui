@@ -53,7 +53,14 @@ const TEXT_COLOR: Color = Color::rgb(0.5, 0.5, 1.0);
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(
+            DefaultPlugins.set(bevy::log::LogPlugin {
+                level: bevy::log::Level::DEBUG,
+                filter:
+                    "wgpu=warn,bevy_ecs=info,naga=info,bevy_app=info,gilrs_core=info,gilrs=info,cuicui_richtext::show=debug,cuicui_fab=trace"
+                        .to_string(),
+            }),
+        )
         .init_resource::<FontHandles>()
         .add_plugin(RichTextPlugin)
         .register_type::<Score>()
