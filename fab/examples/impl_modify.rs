@@ -4,7 +4,7 @@ use cuicui_fab::{
 };
 
 #[derive(Clone, Debug)]
-struct Person {
+pub struct Person {
     name: &'static str,
     surname: &'static str,
     age: usize,

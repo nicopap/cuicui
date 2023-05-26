@@ -1,8 +1,8 @@
 use std::mem;
 
-use bevy::{asset::HandleId, prelude::*, text::BreakLineOn, utils::HashMap};
+use bevy::{prelude::*, text::BreakLineOn, utils::HashMap};
 
-use crate::{parse::interpret, richtext::RichTextData, ResTrackers, RichTextBuilder};
+use crate::{richtext::GetFont, richtext::RichTextData, ResTrackers, RichTextBuilder};
 
 use super::WorldBindings;
 
@@ -84,9 +84,9 @@ pub fn make_rich(
 
         let builder = RichTextBuilder {
             format_string,
-            context: interpret::Context::new(&mut world_bindings.0).with_defaults(),
+            context: &mut world_bindings.0,
             base_section: base_section.clone(),
-            get_font: &|name| Some(fonts.get_handle(HandleId::from(name))),
+            get_font: GetFont::new(&fonts),
             alignment,
             linebreak_behaviour,
             formatters: HashMap::default(),

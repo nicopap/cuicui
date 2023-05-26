@@ -466,11 +466,9 @@ impl IntoModify for UserColor {
   - [X] Remove dead code (existed only so that it can be stored in git history for later retrieval)
 - [ ] Optimization: Early abort on resource extracted is not changed.
 - [X] Optimization: CRITICAL: fix bindng change bit not being reset after application.
-- [ ] (unsure) Optimization: Consider `inplace_it` crate for some arrays.
 - [ ] Optimization: compare Target values _before_ formatting them
-- [ ] Optimization: do not create a string, but instead `clear` and `write!` to 
+- [X] Optimization: do not create a string, but instead `clear` and `write!` to 
       sections.
-- [ ] Way to avoid warnings when inserting the RichText
 - [ ] Better error model than `anyhow`
 - [X] Limit amount of updating by implementing a finer-grained change
       detection system in `RichTextData`
@@ -483,7 +481,7 @@ impl IntoModify for UserColor {
         - [X] Keep ordering of `Modify` that affect the same region
         - [X] Remove need for `Dynamic` in `RichText`
         - [X] Remove `Dynamic` as a modifier
-        - [ ] Remove `Content` as a modifier
+        - [X] ~~Remove `Content` as a modifier~~
         - [ ] Complete implementation
             - [X] RichText::root_mask_for
             - [ ] RichText::binding_modify
@@ -501,8 +499,10 @@ impl IntoModify for UserColor {
 - [X] ~~Provide a fork of `pl_lens` with change detection to replace the error-prone
       `Tracked::update` and allow projections on `Modify::apply`~~
       There is a better way, see `design_doc/fab/track_a_field.md`
-- [ ] Complete `fab_derive`
+- [X] Complete `fab_derive`
 - [ ] consider renaming `Modify`.
+- [ ] (unsure) Optimization: Consider `inplace_it` crate for some arrays.
+- [ ] (unsure) is this still relevant? Way to avoid warnings when inserting the RichText
 - [ ] (unsure) optimization: take inspiration from https://github.com/Wallacoloo/jagged_array/blob/master/src/lib.rs#L68 for `VarMatrix`s impls
 - [ ] (unsure) better format string error messages
 - [ ] (unsure) Allow compile-time verification of rich text spec through a

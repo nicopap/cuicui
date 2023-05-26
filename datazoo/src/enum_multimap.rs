@@ -23,7 +23,6 @@ impl<K: EnumSetType, V: fmt::Debug, const CLM: usize> fmt::Debug for EnumMultiMa
         f.debug_tuple("EnumMultiMap").field(&self.inner).finish()
     }
 }
-#[allow(clippy::let_unit_value)] // false positive: we just want to inline the panic
 impl<K: EnumSetType, V, const CLM: usize> EnumMultiMap<K, V, CLM> {
     /// Compile time error when `CLM` is not the correct value.
     ///
@@ -33,12 +32,12 @@ impl<K: EnumSetType, V, const CLM: usize> EnumMultiMap<K, V, CLM> {
         assert!(K::BIT_WIDTH as usize == CLM + 1);
     };
     pub fn all_rows(&self, set: EnumSet<K>) -> impl Iterator<Item = &V> {
-        let () = Self::SENSIBLE;
+        () = Self::SENSIBLE;
         self.inner.all_rows(set)
     }
     #[must_use]
     pub fn row(&self, key: K) -> &[V] {
-        let () = Self::SENSIBLE;
+        () = Self::SENSIBLE;
         let index = usize::try_from(key.enum_into_u32()).unwrap();
         self.inner.row(index)
     }

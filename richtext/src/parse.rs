@@ -9,12 +9,11 @@
 
 mod color;
 mod error;
-pub(crate) mod interpret;
 mod structs;
 
 use std::borrow::Cow;
 
-use fab::resolve::MakeModify as FabModifier;
+use fab::{binding, resolve::MakeModify as FabModifier};
 use winnow::{
     ascii::{alpha1, alphanumeric1, digit1, escaped, multispace0},
     branch::alt,
@@ -28,7 +27,7 @@ use winnow::{
     Parser,
 };
 
-use crate::{richtext::TextPrefab, show::RuntimeFormat, track::Tracker};
+use crate::{modifiers::TextModifiers, richtext::TextPrefab, show::RuntimeFormat, track::Tracker};
 use structs::{flatten_section, Binding, Dyn, Format, Modifier, Section, Sections};
 
 pub(crate) use color::parse as color;
@@ -177,7 +176,7 @@ fn escape_backslashes(input: &mut Cow<str>) {
     });
 }
 pub(super) fn richtext(
-    ctx: &mut interpret::Context,
+    bindings: &mut binding::World<TextPrefab>,
     input: &str,
     trackers: &mut Vec<Tracker>,
 ) -> AnyResult<Vec<FabModifier<TextPrefab>>> {
@@ -185,7 +184,7 @@ pub(super) fn richtext(
     use fab::resolve::ModifyKind;
     macro_rules! dynbox {
         ($name:expr) => {
-            Ok(ModifyKind::Bound(ctx.bindings.get_or_add($name)))
+            Ok(ModifyKind::Bound(bindings.get_or_add($name)))
         };
     }
     let parsed = sections_inner.parse(input).map_err(|e| e.into_owned())?;
@@ -201,8 +200,6 @@ pub(super) fn richtext(
                 // so that, when we iterate through it, we can apply general, the specific etc.
                 .rev()
                 .map(|Modifier { name, value, subsection_count }| {
-                    let err = || interpret::Error::UnknownModifier(name.to_string());
-                    let parse = ctx.modify_builders.get(name).ok_or_else(err)?;
                     let try_u32 = u32::try_from;
                     let kind = match value {
                         Dyn::Dynamic(Binding::Name(name)) => dynbox!(name),
@@ -221,7 +218,7 @@ pub(super) fn richtext(
                         Dyn::Static(value) => {
                             let mut value: Cow<'static, str> = value.to_owned().into();
                             escape_backslashes(&mut value);
-                            parse(value).map(ModifyKind::Modify)
+                            TextModifiers::parse(name, &value).map(ModifyKind::Modify)
                         }
                     };
                     let modifier = FabModifier {

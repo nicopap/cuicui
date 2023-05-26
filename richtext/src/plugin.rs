@@ -2,14 +2,14 @@
 
 mod make_richtext;
 
-use std::fmt;
+use std::fmt::{self, Write};
 
-use bevy::{asset::HandleId, prelude::*};
+use bevy::prelude::*;
 use fab::binding;
 
 use crate::{
-    modifiers::{self, Content, ModifyBox},
-    richtext::{RichTextData, TextPrefab},
+    modifiers::TextModifiers,
+    richtext::{GetFont, RichTextData, TextPrefab},
     track::{update_tracked_components, update_tracked_resources},
     ResTrackers,
 };
@@ -24,18 +24,19 @@ pub use make_richtext::{make_rich, MakeRichText, MakeRichTextBundle};
 pub struct WorldBindings(binding::World<TextPrefab>);
 impl WorldBindings {
     /// Set a named modifier binding.
-    ///
-    /// Unlike [`RichTextData`] this doesn't check that the key exists or that
-    /// `value` is of the right type.
-    pub fn set(&mut self, key: &str, value: ModifyBox) {
+    pub fn set(&mut self, key: &str, value: TextModifiers) {
         self.0.set_neq(key, value);
     }
-    /// Set a named content binding.
-    ///
-    /// Unlike [`RichTextData`] this doesn't check that the key exists or that
-    /// `value` is of the right type.
+    /// Set a named content binding. This will mark it as changed.
     pub fn set_content(&mut self, key: &str, value: &impl fmt::Display) {
-        self.0.set_neq(key, Box::new(Content::from(value)));
+        if let Some(TextModifiers::Content { statik }) = self.0.get_mut(key) {
+            let to_change = statik.to_mut();
+            to_change.clear();
+            write!(to_change, "{value}").unwrap();
+        } else {
+            let content = TextModifiers::content(value.to_string().into());
+            self.0.set_neq(key, content);
+        }
     }
 }
 
@@ -45,9 +46,7 @@ pub fn update_text(
     fonts: Res<Assets<Font>>,
 ) {
     for (mut rich, mut to_update) in &mut query {
-        rich.update(&mut to_update, &world_bindings.0, &|name| {
-            Some(fonts.get_handle(HandleId::from(name)))
-        });
+        rich.update(&mut to_update, &world_bindings.0, GetFont::new(&fonts));
         rich.bindings.reset_changes();
     }
     world_bindings.0.reset_changes();
@@ -58,11 +57,7 @@ pub fn update_text(
 pub struct RichTextPlugin;
 impl Plugin for RichTextPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<modifiers::Content>()
-            .register_type::<modifiers::RelSize>()
-            .register_type::<modifiers::Font>()
-            .register_type::<modifiers::Color>()
-            .init_resource::<WorldBindings>()
+        app.init_resource::<WorldBindings>()
             .init_resource::<ResTrackers>()
             .add_system(
                 update_tracked_resources

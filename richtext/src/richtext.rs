@@ -1,41 +1,46 @@
-use std::fmt;
+use std::fmt::{self, Write};
 
 use bevy::{
-    prelude::{Component, Handle},
+    asset::HandleId,
+    prelude::{Assets, Component, Handle},
     reflect::{Reflect, Typed},
     text::{BreakLineOn, Font, Text, TextAlignment, TextSection},
     utils::HashMap,
 };
-use enumset::{EnumSetType, __internal::EnumSetTypePrivate};
-use fab::{
-    binding,
-    prefab::{Changing, Prefab},
-    resolve::Resolver,
-};
+use enumset::__internal::EnumSetTypePrivate;
+use fab::{binding, prefab::Changing, prefab::Prefab, resolve::Resolver};
 
-use crate::{modifiers::ModifyBox, parse, parse::interpret, show, show::ShowBox, track::Tracker};
+use crate::{
+    modifiers::{TextModifiers, TextModifiersField},
+    parse, show,
+    show::ShowBox,
+    track::Tracker,
+};
 
 // TODO(clean): Cleanup API, only make pub opaque newtypes.
 
-pub type GetFont<'a> = &'a dyn Fn(&str) -> Option<Handle<Font>>;
-
-#[derive(EnumSetType, Debug, PartialOrd, Ord)]
-pub enum Field {
-    FontSize,
-    Font,
-    Color,
+#[derive(Default)]
+pub struct GetFont<'a>(Option<&'a Assets<Font>>);
+impl<'a> GetFont<'a> {
+    pub fn new(assets: &'a Assets<Font>) -> Self {
+        GetFont(Some(assets))
+    }
+    pub fn get(&self, name: &str) -> Option<Handle<Font>> {
+        self.0.map(|a| a.get_handle(HandleId::from(name)))
+    }
 }
+
 pub struct TrackedText(Changing<TextPrefab>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TextPrefab {}
 impl Prefab for TextPrefab {
-    type Modify = ModifyBox;
+    type Modify = TextModifiers;
     type Item = TextSection;
     type Items = Vec<TextSection>;
 }
 #[derive(Debug)]
-pub struct RichText(Resolver<TextPrefab, { (Field::BIT_WIDTH - 1) as usize }>);
+pub struct RichText(Resolver<TextPrefab, { (TextModifiersField::BIT_WIDTH - 1) as usize }>);
 impl RichText {
     pub fn update(
         &self,
@@ -76,17 +81,28 @@ impl RichTextData {
             text,
         }
     }
-    pub fn set(&mut self, binding_name: impl Into<String>, value: ModifyBox) {
+    pub fn set(&mut self, binding_name: impl Into<String>, value: TextModifiers) {
         self.bindings.set(binding_name, value)
     }
-    pub fn set_by_id(&mut self, id: binding::Id, value: ModifyBox) {
+    /// Set a named content binding. This will mark it as changed.
+    pub fn set_content(&mut self, key: &str, value: &impl fmt::Display) {
+        if let Some(TextModifiers::Content { statik }) = self.bindings.get_mut(key) {
+            let to_change = statik.to_mut();
+            to_change.clear();
+            write!(to_change, "{value}").unwrap();
+        } else {
+            let content = TextModifiers::content(value.to_string().into());
+            self.bindings.set(key, content);
+        }
+    }
+    pub fn set_by_id(&mut self, id: binding::Id, value: TextModifiers) {
         self.bindings.set_by_id(id, value)
     }
 }
 
 pub struct RichTextBuilder<'a> {
     pub format_string: String,
-    pub(crate) context: interpret::Context<'a>,
+    pub(crate) context: &'a mut binding::World<TextPrefab>,
 
     pub base_section: TextSection,
     pub get_font: GetFont<'a>,

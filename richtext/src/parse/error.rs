@@ -1,8 +1,6 @@
 use std::fmt;
 
-use winnow::error::{ContextError, ErrorKind, FromExternalError, ParseError};
-
-use super::interpret;
+use winnow::error::{ContextError, ErrorKind, ParseError};
 
 #[derive(Debug)]
 pub struct Parse<I>(Vec<(I, InternalElem)>);
@@ -18,7 +16,6 @@ impl<I: fmt::Display> fmt::Display for Parse<I> {
         for (input, error) in &self.0 {
             match error {
                 InternalElem::Context(s) => writeln!(f, "in section '{s}', at: {input}")?,
-                InternalElem::Section(s) => writeln!(f, "at {input}: {s}")?,
             }
         }
         Ok(())
@@ -27,7 +24,6 @@ impl<I: fmt::Display> fmt::Display for Parse<I> {
 
 #[derive(Debug)]
 pub(super) enum InternalElem {
-    Section(interpret::Error),
     Context(&'static str),
 }
 impl<I> ParseError<I> for Parse<I> {
@@ -42,10 +38,5 @@ impl<I> ContextError<I> for Parse<I> {
     fn add_context(mut self, input: I, ctx: &'static str) -> Self {
         self.0.push((input, InternalElem::Context(ctx)));
         self
-    }
-}
-impl<I> FromExternalError<I, interpret::Error> for Parse<I> {
-    fn from_external_error(input: I, _: ErrorKind, e: interpret::Error) -> Self {
-        Parse(vec![(input, InternalElem::Section(e))])
     }
 }

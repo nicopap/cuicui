@@ -215,6 +215,7 @@ impl Block {
             impl #modify_ty {
                 #( #ty_constructors )*
             }
+            #[allow(clippy::ptr_arg)]
             impl Modify<#impl_target> for #modify_ty {
                 type Field = #field_ty;
                 type Context #context_generics = #context;

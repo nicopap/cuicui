@@ -95,7 +95,7 @@ fn color_update(time: Res<Time>, mut query: Query<&mut RichTextData, With<ColorT
             blue: (0.50 * seconds).sin() / 2.0 + 0.5,
             alpha: 1.0,
         };
-        text.set("color", Box::new(modifiers::Color(new_color)));
+        text.set("color", modifiers::TextModifiers::color(new_color));
     }
 }
 fn greet_update(
@@ -109,8 +109,7 @@ fn greet_update(
     for mut text in &mut query {
         if at_interval(1.3) {
             *current_guest = (*current_guest + 1) % GUESTS.len();
-            let new_content = modifiers::Content::from(&GUESTS[*current_guest]);
-            text.set("greeted", Box::new(new_content));
+            text.set_content("greeted", &GUESTS[*current_guest]);
         }
     }
 }

@@ -8,14 +8,14 @@ mod resource;
 
 use bevy::{log::trace, prelude::World};
 
-use crate::modifiers::ModifyBox;
+use crate::modifiers::TextModifiers;
 
-pub(crate) type FetchBox = Box<dyn Fn(&World) -> Option<ModifyBox> + Send + Sync + 'static>;
+pub(crate) type FetchBox = Box<dyn Fn(&World) -> Option<TextModifiers> + Send + Sync + 'static>;
 
-fn some_content(input: impl std::fmt::Display) -> Option<ModifyBox> {
-    let content = crate::modifiers::Content::from(input);
+fn some_content(input: impl std::fmt::Display) -> Option<TextModifiers> {
+    let content = TextModifiers::content(input.to_string().into());
     trace!("Content of {content:?}");
-    Some(Box::new(content))
+    Some(content)
 }
 
 pub use component::{update_tracked_components, Tracked};
