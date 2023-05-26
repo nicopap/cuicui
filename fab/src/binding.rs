@@ -65,6 +65,15 @@ impl<P: Prefab> Local<P> {
     pub fn set_by_id(&mut self, id: Id, value: P::Modify) {
         self.bindings.insert(id, (true, value));
     }
+    pub fn get_mut(&mut self, binding_name: impl Into<String>) -> Option<&mut P::Modify> {
+        let name = binding_name.into();
+        let is_name = |(known, _): &(Box<str>, _)| known.as_ref().cmp(&name);
+        let resolved = self.resolved.binary_search_by(is_name).ok()?;
+        let id = self.resolved[resolved].1;
+        let (changed, modify) = self.bindings.get_mut(&id)?;
+        *changed = true;
+        Some(modify)
+    }
     pub fn set(&mut self, binding_name: impl Into<String>, value: P::Modify) {
         let name = binding_name.into();
         let is_name = |(known, _): &(Box<str>, _)| known.as_ref().cmp(&name);
@@ -128,6 +137,13 @@ impl<P: Prefab> World<P> {
                 self.bindings.insert(id, (true, value));
             }
         }
+    }
+    /// Access mutably an existing binding. This sets the `change` bit unconditionally.
+    pub fn get_mut(&mut self, key: &str) -> Option<&mut P::Modify> {
+        let id = self.interner.get(key)?;
+        let (changed, modify) = self.bindings.get_mut(&id)?;
+        *changed = true;
+        Some(modify)
     }
     pub fn get_or_add(&mut self, name: impl AsRef<str>) -> Id {
         self.interner.get_or_intern(name)
