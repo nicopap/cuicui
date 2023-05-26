@@ -69,3 +69,7 @@ impl Modify<City> for ModifyCity {
         item.streets[inner].no = inner;
     }
 }
+
+fn main() {
+    todo!()
+}

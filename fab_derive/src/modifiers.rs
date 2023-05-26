@@ -144,7 +144,7 @@ impl Modify {
         use Modify::*;
         match self {
             Context(_) => Some(quote! { & #ctx }),
-            DynamicReadWrite(_, _, _) => Some(quote! { &mut #item }),
+            DynamicReadWrite(_, _, _) => Some(quote! { #item }),
             WriteMut(path) | ReadWrite(path) => {
                 let path = &path.tokens;
                 Some(quote! { &mut #item #path })
