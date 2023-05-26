@@ -128,9 +128,9 @@ impl<'a> RichTextBuilder<'a> {
         self
     }
     pub fn build(self) -> anyhow::Result<(Text, RichText, Vec<Tracker>)> {
-        let Self { format_string, mut context, base_section, .. } = self;
+        let Self { format_string, context, base_section, .. } = self;
         let mut trackers = Vec::new();
-        let modifiers = parse::richtext(&mut context, &format_string, &mut trackers)?;
+        let modifiers = parse::richtext(context, &format_string, &mut trackers)?;
         let default_section = base_section;
 
         let (rich_text, sections) = Resolver::new(modifiers, &default_section, &self.get_font);

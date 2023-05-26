@@ -23,6 +23,7 @@ impl<K: EnumSetType, V: fmt::Debug, const CLM: usize> fmt::Debug for EnumMultiMa
         f.debug_tuple("EnumMultiMap").field(&self.inner).finish()
     }
 }
+#[allow(clippy::let_unit_value)] // false positive: we just want to inline the panic
 impl<K: EnumSetType, V, const CLM: usize> EnumMultiMap<K, V, CLM> {
     /// Compile time error when `CLM` is not the correct value.
     ///
