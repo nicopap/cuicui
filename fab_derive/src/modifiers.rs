@@ -6,27 +6,54 @@ use syn::{parse::Parse, parse::Parser, punctuated::Punctuated, spanned::Spanned,
 
 use crate::{extensions::GetIdentExt, path::Path};
 
-const VALID_MODIFY_NAMES: &str = "\
-    - `context(ident)`: The context declared as `type Context = Foo;`\n\
-    - `write(.path.in.item)`: path in item to write return value\n\
-    - `write_mut([ident =] .path.in.item)`: write-only path in item to pass as `&mut ident`\n\
-    - `read([ident =] .path.in.item)`: read-only path in item to pass as `&ident`\n\
-    - `read_write([ident =] .path.in.item)`: read/write path in item to pass as `&mut ident`\n\
-    - `dynamic_read_write(read_ident, write_ident)`: pass `&mut item` and read those fields \
-      for checking which paths in item are read from and writen to\n\
-";
+#[derive(Clone, Copy)]
+pub(crate) enum Mode {
+    Read,
+    Write,
+}
+impl Mode {
+    fn pick<T>(self, (read, write): (T, T)) -> T {
+        match self {
+            Mode::Read => read,
+            Mode::Write => write,
+        }
+    }
+    fn is_mode(self) -> impl Fn(&&Modify) -> bool {
+        move |m| match self {
+            Mode::Read => m.is_read(),
+            Mode::Write => m.is_write(),
+        }
+    }
+}
 struct ReadAndWrite {
     read: Ident,
     write: Ident,
+    param_name: Ident,
 }
 impl Parse for ReadAndWrite {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let read = input.parse()?;
         let _ = input.parse::<Token![,]>()?;
         let write = input.parse()?;
-        Ok(ReadAndWrite { read, write })
+
+        let param_name = if input.parse::<Token![,]>().is_ok() {
+            input.parse()?
+        } else {
+            Ident::new("item", input.span())
+        };
+        Ok(ReadAndWrite { read, write, param_name })
     }
 }
+const MODIFY_ATTR_DESCR: &str = "\
+- `context(ident)`: The context declared as `type Context = Foo;`
+- `write(.path.in.item)`: path in item to write return value
+- `write_mut([ident =] .path.in.item)`: write-only path in item to pass as `&mut ident`
+- `read([ident =] .path.in.item)`: read-only path in item to pass as `&ident`
+- `read_write([ident =] .path.in.item)`: read/write path in item to pass as `&mut ident`
+- `dynamic_read_write(read_ident, write_ident [, ident])`: pass `&mut item` and read
+  those fields for checking which paths in item are read from and writen to.
+  The thirs optional parameter is which function argument to passt it to
+  (by default it is `item`)\n";
 #[derive(Debug)]
 enum Modify {
     Context(Ident),
@@ -34,7 +61,7 @@ enum Modify {
     WriteMut(Path),
     Read(Path),
     ReadWrite(Path),
-    DynamicReadWrite(Ident, Ident),
+    DynamicReadWrite(Ident, Ident, Ident),
 }
 fn iter_attrs(tokens: TokenStream) -> syn::Result<Punctuated<syn::MetaList, Token![,]>> {
     let parser = Punctuated::<syn::MetaList, Token![,]>::parse_separated_nonempty;
@@ -52,14 +79,12 @@ impl Modify {
             path if is("read", path) => Modify::Read(parse(input.tokens)?),
             path if is("read_write", path) => Modify::ReadWrite(parse(input.tokens)?),
             path if is("dynamic_read_write", path) => {
-                let ReadAndWrite { read, write } = parse(input.tokens)?;
-                Modify::DynamicReadWrite(read, write)
+                let ReadAndWrite { read, write, param_name } = parse(input.tokens)?;
+                Modify::DynamicReadWrite(read, write, param_name)
             }
             path => {
                 let msg = format!(
-                    "'{:?}' is not a valid modify attribute, valid ones are:\n\
-                    {VALID_MODIFY_NAMES}",
-                    path,
+                    "'{path:?}' is not a modify attribute, use one of:\n{MODIFY_ATTR_DESCR}",
                 );
                 return Err(syn::Error::new(input.path.span(), msg));
             }
@@ -94,9 +119,9 @@ impl Modify {
     fn ident(&self) -> Option<&Ident> {
         use Modify::*;
         match self {
-            Context(ident) => Some(ident),
+            Context(ident) | DynamicReadWrite(_, _, ident) => Some(ident),
             WriteMut(path) | Read(path) | ReadWrite(path) => Some(&path.ident),
-            Write(_) | DynamicReadWrite(_, _) => None,
+            Write(_) => None,
         }
     }
     fn requires_identifier(&self) -> bool {
@@ -119,6 +144,7 @@ impl Modify {
         use Modify::*;
         match self {
             Context(_) => Some(quote! { & #ctx }),
+            DynamicReadWrite(_, _, _) => Some(quote! { &mut #item }),
             WriteMut(path) | ReadWrite(path) => {
                 let path = &path.tokens;
                 Some(quote! { &mut #item #path })
@@ -127,16 +153,20 @@ impl Modify {
                 let path = &path.tokens;
                 Some(quote! { & #item #path })
             }
-            Write(_) | DynamicReadWrite(_, _) => None,
+            Write(_) => None,
         }
     }
 
     fn as_output(&self, item: &Ident) -> Option<TokenStream> {
         match self {
-            Modify::Write(path) => {
-                let path = &path.tokens;
-                Some(quote! { #item #path = })
-            }
+            Modify::Write(Path { tokens, .. }) => Some(quote! { #item #tokens = }),
+            _ => None,
+        }
+    }
+
+    fn get_dynamic(&self) -> Option<(&Ident, &Ident)> {
+        match self {
+            Modify::DynamicReadWrite(read, write, _) => Some((read, write)),
             _ => None,
         }
     }
@@ -160,15 +190,16 @@ impl Modifiers {
         fn_name: &Ident,
         ctx: &Ident,
         item: &Ident,
-        inputs: impl Iterator<Item = &'a Ident>,
+        inputs: impl Iterator<Item = (bool, &'a Ident)>,
     ) -> TokenStream {
-        let parameters = inputs.map(|param| {
+        let parameters = inputs.map(|(must_deref, param)| {
+            let deref = if must_deref { quote!(*) } else { quote!() };
             match self.0.iter().find(|m| m.has_ident(param)) {
                 Some(provided) => provided
                     .call_param(ctx, item)
                     .expect("m.has_ident guarentees call_param always returns some"),
                 // From the data structure itself
-                None => quote!(#param),
+                None => quote!(#deref #param),
             }
         });
         let write_field = self.write_field(item);
@@ -176,7 +207,7 @@ impl Modifiers {
             #write_field #fn_name ( #( #parameters ),* )
         }
     }
-    /// Panics when `function` is invalid.
+    /// Returns `Err` when `function` is invalid.
     ///
     /// It is invalid when:
     /// - Any of the argument is not in the form `foo` or `mut foo`.
@@ -245,19 +276,22 @@ impl Modifiers {
             .collect::<syn::Result<_>>()?;
         Ok(Self(inner))
     }
-
-    pub(crate) fn reads(&self) -> impl Iterator<Item = Ident> + '_ {
+    pub(crate) fn dynamic_fields(&self) -> impl Iterator<Item = &Ident> + '_ {
         self.0
             .iter()
-            .filter(|m| m.is_read())
-            .filter_map(|m| m.field_enum_name())
+            .filter_map(|m| m.get_dynamic())
+            .flat_map(|(read, write)| [read, write])
+    }
+    pub(crate) fn dynamic_field(&self, rw: Mode) -> Option<&Ident> {
+        self.0
+            .iter()
+            .find_map(|m| m.get_dynamic())
+            .map(|m| rw.pick(m))
     }
 
-    pub(crate) fn writes(&self) -> impl Iterator<Item = Ident> + '_ {
-        self.0
-            .iter()
-            .filter(|m| m.is_write())
-            .filter_map(|m| m.field_enum_name())
+    pub(crate) fn used_fields(&self, rw: Mode) -> impl Iterator<Item = Ident> + '_ {
+        let rw = rw.is_mode();
+        self.0.iter().filter(rw).filter_map(|m| m.field_enum_name())
     }
 
     pub(crate) fn access_idents(&self) -> impl Iterator<Item = Ident> + '_ {

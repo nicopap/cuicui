@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, mem};
 
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::spanned::Spanned;
+use syn::{meta::ParseNestedMeta, spanned::Spanned, Visibility};
 
 use crate::{
     extensions::{GetIdentExt, IntoSynErrorsExt},
@@ -38,6 +38,86 @@ fn modify_fn_or_add_context(
     }
 }
 
+/// Get `Something` in `impl Modify<Something> for ModifyFoo`.
+fn get_target(item: &syn::ItemImpl) -> syn::Result<&Ident> {
+    use syn::{GenericArgument::Type, Path};
+    let msg_missing = "#[impl_modify] block must be: `impl Modify<Something> for ModifySomething";
+    let err_inner = |span| syn::Error::new(span, msg_missing);
+    let err = |span| Err(err_inner(span));
+    match &item.trait_ {
+        Some((_, Path { segments, .. }, _)) => {
+            let len = segments.len();
+            if len != 1 {
+                return err(segments.span());
+            }
+            let last = segments.last().expect("already check len > 0");
+            if last.ident != "Modify" {
+                return err(last.span());
+            }
+            match &last.arguments {
+                syn::PathArguments::AngleBracketed(args) => {
+                    let args = &args.args;
+                    let len = args.len();
+                    if len != 1 {
+                        return err(args.span());
+                    }
+                    match args.last() {
+                        Some(Type(ty)) => ty.get_ident().ok_or_else(|| err_inner(ty.span())),
+                        kind => err(kind.span()),
+                    }
+                }
+                args => err(args.span()),
+            }
+        }
+        None => err(item.span()),
+    }
+}
+
+pub(crate) struct Config {
+    fab_path: syn::Path,
+    enumset_crate: Ident,
+    visibility: syn::Visibility,
+}
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            fab_path: syn::parse_quote!(::cuicui_fab),
+            enumset_crate: Ident::new("enumset", Span::call_site()),
+            visibility: Visibility::Public(syn::token::Pub { span: Span::call_site() }),
+        }
+    }
+}
+const CONFIG_ATTR_DESCR: &str = "\
+- `cuicui_fab_path = alternate::path`: specify which path to use for the `cuicui_fab` crate
+  by default, it is `::cuicui_fab`
+- `enumset_crate = identifier`: specify which path to use for the `enumset` crate
+  by default, it is `enumset`
+- `visibility = [pub(crate)]`: specify the visibility for the generated enums.
+  by default, it is `pub`\n";
+impl Config {
+    pub(crate) fn parse(&mut self, meta: ParseNestedMeta) -> syn::Result<()> {
+        match () {
+            () if meta.path.is_ident("cuicui_fab_path") => {
+                let value = meta.value()?;
+                self.fab_path = value.parse()?;
+            }
+            () if meta.path.is_ident("enumset_crate") => {
+                let value = meta.value()?;
+                self.enumset_crate = value.parse()?;
+            }
+            () if meta.path.is_ident("visibility") => {
+                let value = meta.value()?;
+                self.visibility = value.parse()?;
+            }
+            () => {
+                let msg = format!("Unrecognized impl_modify meta attribute\n{CONFIG_ATTR_DESCR}");
+                return Err(meta.error(msg));
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Block {
     attributes: Vec<syn::Attribute>,
@@ -48,9 +128,12 @@ pub(crate) struct Block {
     fields: BTreeSet<Ident>,
     // TODO(feat): allow generics
     modify_ty: Ident,
+    fab_path: syn::Path,
+    enumset_ident: Ident,
+    visibility: Visibility,
 }
 impl Block {
-    pub fn parse(mut input: syn::ItemImpl) -> syn::Result<Self> {
+    pub fn parse(config: Config, mut input: syn::ItemImpl) -> syn::Result<Self> {
         let mut ctx = None;
         let mut errors = Vec::new();
         let read_fn = |item| match modify_fn_or_add_context(item, &mut ctx) {
@@ -84,12 +167,17 @@ impl Block {
             functions,
             fields,
             modify_ty,
+            fab_path: config.fab_path,
+            enumset_ident: config.enumset_crate,
+            visibility: config.visibility,
         })
     }
     pub fn generate_impl(self) -> TokenStream {
         // TODO(bug): handle different crate export names
-        let enset = Ident::new("enumset", Span::call_site());
-        let fab = Ident::new("cuicui_fab", Span::call_site());
+        let enset = &self.enumset_ident;
+        let enset_string = syn::LitStr::new(&enset.to_string(), enset.span());
+        let fab = &self.fab_path;
+        let vis = &self.visibility;
 
         let context = &self.context;
         let context_generics = &self.context_generics;
@@ -102,10 +190,10 @@ impl Block {
         let impl_target = &self.impl_target;
 
         let fns = || self.functions.iter();
-        let ty_variants = fns().map(ModifyFn::ty_variant);
+        let ty_variants = fns().map(|f| f.ty_variant(enset, &field_ty));
         let ty_matcher = fns().map(ModifyFn::ty_matcher);
-        let changes_arms = fns().map(|f| f.changes_arm(&enset, &field_ty));
-        let depends_arms = fns().map(|f| f.depends_arm(&enset, &field_ty));
+        let changes_arms = fns().map(|f| f.changes_arm(enset, &field_ty));
+        let depends_arms = fns().map(|f| f.depends_arm(enset, &field_ty));
         let ty_constructors = fns().map(|m| &m.constructor);
         let ty_function_defs = fns().map(|m| &m.declaration);
         let ty_function_calls = fns().map(|m| m.call(&ctx, &item));
@@ -115,12 +203,13 @@ impl Block {
             /// Fields accessed by [`
             #[doc = stringify!(#modify_ty)]
             /// `].
-            #[derive(#enset::EnumSetType)]
-            enum #field_ty {
+            #[derive( ::#enset::EnumSetType, ::std::fmt::Debug )]
+            #[enumset(crate_name = #enset_string)]
+            #vis enum #field_ty {
                 #( #field_variants ),*
             }
             #( #ty_attributes )*
-            enum #modify_ty {
+            #vis enum #modify_ty {
                 #( #ty_variants ),*
             }
             impl #modify_ty {
@@ -146,53 +235,18 @@ impl Block {
                     Ok(())
                 }
 
-                fn depends(&self) -> #enset::EnumSet<Self::Field> {
+                fn depends(&self) -> ::#enset::EnumSet<Self::Field> {
                     match self {
                         #( #depends_arms ),*
                     }
                 }
 
-                fn changes(&self) -> #enset::EnumSet<Self::Field> {
+                fn changes(&self) -> ::#enset::EnumSet<Self::Field> {
                     match self {
                         #( #changes_arms ),*
                     }
                 }
             }
         }
-    }
-}
-
-/// Get `Something` in `impl Modify<Something> for ModifyFoo`.
-fn get_target(item: &syn::ItemImpl) -> syn::Result<&Ident> {
-    use syn::{GenericArgument::Type, Path};
-    let msg_missing = "#[impl_modify] block must be: `impl Modify<Something> for ModifySomething";
-    let err_inner = |span| syn::Error::new(span, msg_missing);
-    let err = |span| Err(err_inner(span));
-    match &item.trait_ {
-        Some((_, Path { segments, .. }, _)) => {
-            let len = segments.len();
-            if len != 1 {
-                return err(segments.span());
-            }
-            let last = segments.last().expect("already check len > 0");
-            if last.ident != "Modify" {
-                return err(last.span());
-            }
-            match &last.arguments {
-                syn::PathArguments::AngleBracketed(args) => {
-                    let args = &args.args;
-                    let len = args.len();
-                    if len != 1 {
-                        return err(args.span());
-                    }
-                    match args.last() {
-                        Some(Type(ty)) => ty.get_ident().ok_or_else(|| err_inner(ty.span())),
-                        kind => err(kind.span()),
-                    }
-                }
-                args => err(args.span()),
-            }
-        }
-        None => err(item.span()),
     }
 }

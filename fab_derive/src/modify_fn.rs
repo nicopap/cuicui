@@ -5,40 +5,45 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::{punctuated::Punctuated, spanned::Spanned, ItemFn, Token};
 
-use crate::modifiers::Modifiers;
+use crate::modifiers::{Mode, Modifiers};
 
-type MyArm = TokenStream;
-type MyVariant = TokenStream;
-type MyMatcher = TokenStream;
-type MyExprCall = TokenStream;
+type Tokens = TokenStream;
 
+enum Site {
+    Constructor,
+    Arm,
+}
 fn mk_tyname(snake_name: &Ident) -> Ident {
     let ident = AsUpperCamelCase(snake_name.to_string());
     Ident::new(&ident.to_string(), snake_name.span())
 }
-fn mk_variant(mods: &Modifiers, name: &Ident, inputs: &[syn::FnArg]) -> MyVariant {
+fn mk_variant(mods: &Modifiers, name: &Ident, inputs: &[syn::FnArg], field_ty: Tokens) -> Tokens {
     // TODO: remove reference from input type.
     // TODO: document variant with path & modify target.
     let fields = inputs.iter().filter(|i| mods.is_constructor_input(i));
+    let dynamic_fields = mods.dynamic_fields().map(|f| quote!( #f : #field_ty ));
     quote! {
-        #name { #( #fields ),* }
+        #name { #( #fields, )* #( #dynamic_fields ),* }
     }
 }
-fn mk_matcher(mods: &Modifiers, name: &Ident, inputs: &[syn::FnArg]) -> MyMatcher {
+fn mk_matcher(mods: &Modifiers, name: &Ident, inputs: &[syn::FnArg], site: Site) -> Tokens {
     let mk_pattern_only = |i| match i {
         &syn::FnArg::Receiver(_) => None,
         syn::FnArg::Typed(ty) => Some(&ty.pat),
     };
-    // TODO: remove reference from input type.
+    let dots = match site {
+        Site::Constructor => quote!(),
+        Site::Arm => quote!(..),
+    };
     let fields = inputs
         .iter()
         .filter(|i| mods.is_constructor_input(i))
         .filter_map(mk_pattern_only);
     quote! {
-        #name { #( #fields ),* }
+        #name { #( #fields, )* #dots }
     }
 }
-fn mk_constructor(modifiers: &Modifiers, function: &mut ItemFn, body: Box<syn::Block>) {
+fn mk_constructor(modifiers: &Modifiers, mut function: ItemFn, body: Box<syn::Block>) -> ItemFn {
     let span = function.sig.span();
 
     // Constructor always return self
@@ -59,6 +64,7 @@ fn mk_constructor(modifiers: &Modifiers, function: &mut ItemFn, body: Box<syn::B
     }
     function.sig.inputs = new_inputs;
     function.block = body;
+    function
 }
 /// Declaration of modifier to insert into the match arms of the `apply` `Modify` method.
 fn mk_declaration(function: &mut ItemFn) {
@@ -70,7 +76,7 @@ pub(crate) struct ModifyFn {
     name: Ident,
     inputs: Vec<syn::FnArg>,
     pub declaration: ItemFn,
-    pub constructor: ItemFn,
+    pub constructor: Option<ItemFn>,
     modifiers: Modifiers,
 }
 impl ModifyFn {
@@ -82,23 +88,30 @@ impl ModifyFn {
         modifiers.validate(&input)?;
 
         let inputs: Vec<_> = input.sig.inputs.clone().into_iter().collect();
-        let matcher = mk_matcher(&modifiers, &ty_name, &inputs);
+        let matcher = mk_matcher(&modifiers, &ty_name, &inputs, Site::Constructor);
         let block = quote!({ Self :: #matcher });
 
-        let mut constructor = input.clone();
-        mk_constructor(&modifiers, &mut constructor, Box::new(syn::parse2(block)?));
+        let constructor = if modifiers.dynamic_field(Mode::Read).is_none() {
+            let block = syn::parse2(block)?;
+            Some(mk_constructor(&modifiers, input.clone(), Box::new(block)))
+        } else {
+            None
+        };
 
         let mut declaration = input;
         mk_declaration(&mut declaration);
 
         Ok(ModifyFn { name, inputs, declaration, constructor, modifiers })
     }
-    pub fn call(&self, ctx: &Ident, item: &Ident) -> MyExprCall {
+    pub fn call(&self, ctx: &Ident, item: &Ident) -> Tokens {
         let name = &self.name;
         let arguments = self.declaration.sig.inputs.iter().filter_map(|i| match i {
             syn::FnArg::Receiver(_) => None,
             syn::FnArg::Typed(pat) => match &*pat.pat {
-                syn::Pat::Ident(ident) => Some(&ident.ident),
+                syn::Pat::Ident(ident) => {
+                    let must_deref = !matches!(&*pat.ty, &syn::Type::Reference(_));
+                    Some((must_deref, &ident.ident))
+                }
                 _ => None,
             },
         });
@@ -107,29 +120,27 @@ impl ModifyFn {
     fn ty_name(&self) -> Ident {
         mk_tyname(&self.name)
     }
-    pub fn ty_variant(&self) -> MyVariant {
-        mk_variant(&self.modifiers, &self.ty_name(), &self.inputs)
+    pub fn ty_variant(&self, root: &Ident, field_ty_name: &Ident) -> Tokens {
+        let field_ty = quote!(::#root::EnumSet<#field_ty_name>);
+        mk_variant(&self.modifiers, &self.ty_name(), &self.inputs, field_ty)
     }
-    pub fn ty_matcher(&self) -> MyVariant {
-        mk_matcher(&self.modifiers, &self.ty_name(), &self.inputs)
+    pub fn ty_matcher(&self) -> Tokens {
+        mk_matcher(&self.modifiers, &self.ty_name(), &self.inputs, Site::Arm)
     }
-    pub fn depends_arm(&self, root: &Ident, field_ty_name: &Ident) -> MyArm {
-        // TODO: dynamic_read_write
+    fn arm(&self, root: &Ident, field_ty_name: &Ident, mode: Mode) -> Tokens {
         let ty_name = self.ty_name();
-        let reads = self.modifiers.reads();
-        quote! {
-            Self::#ty_name { .. } => #root ::EnumSet::EMPTY
-                #( | #field_ty_name :: #reads )*
+        let ty = quote!(Self::#ty_name);
+        let fields = self.modifiers.used_fields(mode);
+        match self.modifiers.dynamic_field(mode) {
+            Some(dynamic) => quote! { #ty { #dynamic , .. } => *#dynamic },
+            None => quote! { #ty { .. } => ::#root::EnumSet::EMPTY #(| #field_ty_name::#fields)* },
         }
     }
-    pub fn changes_arm(&self, root: &Ident, field_ty_name: &Ident) -> MyArm {
-        // TODO: dynamic_read_write
-        let ty_name = self.ty_name();
-        let writes = self.modifiers.writes();
-        quote! {
-            Self::#ty_name { .. } =>  #root ::EnumSet::EMPTY
-                #( | #field_ty_name :: #writes )*
-        }
+    pub fn depends_arm(&self, root: &Ident, field_ty_name: &Ident) -> Tokens {
+        self.arm(root, field_ty_name, Mode::Read)
+    }
+    pub fn changes_arm(&self, root: &Ident, field_ty_name: &Ident) -> Tokens {
+        self.arm(root, field_ty_name, Mode::Write)
     }
     pub fn access_idents(&self) -> impl Iterator<Item = Ident> + '_ {
         self.modifiers.access_idents()

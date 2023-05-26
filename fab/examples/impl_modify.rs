@@ -35,7 +35,7 @@ impl Prefab for CityPrefab {
 #[impl_modify]
 #[derive(Debug)]
 impl Modify<City> for ModifyCity {
-    type Context = ();
+    type Context<'a> = ();
 
     #[modify(read(admin_name = .admin.chief.surname), read(.name), write(.admin.chief.age))]
     fn add_chief_age(additional_years: usize, admin_name: &str, name: &str) -> usize {
@@ -45,6 +45,11 @@ impl Modify<City> for ModifyCity {
     #[modify(write_mut(.admin.secretary.name))]
     fn secretary_name(set_name: &'static str, name: &mut &'static str) {
         *name = set_name;
+    }
+
+    #[modify(write(.admin.secretary.age))]
+    fn secretary_age(set_age: usize) -> usize {
+        set_age
     }
 
     /// Always set name of the first street to that of the city secretary.
@@ -57,5 +62,10 @@ impl Modify<City> for ModifyCity {
         } else {
             streets.push(Street { no: 0, name, people: 1 })
         }
+    }
+
+    #[modify(dynamic_read_write(reads, writes))]
+    fn arbitrary_changes(inner: usize, item: &mut City) {
+        item.streets[inner].no = inner;
     }
 }

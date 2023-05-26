@@ -2,7 +2,7 @@ use std::fmt::Write;
 
 use heck::AsUpperCamelCase;
 use proc_macro2::{Ident, TokenStream, TokenTree};
-use syn::{parse::Parse, punctuated::Punctuated, Token};
+use syn::{parse::Parse, Token};
 
 const ATTR_SYNTAX_MSG: &str = "No input paths were specified, cannot know which field \
     of the item to use. The syntax for modify attributes is: \n\n\
