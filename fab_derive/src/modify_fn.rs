@@ -17,15 +17,42 @@ fn mk_tyname(snake_name: &Ident) -> Ident {
     let ident = AsUpperCamelCase(snake_name.to_string());
     Ident::new(&ident.to_string(), snake_name.span())
 }
-fn mk_variant(mods: &Modifiers, name: &Ident, inputs: &[syn::FnArg], field_ty: Tokens) -> Tokens {
-    // TODO: remove reference from input type.
+fn mk_variant_type(ty: Box<syn::Type>) -> Box<syn::Type> {
+    use syn::{Type::Reference, TypeReference};
+    match *ty {
+        Reference(TypeReference { lifetime: None, mutability: None, elem, .. }) => elem,
+        any_else => Box::new(any_else),
+    }
+}
+/// `#name { [field: Type],* }` used in `enum ModifyFoo` declaration.
+///
+/// - Removes inputs appearing in `mods`
+/// - Remove prefix `&` that do not have a lifetime from the input type.
+/// - Add the `dynamic_field` `read` and `write` fields with type `dynamic_ty`
+fn mk_variant(mods: &Modifiers, name: &Ident, inputs: &[syn::FnArg], dynamic_ty: Tokens) -> Tokens {
     // TODO: document variant with path & modify target.
-    let fields = inputs.iter().filter(|i| mods.is_constructor_input(i));
-    let dynamic_fields = mods.dynamic_fields().map(|f| quote!( #f : #field_ty ));
+    let fields = inputs
+        .iter()
+        .filter(|i| mods.is_constructor_input(i))
+        .filter_map(|f| match f {
+            syn::FnArg::Receiver(_) => None,
+            syn::FnArg::Typed(pat) => Some(pat),
+        })
+        .map(|f| {
+            let mut modified = f.clone();
+            modified.ty = mk_variant_type(modified.ty);
+            modified
+        });
+    let dynamic_fields = mods.dynamic_fields().map(|f| quote!( #f : #dynamic_ty ));
     quote! {
         #name { #( #fields, )* #( #dynamic_fields ),* }
     }
 }
+/// `#name { [field],* [..]? }` used in `ModifyFoo` constructors (`Site::Constructor`)
+/// or in match arms for `Site::Arm`.
+///
+/// - Removes inputs appearing in `mods`
+/// - Only keep the name of the input.
 fn mk_matcher(mods: &Modifiers, name: &Ident, inputs: &[syn::FnArg], site: Site) -> Tokens {
     let mk_pattern_only = |i| match i {
         &syn::FnArg::Receiver(_) => None,
@@ -43,6 +70,14 @@ fn mk_matcher(mods: &Modifiers, name: &Ident, inputs: &[syn::FnArg], site: Site)
         #name { #( #fields, )* #dots }
     }
 }
+/// Convert `function` into a constructor.
+///
+/// Constructors are functions of the same name as the modify function, used
+/// to create each individual variants of the modify enum.
+///
+/// - Removes inputs appearing in `mods`
+/// - Remove prefix `&` that do not have a lifetime from the input type.
+/// - Add the `dynamic_field` `read` and `write` fields with type `dynamic_ty`
 fn mk_constructor(modifiers: &Modifiers, mut function: ItemFn, body: Box<syn::Block>) -> ItemFn {
     let span = function.sig.span();
 
@@ -59,7 +94,10 @@ fn mk_constructor(modifiers: &Modifiers, mut function: ItemFn, body: Box<syn::Bl
     let mut new_inputs = Punctuated::new();
     for input in mem::take(&mut function.sig.inputs).into_iter() {
         if modifiers.is_constructor_input(&input) {
-            new_inputs.push(input);
+            let syn::FnArg::Typed(mut input) = input else { continue; };
+            input.ty = mk_variant_type(input.ty);
+
+            new_inputs.push(syn::FnArg::Typed(input));
         }
     }
     function.sig.inputs = new_inputs;

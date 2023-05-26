@@ -3,11 +3,11 @@ use cuicui_fab::{
     prefab::{Modify, Prefab},
 };
 
+#[derive(Clone, Debug)]
 struct Person {
     name: &'static str,
     surname: &'static str,
     age: usize,
-    place_of_birth: Option<Box<City>>,
 }
 struct Street {
     no: usize,
@@ -17,6 +17,7 @@ struct Street {
 struct Administration {
     chief: Person,
     secretary: Person,
+    lawyer: Person,
 }
 struct City {
     streets: Vec<Street>,
@@ -50,6 +51,11 @@ impl Modify<City> for ModifyCity {
     #[modify(write(.admin.secretary.age))]
     fn secretary_age(set_age: usize) -> usize {
         set_age
+    }
+
+    #[modify(write(.admin.lawyer))]
+    fn lawyer(set_lawyer: &Person) -> Person {
+        set_lawyer.clone()
     }
 
     /// Always set name of the first street to that of the city secretary.
