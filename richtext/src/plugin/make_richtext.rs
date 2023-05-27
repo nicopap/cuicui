@@ -1,24 +1,25 @@
 use std::mem;
 
-use bevy::{prelude::*, text::BreakLineOn, utils::HashMap};
+use bevy::{ecs::system::SystemState, prelude::*, text::BreakLineOn};
 
-use crate::{richtext::GetFont, richtext::RichTextData, ResTrackers, RichTextBuilder};
+use crate::{richtext, richtext::GetFont, richtext::RichTextData, track::Hook, Hooks};
 
 use super::WorldBindings;
 
 #[derive(Component)]
 pub struct MakeRichText {
-    pub base_section: TextSection,
+    pub text: TextSection,
     pub alignment: TextAlignment,
-    pub linebreak_behaviour: BreakLineOn,
+    pub line_break: BreakLineOn,
     pub format_string: String,
 }
 impl MakeRichText {
+    /// Drain all fields from a `&mut Self` to get an owned value.
     fn take(&mut self) -> Self {
         Self {
-            base_section: mem::take(&mut self.base_section),
+            text: mem::take(&mut self.text),
             alignment: self.alignment,
-            linebreak_behaviour: self.linebreak_behaviour,
+            line_break: self.line_break,
             format_string: mem::take(&mut self.format_string),
         }
     }
@@ -35,16 +36,16 @@ impl MakeRichTextBundle {
     pub fn new(format_string: impl Into<String>) -> Self {
         MakeRichTextBundle {
             make_richtext: MakeRichText {
-                base_section: default(),
+                text: default(),
                 alignment: TextAlignment::Left,
-                linebreak_behaviour: BreakLineOn::WordBoundary,
+                line_break: BreakLineOn::WordBoundary,
                 format_string: format_string.into(),
             },
             text_bundle: default(),
         }
     }
     pub fn with_text_style(mut self, style: TextStyle) -> Self {
-        self.make_richtext.base_section.style = style;
+        self.make_richtext.text.style = style;
         self
     }
     /// Returns this [`MakeRichTextBundle`] with a new [`TextAlignment`] on [`Text`].
@@ -66,37 +67,44 @@ impl MakeRichTextBundle {
     }
 }
 
-pub fn make_rich(
-    mut cmds: Commands,
-    mut world_bindings: ResMut<WorldBindings>,
-    mut res_trackers: ResMut<ResTrackers>,
-    fonts: Res<Assets<Font>>,
-    mut awaiting_fortune: Query<(Entity, &mut MakeRichText)>,
+/// Create and insert [`RichText`] on [`MakeRichText`] entities, updating [`WorldBindings`] and [`Hooks`].
+///
+/// This is an exclusive system, as it requires access to the [`World`] to generate
+/// the [`Hook`]s specified in the format string.
+pub fn mk_richtext(
+    world: &mut World,
+    mut to_make: Local<QueryState<(Entity, &mut MakeRichText)>>,
+    mut cache: Local<SystemState<(Commands, ResMut<WorldBindings>, Res<Assets<Font>>)>>,
 ) {
+    // The `format_string` are field of `MakeRichText`, components of the ECS.
+    // we use `MakeRichText::take` to extract them from the ECS, and own them
+    // in this system in `to_make`.
+    let to_make: Vec<_> = to_make
+        .iter_mut(world)
+        .map(|(e, mut r)| (e, r.take()))
+        .collect();
+
+    // The `parse::Hook`s returned by `richtext::mk`
+    // have a lifetime dependent on the `format_string` used.
+    //
+    // parse::Hook's reference here points to String within MakeRichText in
+    // the `to_make` variable.
+    let mut new_hooks: Vec<crate::parse::Hook<'_>> = Vec::new();
+
+    // Furthermore, `richtext::mk` needs mutable access to WorldBindings and
+    // immutable to Assets<Font>, so we use the SystemState to extract them.
+    let (mut cmds, mut world_bindings, fonts) = cache.get_mut(world);
     // TODO(perf): batch commands update.
-    for (entity, mut make_rich) in &mut awaiting_fortune {
-        let MakeRichText {
-            base_section,
-            alignment,
-            linebreak_behaviour,
-            format_string,
-        } = make_rich.take();
+    for (entity, to_make) in to_make.iter() {
+        let MakeRichText { text, alignment, line_break, format_string } = to_make;
+        let b = &mut world_bindings;
+        let fonts = GetFont::new(&fonts);
+        match richtext::mk(b, text, fonts, *alignment, *line_break, format_string) {
+            Ok((default_text, text, mut pulls)) => {
+                new_hooks.append(&mut pulls);
 
-        let builder = RichTextBuilder {
-            format_string,
-            context: &mut world_bindings.0,
-            base_section: base_section.clone(),
-            get_font: GetFont::new(&fonts),
-            alignment,
-            linebreak_behaviour,
-            formatters: HashMap::default(),
-        };
-        match builder.build() {
-            Ok((default_text, text, mut trackers)) => {
-                res_trackers.extend(trackers.drain(..));
-
-                let richtext_data = RichTextData::new(text, base_section);
-                cmds.entity(entity)
+                let richtext_data = RichTextData::new(text, to_make.text.clone());
+                cmds.entity(*entity)
                     .insert((richtext_data, default_text))
                     .remove::<MakeRichText>();
             }
@@ -105,4 +113,19 @@ pub fn make_rich(
             }
         }
     }
+    cache.apply(world);
+
+    // To convert the parse::Hook into an actual track::Hook that goes into track::Hooks,
+    // we need excluisve world access.
+    world.resource_scope(|world, mut hooks: Mut<Hooks>| {
+        world.resource_scope(|world, mut bindings: Mut<WorldBindings>| {
+            new_hooks.iter().for_each(|hook| {
+                if let Some(hook) = Hook::from_parsed(*hook, &mut bindings, world) {
+                    hooks.extend(Some(hook));
+                } else {
+                    error!("A tracker failed to be loaded");
+                }
+            });
+        });
+    });
 }

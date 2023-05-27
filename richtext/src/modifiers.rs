@@ -17,7 +17,7 @@ pub type ModifyBox = Box<dyn TextModify + Send + Sync + 'static>;
 
 #[impl_modify(cuicui_fab_path = fab)]
 #[derive(PartialEq, Debug)]
-impl Modify<TextSection> for TextModifiers {
+impl Modify<TextSection> for Modifier {
     type Context<'a> = GetFont<'a>;
 
     #[modify(context(get_font), write(.style.font))]
@@ -46,7 +46,7 @@ impl Modify<TextSection> for TextModifiers {
         boxed.apply(ctx, item);
     }
 }
-impl TextModifiers {
+impl Modifier {
     pub fn parse(name: &str, input: &str) -> anyhow::Result<Self> {
         match name {
             n if n == "Font" => Ok(Self::font(input.to_string().into())),
@@ -58,9 +58,9 @@ impl TextModifiers {
         }
     }
 }
-impl<T: TextModify + Send + Sync + 'static> From<T> for TextModifiers {
+impl<T: TextModify + Send + Sync + 'static> From<T> for Modifier {
     fn from(value: T) -> Self {
-        TextModifiers::Dynamic {
+        Modifier::Dynamic {
             depends: value.depends(),
             changes: value.changes(),
             boxed: Box::new(value),
@@ -70,8 +70,8 @@ impl<T: TextModify + Send + Sync + 'static> From<T> for TextModifiers {
 
 pub trait TextModify {
     fn apply(&self, ctx: &GetFont, prefab: &mut TextSection);
-    fn depends(&self) -> EnumSet<TextModifiersField>;
-    fn changes(&self) -> EnumSet<TextModifiersField>;
+    fn depends(&self) -> EnumSet<ModifierField>;
+    fn changes(&self) -> EnumSet<ModifierField>;
 
     fn as_any(&self) -> &dyn Any;
     fn eq_dyn(&self, other: &dyn TextModify) -> bool;

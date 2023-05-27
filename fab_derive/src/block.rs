@@ -173,7 +173,6 @@ impl Block {
         })
     }
     pub fn generate_impl(self) -> TokenStream {
-        // TODO(bug): handle different crate export names
         let enset = &self.enumset_ident;
         let enset_string = syn::LitStr::new(&enset.to_string(), enset.span());
         let fab = &self.fab_path;

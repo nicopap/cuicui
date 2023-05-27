@@ -2,8 +2,7 @@ use std::fmt;
 
 use bevy::{ecs::world::EntityRef, prelude::*};
 
-use super::some_content;
-use crate::{modifiers::TextModifiers, plugin::WorldBindings};
+use crate::{modifiers::Modifier, richtext::WorldBindings};
 
 /// Add a component and keep track of its value in [`WorldBindings`],
 /// this is a soft wrapper around [`Tracked`] methods.
@@ -121,12 +120,19 @@ macro_rules! track {
     };
 }
 
-type ProtoFetch = fn(EntityRef) -> Option<TextModifiers>;
+fn some_content(input: impl std::fmt::Display) -> Option<Modifier> {
+    let content = Modifier::content(input.to_string().into());
+    trace!("Content of {content:?}");
+    Some(content)
+}
+
+type ProtoFetch = fn(EntityRef) -> Option<Modifier>;
 
 /// Track a component of this entity and keep the binding `binding_name`
 /// in [`WorldBindings`] up to date with its value.
 #[derive(Component)]
 struct Tracker {
+    // TODO(perf): use binding::Id instead here.
     binding_name: &'static str,
     proto_fetch: ProtoFetch,
 }
@@ -175,7 +181,7 @@ impl<T: Component> Tracked<T> {
     /// [`Modify`]: crate::Modify
     pub fn modifier(binding_name: &'static str, t: T) -> Self
     where
-        T: Into<TextModifiers> + Clone,
+        T: Into<Modifier> + Clone,
     {
         let proto_fetch: ProtoFetch = |entity| Some(entity.get::<T>()?.clone().into());
         Self { t, tracker: Tracker { binding_name, proto_fetch } }
@@ -184,11 +190,13 @@ impl<T: Component> Tracked<T> {
 
 pub fn update_tracked_components(world: &mut World, mut entities: Local<Vec<Entity>>) {
     world.resource_scope(|world, mut world_bindings: Mut<WorldBindings>| {
+        // We do this weird dance because we need to pass a EntityRef to proto_fetch
         entities.extend(world.query_filtered::<Entity, With<Tracker>>().iter(world));
         for entity in entities.drain(..) {
-            // TODO(perf): the 2 next Option<> can safely be unchecked_unwraped
-            let Some(entity) = world.get_entity(entity) else { continue; };
-            let Some(tracker) = entity.get::<Tracker>() else { continue; };
+            // SAFETY: all entity in entities has a Tracker component and exist.
+            // because of that query_filtered
+            let entity = unsafe { world.get_entity(entity).unwrap_unchecked() };
+            let tracker = unsafe { entity.get::<Tracker>().unwrap_unchecked() };
             let Some(modify) = (tracker.proto_fetch)(entity) else { continue; };
             world_bindings.set(tracker.binding_name, modify);
         }

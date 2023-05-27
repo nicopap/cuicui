@@ -5,44 +5,45 @@ use winnow::error::ParseError;
 use winnow::Parser;
 
 use super::{balanced_text, bare_content, close_section, closed_element, sections_inner, structs};
+use structs::{Binding, Dyn, Modifier, Section};
 
 macro_rules! sections {
     (@modifier {$binding:ident}) => {
-        structs::Modifier {
+        Modifier {
             name: "Content",
-            value: structs::Dyn::Dynamic(structs::Binding::Name(stringify!($binding))),
+            value: Dyn::Dynamic(Binding::named(stringify!($binding))),
             subsection_count: 1,
         }
     };
     (@modifier $value:literal) => {
-        structs::Modifier {
+        Modifier {
             name: "Content",
-            value: structs::Dyn::Static($value),
+            value: Dyn::Static($value),
             subsection_count: 1,
         }
     };
     (@modifier ( $name:ident $subsection_count:literal static $value:literal )) => {
-        structs::Modifier {
+        Modifier {
             name: stringify!($name),
-            value: structs::Dyn::Static($value),
+            value: Dyn::Static($value),
             subsection_count: $subsection_count,
         }
     };
     (@modifier ( $name:ident $subsection_count:literal { $binding:ident } )) => {
-        structs::Modifier {
+        Modifier {
             name: stringify!($name),
-            value: structs::Dyn::Dynamic(structs::Binding::Name(stringify!($binding))),
+            value: Dyn::Dynamic(Binding::named(stringify!($binding))),
             subsection_count: $subsection_count,
         }
     };
     (@section {$binding:ident}) => {
-        structs::Section { modifiers: vec![ sections!(@modifier (Content 1 {$binding}) ) ] }
+        Section { modifiers: vec![ sections!(@modifier (Content 1 {$binding}) ) ] }
     };
     (@section $plain:literal) => {
-        structs::Section { modifiers: vec![ sections!(@modifier $plain) ] }
+        Section { modifiers: vec![ sections!(@modifier $plain) ] }
     };
     (@section [ $( $modifier:tt ),* $(,)? ]) => {
-        structs::Section {
+        Section {
             modifiers: vec![ $( sections!(@modifier $modifier) ),* ],
         }
     };

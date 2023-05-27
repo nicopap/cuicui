@@ -98,7 +98,7 @@ where
     PrefabField<P>: fmt::Debug,
 {
     pub fn new(
-        modifiers: Vec<MakeModify<P>>,
+        modifiers: impl ExactSizeIterator<Item = MakeModify<P>>,
         default_section: &P::Item,
         ctx: &PrefabContext<'_, P>,
     ) -> (Self, Vec<P::Item>) {

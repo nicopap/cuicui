@@ -38,15 +38,8 @@ impl Parse for FieldEnumName {
 pub(crate) struct Path {
     pub ident: Ident,
     pub tokens: TokenStream,
-}
-impl Path {
-    pub fn to_field_enum_name(&self) -> Ident {
-        // TODO(err): should re-use ATTR_SYNTAX_MSG
-        // TODO(err): do not panic, instead return an error
-        syn::parse2::<FieldEnumName>(self.tokens.clone())
-            .expect("tokens should always be an accessor expression")
-            .0
-    }
+    /// Name in the modify field enum variants.
+    pub variant_ident: Ident,
 }
 impl Parse for Path {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -68,9 +61,10 @@ impl Parse for Path {
             };
             ident
         };
+        let variant_ident = input.fork().parse::<FieldEnumName>()?.0;
         let tokens = input
             .parse::<TokenStream>()
             .expect("parsing TokenStream is infallible");
-        Ok(Path { ident, tokens })
+        Ok(Path { ident, tokens, variant_ident })
     }
 }

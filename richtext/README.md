@@ -411,101 +411,30 @@ impl IntoModify for UserColor {
 
 ## TODO
 
-- [ ] Documentation
-    - [ ] Instructions on how to add richtext to your project (but avoid explicitly naming version,
-          or use a crate to maintain it)
-    - [ ] This time, the README is different from the crate root's doc string, so we need to check
-          the code listings manually
-    - [ ] Important items:
-        - [ ] `RichTextPlugin`
-        - [ ] `RichText`
-        - [ ] `RichText::parse`
-        - [ ] `RichTextData`
-        - [ ] `RichText::set`-family
-        - [X] `modify` module
-        - [X] crate root.
-- [X] Define and verify a grammar for defining rich text through a string
-      like rust's format macro.
-- [X] Control by name the content of sections
-- [X] Control styling of sections through modifiers
-- [X] Control by name the modifiers at runtime
-- [X] Allow nesting of sections, so that outer modifiers affect inner sections.
-- [X] Check that nesting doesn't overwrite parent modifiers.
-- [X] Use modifier type id for implicit references.
-- [X] Implement ez methods for implicit refs
-- [X] Use a `Resource` context instead of storing it in a `Component`.
-- [X] Proper error handling when parsing keys/values
-- [ ] Text2d support (maybe even _generic_ support)
-- [X] Control a bevy `Text` by manipulating `RichTextData`
-- [X] Provide systems to automatically update `Text` based on `RichTextData`
-- [X] `Fetcher`s and `Tracker`s
-  - [X] `Tracked`
-  - [X] `DebugTracked`
-  - [X] resource tracker
-- [ ] Reflection handling
-    - [X] `Format` cleanup as described in design_doc/richtext/dynamic_format.md
-    - [ ] A `{Named(Name).Component.path.to.field}` path specifier.
-    - [X] "Pull bindings" format string decides what to read rather than `tracker`s
-    - [X] namespaced binding -> Require update to grammar.
-    - [X] Design a reflection-based format system.
-    - [X] Prepare code for pull formatting
-        - [X] Separate `RichText` from datastructures used for parsing
-        - [X] Custom `Modify`, registration, name, parse
-- [ ] Lean on reflection for Resource modifiers
-    - [ ] Allow arbitrary modifiers from `Format`
-    - [ ] Allow user-defined `Format`s
-    - [X] Remove `ResourceTrackerExt`
-    - [X] Consider using "starting by 'Res'" or "format applies to everything"
-          in order to avoid `fmt:` prefix → Actually checking for closing
-          delimiter is much easier.
-- [X] Refactor
-  - [X] extract richtext into separate crate
-  - [X] Reorganize modules: `trackers`, `modify` (trait) `modifiers` (impls)
-        `parse`, `plugin`, `change_check`
-  - [X] Replace hackish implementation of `Bundle` with simple macros
-  - [X] Remove dead code (existed only so that it can be stored in git history for later retrieval)
-- [ ] Optimization: Early abort on resource extracted is not changed.
-- [X] Optimization: CRITICAL: fix bindng change bit not being reset after application.
-- [ ] Optimization: compare Target values _before_ formatting them
-- [X] Optimization: do not create a string, but instead `clear` and `write!` to 
-      sections.
-- [ ] Better error model than `anyhow`
-- [X] Limit amount of updating by implementing a finer-grained change
-      detection system in `RichTextData`
-- [ ] Optimization: update Cow instead of creating new one => no alloc
-- [ ] Extract `Modify<T>` to be generic over what it modifies
-      + `Context` as associated type of `T` most likely.
-    - [ ] Make `plugin` generic over `Prefab` and extract into own crate.
-    - [ ] Nested Modifiers
-        - [X] Support downstream change trigger (`Modify::changes` method)
-        - [X] Keep ordering of `Modify` that affect the same region
-        - [X] Remove need for `Dynamic` in `RichText`
-        - [X] Remove `Dynamic` as a modifier
-        - [X] ~~Remove `Content` as a modifier~~
-        - [ ] Complete implementation
-            - [X] RichText::root_mask_for
-            - [ ] RichText::binding_modify
-            - [X] Make::purge_static
-            - [X] Make::modify_deps
-            - [ ] Make::binding_mask
-    - [X] extract `store` module into individual crate.
-    - [X] VarMatrix → JaggedArray
-    - [X] Clean up `bindings.rs`, `richtext.rs`, `richtext/make.rs`, `modify.rs`
-        - [X] A lot actually belong to `Modify`
-        - [X] remove `ctx` arg from `Modify::apply` (yep)
-        - [X] It should be generic over what is being modified
-        - [X] `sort` type-safe slices for usage in `Modifiers` and `Dependencies`
-              to ensure we indeed sort our stuff correctly
-- [X] ~~Provide a fork of `pl_lens` with change detection to replace the error-prone
-      `Tracked::update` and allow projections on `Modify::apply`~~
-      There is a better way, see `design_doc/fab/track_a_field.md`
-- [X] Complete `fab_derive`
-- [ ] consider renaming `Modify`.
-- [ ] (unsure) Optimization: Consider `inplace_it` crate for some arrays.
-- [ ] (unsure) is this still relevant? Way to avoid warnings when inserting the RichText
+- [ ] fab_derive: Write the doc strings of modify functions on the modify enum variants and constructor.
+- [ ] fab_derive: Fix doc compilation with `fab_derive`
+- [ ] fab_derive: Document `impl_modify` macro fully. Specifically: settle on a naming convention
+      and use it consistently.
+- [ ] fab_derive: Test `impl_modify` more thourougfully
+- [ ] fab_derive: Define error messages as txt files and use `include_str` in both doc and code.
+- [ ] fab: Let user specify `track::Write`s
+- [ ] fab: Entry api to bindings, allows skipping allocations wholesale.
+- [ ] fab resolve: Implement proper dependency resolution
+- [ ] fab resolve: Lightweight dumb resolver
+- [ ] richtext trackers: Cleanup error handling
+- [ ] richtext trackers: Manage when cached entity changes/not accessible
+- [ ] richtext trackers: Cleanup module tree
+- [ ] richtext trackers: Check is_changed of resources and components before updating binding
+- [ ] richtext trackers: Check that the target field changed before updating binding
+- [ ] richtext trackers: Test the component-based trackers
+- [ ] richtext builder: Let user specify `track::Write`s
+- [ ] richtext parser: test and improve error messages
+- [ ] richtext parser: review the informal_grammar.md file
+- [ ] richtext: Modify a Vec<&mut Text> over TextSections, to allow all kind of effects
+- [ ] richtext: way to apply the same Modify in series, by splitting text word/character
+- [ ] richtext: Text2d support
+- [ ] everything: Document the hell out of everything
 - [ ] (unsure) optimization: take inspiration from https://github.com/Wallacoloo/jagged_array/blob/master/src/lib.rs#L68 for `VarMatrix`s impls
-- [ ] (unsure) better format string error messages
-- [ ] (unsure) Allow compile-time verification of rich text spec through a
-      proc macro
+- [ ] (unsure) richtext parser: Allow compile-time verification of rich text spec through a proc macro
 
 [misery-bui]: https://github.com/bevyengine/bevy/blob/22121e69fb4a72bb514d43240df220b8938a1e13/examples/3d/shadow_biases.rs#L107-L141

@@ -6,6 +6,54 @@ use winnow::stream::Accumulate;
 
 const CONTENT_NAME: &str = "Content";
 
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub(super) enum Path<'a> {
+    Binding(&'a str),
+    Tracked(Source<'a>),
+}
+impl<'a> Path<'a> {
+    pub(super) fn binding(&self) -> &'a str {
+        use Path::*;
+
+        let (Binding(binding) | Tracked(Source{ binding, .. })) = self;
+        binding
+    }
+}
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub(crate) struct Source<'a>{
+    pub(crate) query: Query<'a>,
+    pub(crate) reflect_path: &'a str,
+    /// Full name of the binding. This is query + reflect_path
+    pub(crate) binding: &'a str,
+}
+impl<'a> Source<'a> {
+    pub(super) fn new(((query, reflect_path), binding): ((Query<'a>, &'a str), &'a str)) -> Self {
+        Source { query, reflect_path, binding }
+    }
+}
+
+/// Where to pull from the value.
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub(crate) enum Query<'a> {
+    /// A [`Resource`] implementing [`Reflect`].
+    Res(&'a str),
+    /// The first [`Entity`] found with provided component.
+    One(&'a str),
+    /// The first [`Entity`] found with the given name
+    Name { name: &'a str, access: &'a str },
+    /// The first [`Entity`] found with provided component, but access a
+    /// different component.
+    Marked { marker: &'a str, access: &'a str },
+}
+impl<'a> Query<'a> {
+    pub(super) fn name((name, access): (&'a str, &'a str)) -> Self {
+        Query::Name { name, access }
+    }
+    pub(super) fn marked((marker, access): (&'a str, &'a str)) -> Self {
+        Query::Marked { marker, access }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub(super) struct Section<'a> {
     pub(super) modifiers: Vec<Modifier<'a>>,
@@ -25,13 +73,36 @@ pub(super) enum Dyn<'a> {
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub(super) enum Binding<'a> {
-    Name(&'a str),
-    Format { path: &'a str, format: Format<'a> },
+pub struct Hook<'a> {
+    pub(crate) source: Source<'a>,
+    pub(crate) format: Option<Format<'a>>,
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub(super) enum Format<'a> {
+pub(super) struct Binding<'a> {
+    pub(super) path: Path<'a>,
+    pub(super) format: Option<Format<'a>>,
+}
+impl<'a> Binding<'a> {
+    #[cfg(test)]
+    pub(super) fn named(name: &'a str) -> Self {
+        Binding {
+            path: Path::Binding(name),
+            format: None,
+        }
+    }
+
+    pub(crate) fn as_pull(&self) -> Option<Hook<'a>> {
+        if let Path::Tracked(source) = self.path {
+            Some(Hook { source, format: self.format})
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub(crate) enum Format<'a> {
     UserDefined(&'a str),
     Fmt(RuntimeFormat),
 }
@@ -87,8 +158,8 @@ impl<'a> Modifier<'a> {
 }
 
 impl<'a> Binding<'a> {
-    pub(super) fn format((path, format): (&'a str, Format<'a>)) -> Self {
-        Binding::Format { path, format }
+    pub(super) fn format((path, format): (Path<'a>, Option<Format<'a>>)) -> Self {
+        Binding { path, format }
     }
 }
 

@@ -1,6 +1,12 @@
 # Parsing grammar for rich text 
 
 ```
+namespace =
+    'Res' '.' <ident>
+    | 'One' '(' <ident> ')'
+    | 'Name' '(' <ident> ')' '.' <ident>
+    | 'Marked' '(' <ident> ')' '.' <ident>
+
 <ident>: [:alpha:_][:alphanum:_]* "identifier respecting rust's identifier rules"
 <text∌FOO>: "text that doesn't contain FOO, unless prefixed by backslash `\`
              may be empty"
@@ -11,17 +17,17 @@ exposed = <text∌([{}|,>
 balanced_text = exposed [scope exposed]*
 
 format_spec = <https://doc.rust-lang.org/stable/std/fmt/index.html#syntax>
-format = path ':' format_spec
+format = namespace path ':' format_spec
 binding = format | path
 
-path = [:alphanum:_."]+
+path = <text∌:}>
 key = <ident>
 open_subsection = <text∌{}>
 open_section = <text∌{>
 close_section = '{' closed '}'
 closed_element = key ':' metadata
-closed = format | [closed_element],* ['|' bare_content]?
-metadata = '{' format '}' | balanced_text
+closed = binding | [closed_element],* ['|' bare_content]?
+metadata = '{' binding '}' | balanced_text
 bare_content = open_subsection [close_section open_subsection]*
 rich_text = open_section [close_section open_section]*
 ```

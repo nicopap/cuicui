@@ -7,8 +7,6 @@ use sorted_iter::{assume::AssumeSortedByItemExt, sorted_iterator::SortedByItem, 
 use crate::{div_ceil, Bitset};
 
 // TODO(clean): Manual impl of Debug using braile to show internal state.
-// TODO(perf): inspect asm to see if Box's metadata store width rather than
-// total len.
 /// A bitset similar to [`BitMatrix`][super::BitMatrix],
 /// but with a fixed column and row count, one row per `R` variant.
 #[derive(Clone, PartialEq, Eq)]

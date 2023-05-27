@@ -12,11 +12,31 @@ See the next section for a detailed explanation with semantic information.
 `#[impl_modify]` only works on `impl` block, it should be formatted as a
 trait implementation for `Modify<I>` as follow:
 
+Consider the following structs:
+
 ```rust
+struct Color([f32;4]);
+impl Color {
+  fn as_hsla(&self) -> [f32;4] { self.0 }
+  fn hsla(inner: [f32;4]) -> Self { Color(inner) }
+}
+
+struct TextStyle {
+  color: Color,
+}
+
+struct TextSection {
+  value: String,
+  style: TextStyle,
+}
+```
+
+```rust
+use cuicui_fab_derive::impl_modify;
+
 #[impl_modify]
 impl Modify<TextSection> for CustomModify {
     // ...
-}
 ```
 
 The first item (declaration) within that `impl` block should be a type
@@ -24,26 +44,21 @@ definition for `Context`. The type definition accepts either 1 or 0 lifetime
 parameters:
 
 ```rust
-#[impl_modify]
-impl Modify<TextSection> for CustomModify {
-    type Context<'a> = GetFont<'a>;
     // ...
-}
+    type Context<'a> = ();
+    // ...
 ```
 
 All other items are function declarations. They can be documented. You can
 decorate them with the `modify` attributes.
 
 ```rust
-#[impl_modify]
-impl Modify<TextSection> for CustomModify {
-    type Context<'a> = GetFont<'a>;
-
-    #[modify(read_write(it.style.color))]
+    // ...
+    #[modify(read_write(.style.color))]
     fn shift_hue(hue_offset: f32, color: &mut Color) {
         let mut hsl = color.as_hsla_f32();
         hsl[0] = (hsl[0] + hue_offset) % 360.0;
-        *color = Color::hsla(hsl[0], hsl[1], hsl[2], hsl[3]);
+        *color = Color::hsla(hsl);
     }
     // ...
 }
@@ -69,8 +84,8 @@ All the `modify` attributes are:
    allocating anything.
 
 ```rust
-#[modify(read(it.path.to.value))]
-fn some_change(value: f32) {
+#[modify(read(.style.font_size))]
+fn some_change(font_size: f32) {
     // ...
 }
 ```
@@ -79,8 +94,8 @@ You might want to rename the field name before passing it as argument.
 To do so, use the following syntax:
 
 ```rust
-#[modify(read(unique_value_name = it.path.to.value))]
-fn some_change(unique_value_name: f32) {
+#[modify(read(size = .style.font_size))]
+fn some_change(size: f32) {
     // ...
 }
 ```

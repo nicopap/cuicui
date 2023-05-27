@@ -44,11 +44,14 @@ where
     ///
     /// - All [`Modify::changes`] of `make_modifiers` **must** be a subset of [`Modify::depends`].
     /// - [`Modify::depends`] may have exactly 1 or 0 components.
-    pub(super) fn new(make_modifiers: Vec<MakeModify<P>>, default_section: &'a P::Item) -> Self {
+    pub(super) fn new(
+        make_modifiers: impl ExactSizeIterator<Item = MakeModify<P>>,
+        default_section: &'a P::Item,
+    ) -> Self {
         let mut modifiers = Vec::with_capacity(make_modifiers.len());
         let mut bindings = Vec::with_capacity(make_modifiers.len());
 
-        for MakeModify { kind, range } in make_modifiers.into_iter() {
+        for MakeModify { kind, range } in make_modifiers {
             match kind {
                 ModifyKind::Bound(binding) => bindings.push((binding, range)),
                 ModifyKind::Modify(modify) => {

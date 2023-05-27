@@ -102,6 +102,21 @@ impl<P: Prefab> Local<P> {
     }
 }
 impl<P: Prefab> World<P> {
+    pub fn map_or_insert(
+        &mut self,
+        id: Id,
+        default: impl FnOnce() -> P::Modify,
+        update: impl FnOnce(&mut P::Modify),
+    ) {
+        if let Some((change, value)) = self.bindings.get_mut(&id) {
+            update(value);
+            // TODO(perf): pass a Mut<P::Modify> to update, check if updated
+            *change = true;
+        } else {
+            self.bindings.insert(id, (true, default()));
+        }
+    }
+
     // TODO(err): Should return Result
     pub fn set(&mut self, key: &str, value: P::Modify) -> Option<()> {
         let id = self.interner.get(key)?;

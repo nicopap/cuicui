@@ -16,7 +16,7 @@ mod structs;
 
 use std::borrow::Cow;
 
-use fab::{binding, resolve::MakeModify as FabModifier};
+use fab::{resolve::MakeModify, resolve::ModifyKind};
 use winnow::{
     ascii::{alpha1, alphanumeric1, digit1, escaped, multispace0},
     branch::alt,
@@ -26,14 +26,19 @@ use winnow::{
     dispatch,
     error::ParseError,
     stream::{AsChar, Stream, StreamIsPartial},
-    token::{any, one_of, take_till1, take_while1},
+    token::{any, one_of, take_till0, take_till1},
     Parser,
 };
 
-use crate::{modifiers::TextModifiers, richtext::TextPrefab, show::RuntimeFormat, track::Tracker};
-use structs::{flatten_section, Binding, Dyn, Format, Modifier, Section, Sections};
+use crate::{
+    modifiers::Modifier as TextModifier,
+    richtext::{TextPrefab, WorldBindings},
+    show::RuntimeFormat,
+};
+use structs::{flatten_section, Binding, Dyn, Modifier, Path, Section, Sections};
 
 pub(crate) use color::parse as color;
+pub(crate) use structs::{Format, Hook, Query, Source};
 
 type IResult<'a, O> = winnow::IResult<&'a str, O>;
 type AnyResult<T> = anyhow::Result<T>;
@@ -41,6 +46,21 @@ type AnyResult<T> = anyhow::Result<T>;
 // How to read the following code:
 // Look at the variable names for match with the grammar linked in module doc,
 // they are defined in the same order.
+
+/// Parse the prefix of the `Target` string.
+fn path(input: &str) -> IResult<Path> {
+    let namespace = alt((
+        preceded("Res.", ident).map(Query::Res),
+        preceded("One", delimited('(', ident, ')')).map(Query::One),
+        preceded("Name", (delimited('(', ident, ")."), ident)).map(Query::name),
+        preceded("Marked", (delimited('(', ident, ")."), ident)).map(Query::marked),
+    ));
+    let reflect_path = escaped(take_till0(":}\\"), '\\', one_of(":}\\"));
+    let target = (namespace, reflect_path).with_recognized().map(Source::new);
+
+    let mut path = alt((target.map(Path::Tracked), ident.map(Path::Binding)));
+    path.parse_next(input)
+}
 
 /// Parse a rust format specifier.
 ///
@@ -76,9 +96,7 @@ fn binding(input: &str) -> IResult<Binding> {
         debug: type_.is_some(),
     });
     let format_spec = alt((ident.map(Format::UserDefined), format_spec.map(Format::Fmt)));
-    let path = take_while1(('a'..='z', 'A'..='Z', '0'..='9', "_."));
-    let format = separated_pair(path, ':', format_spec);
-    let format = alt((format.map(Binding::format), ident.map(Binding::Name)));
+    let format = (path, opt(preceded(':', format_spec))).map(Binding::format);
     terminated(format, peek('}'))
         .context("format")
         .parse_next(input)
@@ -178,59 +196,43 @@ fn escape_backslashes(input: &mut Cow<str>) {
         normal
     });
 }
-pub(super) fn richtext(
-    bindings: &mut binding::World<TextPrefab>,
-    input: &str,
-    trackers: &mut Vec<Tracker>,
-) -> AnyResult<Vec<FabModifier<TextPrefab>>> {
-    use crate::track::make_tracker;
-    use fab::resolve::ModifyKind;
-    macro_rules! bound {
-        ($name:expr) => {
-            Ok(ModifyKind::Bound(bindings.get_or_add($name)))
-        };
-    }
-    let parsed = sections_inner.parse(input).map_err(|e| e.into_owned())?;
+pub(super) fn richtext<'b, 'a: 'b>(
+    bindings: &mut WorldBindings,
+    input: &'a str,
+    pullers: &'b mut Vec<Hook<'a>>,
+) -> AnyResult<Vec<MakeModify<TextPrefab>>> {
+    let mut mk_kind = |name, value| match value {
+        Dyn::Dynamic(target) => {
+            let binding = bindings.0.get_or_add(target.path.binding());
+            if let Some(puller) = target.as_pull() {
+                pullers.push(puller);
+            }
+            Ok(ModifyKind::Bound(binding))
+        }
+        Dyn::Static(value) => {
+            let mut value = value.into();
+            escape_backslashes(&mut value);
+            TextModifier::parse(name, &value).map(ModifyKind::Modify)
+        }
+    };
+    let parsed = sections_inner.parse(input).map_err(|e| e.into_owned())?.0;
+
     parsed
-        .0
         .into_iter()
         .enumerate()
-        .flat_map(|(i, sec)| {
-            sec.modifiers
-                .into_iter()
-                // NOTE: `ParseModifier` are sorted in ascending order (most specific
-                // to most general), but we want the reverse, most general to most specific,
-                // so that, when we iterate through it, we can apply general, the specific etc.
-                .rev()
-                .map(|Modifier { name, value, subsection_count }| {
-                    let try_u32 = u32::try_from;
-                    let kind = match value {
-                        Dyn::Dynamic(Binding::Name(name)) => bound!(name),
-                        Dyn::Dynamic(Binding::Format { path, format }) => {
-                            let show = match format {
-                                Format::Fmt(format) => Box::new(format),
-                                Format::UserDefined(_) => {
-                                    todo!("TODO(feat): user-specified formatters")
-                                }
-                            };
-                            // TODO(err): unwrap
-                            let tracker = make_tracker(path.to_string(), path, show).unwrap();
-                            trackers.push(tracker);
-                            bound!(path)
-                        }
-                        Dyn::Static(value) => {
-                            let mut value: Cow<'static, str> = value.to_owned().into();
-                            escape_backslashes(&mut value);
-                            TextModifiers::parse(name, &value).map(ModifyKind::Modify)
-                        }
-                    };
-                    let modifier = FabModifier {
-                        kind: kind?,
-                        range: try_u32(i)?..try_u32(i + subsection_count)?,
-                    };
-                    Ok(modifier)
+        .flat_map(|(i, sec): (usize, Section)| -> Vec<_> {
+            let try_u32 = u32::try_from;
+            // NOTE: `ParseModifier` are sorted in ascending order (most specific
+            // to most general), but we want the `.rev()`, most general to most specific,
+            // so that, when we iterate through it, we can apply general, the specific etc.
+            let ret = sec.modifiers.into_iter().rev().map(|modi| {
+                let Modifier { name, value, subsection_count } = modi;
+                Ok(MakeModify {
+                    range: try_u32(i)?..try_u32(i + subsection_count)?,
+                    kind: mk_kind(name, value)?,
                 })
-                .collect::<Vec<_>>()
+            });
+            ret.collect()
         })
         .collect()
 }

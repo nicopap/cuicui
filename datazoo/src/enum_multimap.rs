@@ -54,7 +54,6 @@ impl<K: EnumSetType, V, const CLM: usize> EnumMultiMap<K, V, CLM> {
 
 #[derive(Debug, Clone)]
 pub struct Builder<K, V, const CLM: usize> {
-    // TODO(perf): could be replaced by eehh idk
     pub rows: Vec<Box<[V]>>,
     _key: PhantomData<K>,
 }

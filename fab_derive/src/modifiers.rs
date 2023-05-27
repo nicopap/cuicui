@@ -131,12 +131,12 @@ impl Modify {
         self.ident() == Some(ident)
     }
 
-    fn field_enum_name(&self) -> Option<Ident> {
+    fn field_enum_name(&self) -> Option<&Ident> {
         use Modify::*;
         match self {
             Context(_) | DynamicReadWrite(..) => None,
             WriteMut(path) | Write(path) | Read(path) | ReadWrite(path) => {
-                Some(path.to_field_enum_name())
+                Some(&path.variant_ident)
             }
         }
     }
@@ -179,10 +179,8 @@ impl Modifiers {
     ///
     /// Returns empty stream if write modify is passed by reference.
     fn write_field(&self, item: &Ident) -> TokenStream {
-        self.0
-            .iter()
-            .find_map(|m| m.as_output(item))
-            .unwrap_or(quote!())
+        let found = self.0.iter().find_map(|m| m.as_output(item));
+        found.unwrap_or(quote!())
     }
     /// The call site: `item.path = fn_name(field1, field2, &item.input1, &mut item.inout)`
     pub fn call<'a>(
@@ -212,7 +210,8 @@ impl Modifiers {
     /// It is invalid when:
     /// - Any of the argument is not in the form `foo` or `mut foo`.
     /// - There is a `Modify` with an identifier not present in arguments
-    /// - There isn't an output `Modify` (ie: it does nothing)
+    /// - There isn't an output modify attribute (ie: it does nothing)
+    /// - There is an invalid attribute
     pub fn validate(&self, function: &ItemFn) -> syn::Result<()> {
         let fn_name = &function.sig.ident;
         macro_rules! bail {
@@ -289,12 +288,12 @@ impl Modifiers {
             .map(|m| rw.pick(m))
     }
 
-    pub(crate) fn used_fields(&self, rw: Mode) -> impl Iterator<Item = Ident> + '_ {
+    pub(crate) fn used_fields(&self, rw: Mode) -> impl Iterator<Item = &Ident> + '_ {
         let rw = rw.is_mode();
         self.0.iter().filter(rw).filter_map(|m| m.field_enum_name())
     }
 
-    pub(crate) fn access_idents(&self) -> impl Iterator<Item = Ident> + '_ {
+    pub(crate) fn access_idents(&self) -> impl Iterator<Item = &Ident> + '_ {
         self.0.iter().filter_map(|m| m.field_enum_name())
     }
 }

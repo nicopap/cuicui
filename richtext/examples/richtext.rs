@@ -95,7 +95,8 @@ fn color_update(time: Res<Time>, mut query: Query<&mut RichTextData, With<ColorT
             blue: (0.50 * seconds).sin() / 2.0 + 0.5,
             alpha: 1.0,
         };
-        text.set("color", modifiers::TextModifiers::color(new_color));
+        text.bindings
+            .set("color", modifiers::Modifier::color(new_color));
     }
 }
 fn greet_update(

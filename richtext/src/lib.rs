@@ -95,6 +95,6 @@ mod richtext;
 pub mod show;
 pub mod track;
 
-pub use plugin::{make_rich, MakeRichText, MakeRichTextBundle, RichTextPlugin, WorldBindings};
-pub use richtext::{RichText, RichTextBuilder, RichTextData};
-pub use track::{ResTrackers, Tracked};
+pub use plugin::{mk_richtext, MakeRichText, MakeRichTextBundle, RichTextPlugin};
+pub use richtext::{RichText, RichTextData, WorldBindings};
+pub use track::{Hooks, Tracked};

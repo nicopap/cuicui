@@ -181,6 +181,6 @@ impl ModifyFn {
         self.arm(root, field_ty_name, Mode::Write)
     }
     pub fn access_idents(&self) -> impl Iterator<Item = Ident> + '_ {
-        self.modifiers.access_idents()
+        self.modifiers.access_idents().cloned()
     }
 }
