@@ -52,9 +52,7 @@ impl Hook {
         bindings: &mut Mut<WorldBindings>,
     ) -> Option<()> {
         let value = self.read.world(world)?;
-        // TODO(perf): allow an Entry-like API to avoid string allocations.
-        let value = self.write.modify(value);
-        bindings.0.set_id_neq(self.binding, value);
+        self.write.modify(value, bindings.0.entry(self.binding));
         Some(())
     }
 }

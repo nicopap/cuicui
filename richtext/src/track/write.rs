@@ -1,12 +1,10 @@
-use core::fmt;
+use std::fmt;
 
 use bevy::reflect::Reflect;
+use fab::binding;
 
 use crate::{modifiers::Modifier, parse, show::RuntimeFormat};
 
-// TODO(perf): If bindings::World had a `entry -> Entry` we could use it to
-// optionally update in-place the TextModifier. This would help avoiding
-// allocations.
 /// Turn a [`&dyn Reflect`] into a [`TextModifier`].
 pub enum Write {
     /// Print the `Reflect` as a [`TextModifier::content`] displayed with the
@@ -14,19 +12,23 @@ pub enum Write {
     Format(RuntimeFormat),
 
     /// An arbitrary function to run on the `Reflect`.
-    Arbitrary(fn(&dyn Reflect) -> Modifier),
+    Arbitrary(fn(&dyn Reflect, binding::Entry<Modifier>)),
 
     /// Print the `Reflect` as a [`TextModifier::content`] displayed with
     /// [`Reflect::debug`].
     Debug,
 }
 impl Write {
-    pub fn modify(&self, value: &dyn Reflect) -> Modifier {
-        let content = |s: String| Modifier::content(s.into());
+    pub fn modify(&self, value: &dyn Reflect, entry: binding::Entry<Modifier>) {
+        fn set_content(entry: binding::Entry<Modifier>, s: impl fmt::Display) {
+            entry
+                .modify(|m| m.overwrite_content(&s))
+                .or_insert(Modifier::content(s.to_string().into()));
+        }
         match self {
-            Write::Format(fmt) => content(fmt.display(value).to_string()),
-            Write::Arbitrary(run) => run(value),
-            Write::Debug => content(DisplayReflect(value).to_string()),
+            Write::Format(fmt) => set_content(entry, fmt.display(value)),
+            Write::Arbitrary(run) => run(value, entry),
+            Write::Debug => set_content(entry, DisplayReflect(value)),
         }
     }
 

@@ -1,5 +1,7 @@
 //! Stores [`Modify`].
 
+mod entry;
+
 use std::{collections::BTreeMap, fmt, mem};
 
 use anyhow::anyhow;
@@ -11,6 +13,8 @@ use string_interner::{backend::StringBackend, StringInterner, Symbol};
 use crate::prefab::Modify;
 
 use crate::prefab::Prefab;
+
+pub use entry::Entry;
 
 /// A binding id used in [`World`] and [`Local`] to associate a name to a
 /// [`Modify`].
@@ -62,6 +66,9 @@ pub struct View<'a, P: Prefab> {
 }
 
 impl<P: Prefab> Local<P> {
+    pub fn entry(&mut self, id: Id) -> Entry<P::Modify> {
+        Entry::new(&mut self.bindings, id)
+    }
     pub fn set_by_id(&mut self, id: Id, value: P::Modify) {
         self.bindings.insert(id, (true, value));
     }
@@ -102,19 +109,8 @@ impl<P: Prefab> Local<P> {
     }
 }
 impl<P: Prefab> World<P> {
-    pub fn map_or_insert(
-        &mut self,
-        id: Id,
-        default: impl FnOnce() -> P::Modify,
-        update: impl FnOnce(&mut P::Modify),
-    ) {
-        if let Some((change, value)) = self.bindings.get_mut(&id) {
-            update(value);
-            // TODO(perf): pass a Mut<P::Modify> to update, check if updated
-            *change = true;
-        } else {
-            self.bindings.insert(id, (true, default()));
-        }
+    pub fn entry(&mut self, id: Id) -> Entry<P::Modify> {
+        Entry::new(&mut self.bindings, id)
     }
 
     // TODO(err): Should return Result

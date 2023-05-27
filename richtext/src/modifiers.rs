@@ -1,4 +1,5 @@
 //! Provided implementations for the [`Modify<TextPrefab>`] trait for cuicui.
+use std::fmt::Write;
 use std::{any::Any, borrow::Cow, fmt};
 
 use bevy::prelude::{trace, Color, Handle};
@@ -47,6 +48,18 @@ impl Modify<TextSection> for Modifier {
     }
 }
 impl Modifier {
+    /// Set this [`Modifier`] to [`Modifier::Content`].
+    ///
+    /// Note that this **doesn't allocate** if `self` is already [`Modifier::Content`].
+    pub fn overwrite_content(&mut self, new_content: &impl fmt::Display) {
+        if let Modifier::Content { statik } = self {
+            let statik = statik.to_mut();
+            statik.clear();
+            write!(statik, "{new_content}").unwrap();
+        } else {
+            *self = Modifier::content(new_content.to_string().into());
+        }
+    }
     pub fn parse(name: &str, input: &str) -> anyhow::Result<Self> {
         match name {
             n if n == "Font" => Ok(Self::font(input.to_string().into())),
