@@ -45,9 +45,10 @@ type Ctx<'a, M, I> = <M as Modify<I>>::Context<'a>;
 /// [read]: Modify::depends
 /// [update]: Modify::changes
 pub trait Modify<I: ?Sized> {
-    /// The [set](EnumSet) elements of fields that `Self` accesses on `I`.
+    /// The [set](EnumSet) of fields that `Self` accesses on `I`.
     type Field: EnumSetType;
 
+    // TODO(perf): Change detection on context as well.
     /// An additional context **outside of `I`** that is relevant to operations
     /// on `I`.
     type Context<'a>
@@ -92,13 +93,13 @@ pub trait Prefab {
 /// track of the updated fields.
 ///
 /// To reset the field update tracking, use [`Changing::reset_updated`].
-pub struct Changing<P: Prefab> {
-    pub(crate) updated: FieldsOf<P>,
-    pub(crate) value: P::Item,
+pub struct Changing<I, M: Modify<I>> {
+    pub(crate) updated: EnumSet<M::Field>,
+    pub(crate) value: I,
 }
-impl<P: Prefab> Changing<P> {
+impl<I, M: Modify<I>> Changing<I, M> {
     /// Store this `value` in a `Changing`, with no updated field.
-    pub fn new(value: P::Item) -> Self {
+    pub fn new(value: I) -> Self {
         Self { updated: EnumSet::EMPTY, value }
     }
     /// Update `self` with `f`, declaring that `update` is changed.
@@ -106,9 +107,9 @@ impl<P: Prefab> Changing<P> {
     /// If you change fields other than the ones in `updated`, they won't be
     /// tracked as changed. So make sure to properly declare which fields
     /// you are changing.
-    pub fn update(&mut self, updated: FieldsOf<P>, f: impl FnOnce(&mut Self)) {
+    pub fn update(&mut self, updated: M::Field, f: impl FnOnce(&mut I)) {
         self.updated |= updated;
-        f(self);
+        f(&mut self.value);
     }
     /// Reset the change tracker state.
     pub fn reset_updated(&mut self) {

@@ -61,7 +61,7 @@ impl WorldBindings {
 #[derive(Debug)]
 pub struct RichText(Resolver<TextPrefab, { (ModifierField::BIT_WIDTH - 1) as usize }>);
 
-pub struct TrackedText(Changing<TextPrefab>);
+pub struct TrackedText(Changing<TextSection, Modifier>);
 
 #[derive(Component)]
 pub struct RichTextData {

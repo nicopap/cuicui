@@ -123,7 +123,7 @@ where
     pub fn update<'a>(
         &'a self,
         to_update: &'a mut P::Items,
-        updates: &'a Changing<P>,
+        updates: &'a Changing<P::Item, P::Modify>,
         bindings: View<'a, P>,
         ctx: &'a PrefabContext<'a, P>,
     ) {
