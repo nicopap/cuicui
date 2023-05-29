@@ -16,32 +16,48 @@ use crate::richtext::GetFont;
 /// [`Component`]: bevy::prelude::Component
 pub type ModifyBox = Box<dyn TextModify + Send + Sync + 'static>;
 
+/// Operations on bevy [`TextSection`]s.
+///
+/// You typically get a [`RichText`] from parsing a [format string]. The modifiers
+/// are then managed by [`RichText`].
+///
+/// You can create your own operations. At the cost of storing them as a [`ModifyBox`]
+/// and having to be careful about what you update. You create such a `Modifier`
+/// using [`Modifier::Dynamic`].
+///
+/// [`RichText`]: crate::RichText
+/// [format string]: https://github.com/nicopap/cuicui/blob/main/design_doc/richtext/informal_grammar.md
 #[impl_modify(cuicui_fab_path = fab)]
 #[derive(PartialEq, Debug)]
 impl Modify<TextSection> for Modifier {
     type Context<'a> = GetFont<'a>;
 
+    /// Set the font to provided `path`.
     #[modify(context(get_font), write(.style.font))]
     fn font(path: &Cow<'static, str>, get_font: &GetFont) -> Handle<Font> {
         trace!("Apply =font=: {path:?}");
         get_font.get(path).unwrap_or_default()
     }
+    /// Increase the font size relative to the current section.
     #[modify(read_write(.style.font_size))]
     fn rel_size(relative_size: f32, font_size: &mut f32) {
         trace!("Apply :rel_size: {relative_size:?}");
         *font_size *= relative_size;
     }
+    /// Set the color of the [`TextSection`] to `statik`.
     #[modify(write(.style.color))]
     fn color(statik: Color) -> Color {
         trace!("Apply ~COLOR~: {statik:?}");
         statik
     }
+    /// Set the text content of the [`TextSection`] to `statik`.
     #[modify(write_mut(.value))]
     fn content(statik: &Cow<'static, str>, value: &mut String) {
         trace!("Apply $CONTENT$: {statik:?}");
         value.clear();
         value.push_str(statik);
     }
+    /// Use an arbitrary [`ModifyBox`] to modify this section.
     #[modify(dynamic_read_write(depends, changes, item), context(ctx))]
     fn dynamic(boxed: &ModifyBox, ctx: &GetFont, item: &mut TextSection) {
         boxed.apply(ctx, item);

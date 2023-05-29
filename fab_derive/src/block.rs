@@ -199,9 +199,17 @@ impl Block {
 
         let ty_attributes = &self.attributes;
         quote! {
-            /// Fields accessed by [`
-            #[doc = stringify!(#modify_ty)]
-            /// `].
+            #[doc = concat!("Fields accessed by [`", stringify!(#modify_ty), "`].")]
+            #[doc = "\n\n"]
+            #[doc = concat!(
+                "Fields may be members of [`",
+                stringify!(#impl_target),
+                "`], the prefab items of sections modified by [`",
+                stringify!(#modify_ty),
+                "`], or fields of the context [`",
+                stringify!(#modify_ty),
+                "::Context`].\n",
+            )]
             #[derive( ::#enset::EnumSetType, ::std::fmt::Debug )]
             #[enumset(crate_name = #enset_string)]
             #vis enum #field_ty {
