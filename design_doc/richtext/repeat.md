@@ -57,7 +57,7 @@ This would:
 
 ### Problems
 
-- Time complexity: This requires applying **½×n²** times the `HueShift` modifier.
+- Time complexity: This requires applying **½ · n²** times the `HueShift` modifier.
 - Preset subsection splitting: This prevents using subsections in the content string.
 - Verbosity: This is still fairly verbose, although not as much as before
 
@@ -143,3 +143,110 @@ depending on a runtime or static setting.
 
 But the DSL for rich text should be approachable enough for non-technical people
 to use effectively.
+
+## Implementation
+
+Splitting either happens during parsing or as a transformation after parsing.
+
+### At parse time
+
+Advantages are:
+
+- Do not need to re-visit the parsed tree, less overhead
+- Easier to keep track of section size and position
+
+Problems are:
+
+- Current impl is only a bunch of `&str` there is no semantics to parsed value,
+  would need to introduce storing `Modify` to the parsing
+- If we opt for a hlist-based `Split` declaration, we would need to pass the
+  `S: Split` is type parameter accross all parsing functions, and might result
+  in very difficult-to-read error messages.
+- Mixing semantics with syntax parsing probably won't end well.
+
+Implementation:
+
+I would change the way `Sections` extends its internal list. I would read the
+`Content` modifier and split the sections in multiple sections before accumulating
+them.
+
+Actually change `flatten_section` and `Section::free`.
+
+would need to add a `s: Split` argument to those functions? Add a field to
+`Section` to account for that. Then the returned `Vec` of those functions would
+be extended based on the repeat mode. (but also the modifier lengths shall be
+extended as well.
+
+### Post-parsing
+
+Each `Section` has `Modifier`s that apply to the current `content`, but also
+all the next *n* `Section`s where *n* is `Modifier::subsection_count`.
+
+```
+{M4 | { M2 | {M1, M3 | Hello}{M2, R |{M1 | This has several}{M5 | words here }}}{M6 | also more}}
+Four sections:         -----               ----------------       ----------          ---------
+
+R: (Repeat::ByWord, fn(_) ─-> M8)
+
+  Hello  │      This has several      │    words here    │  also more
+M2───────┼────────────────────────────┼──────────────    │M6─────────
+M1─────  │  M2────────────────────────┼──────────────    │
+M3─────  │  R ────────────────────────┼──────────────    │
+         │  M1————————————————————    │  M5──────────    │
+M4───────┼────────────────────────────┼──────────────────┼───────────
+
+  Hello  ┃  This  │  has  │  several  ┃  words  │  here  ┃  also more
+M2───────╂────────┼───────┼───────────╂─────────┼──────  ┃M6─────────
+M1─────  ┃M2──────┼───────┼───────────╂─────────┼──────  ┃
+M3─────  ┃M8────  │M8───  │M8───────  ┃M8─────  │M8────  ┃
+         ┃M1──────┼───────┼─────────  ┃M5───────┼──────  ┃
+M4───────╂────────┼───────┼───────────╂─────────┼────────╂───────────
+
+=====================================================================
+=====================================================================
+
+┌───────┬──────────────────────┬────────────────┬─────────┐
+│ sec 1 │         sec 2        │     sec 3      │  sec 4  │
+│ Hello │   This has several   │   words here   │also more│
+├───────┼──────────────────────┼────────────────┼─────────┤
+│mod│len│        mod│len       │     mod│len    │ mod│len │
+│───┼───│        ───┼───       │     ───┼───    │ ───┼─── │
+│M4 │ 4 │        M2 │ 2        │     M5 │ 1     │ M6 │ 1  │
+│M2 │ 3 │        R  │ 2        ├────────────────┴─────────┘
+│M1 │ 1 │        M1 │ 1        │
+│M3 │ 1 ├──────────────────────┘
+└───────┘
+
+┌───────┬───────┬───────┬───────┬───────┬───────┬─────────┐
+│ sec 1 │ sec 2 │ sec 3 │ sec 4 │ sec 5 │ sec 6 │  sec 7  │
+│ Hello │ This  │  has  │several│ words │  here │also more│
+├───────┼───────┼───────┼───────┼───────┼───────┼─────────┤
+│mod│len│mod│len│mod│len│mod│len│mod│len│mod│len│ mod│len │
+│───┼───│───┼───│───┼───│───┼───│───┼───│───┼───│ ───┼─── │
+│M4 │ 7 │M2 │ 5 │M8 │ 1 │M8 │ 1 │M8 │ 1 │M8 │ 1 │ M6 │ 1  │
+│M2 │ 6 │M8 │ 1 ├───────┴───────┤M5 │ 2 ├───────┴─────────┘
+│M1 │ 1 │M1 │ 3 │               └───────┘
+│M3 │ 1 ├───────┘
+└───────┘
+```
+
+What happens when we have multiple active `Repeat`?
+⇒ Let's leave this for the future.
+
+- For each Possible `repeat`:
+  - Iterate through all sections, if `section` has given `repeat`:
+    - Remove `repeat` from `section`
+    - Count sum of words in next `section.repeat.subsection_count` (including this one)
+    - For `current_section` in next `section.repeat.subsection_count` (including this one):
+      - Split content in *n* contents in `content_list`
+      - Change `current_section`'s content to `content_list.head`
+      - For all `modify` in `current_section`:
+        - Increment `modify.subsection_count` by *n - 1*
+      - For all `section` precedeeing `current_section`:
+        - For all `modify` in `section`, if `subsection_count` contains `current_section`:
+          - increment `modify.subsection_count` by *n - 1*
+      - Add the `mk_modify` with `subsection_count = 1` to `current_section`
+      - For all `content` in `content_list.tail`:
+        - Insert between `current_section` and the next a new section
+          with only modifiers `mk_modify` with `subsection_count = 1` and
+          `content`
