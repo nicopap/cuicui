@@ -13,7 +13,7 @@ fn main() {
             DefaultPlugins.set(bevy::log::LogPlugin {
                 level: bevy::log::Level::DEBUG,
                 filter:
-                    "wgpu=warn,bevy_ecs=info,naga=info,bevy_app=info,gilrs_core=info,gilrs=info,cuicui_richtext::show=debug,cuicui_fab=trace"
+                    "wgpu=warn,bevy_ecs=info,naga=info,bevy_app=info,gilrs_core=info,gilrs=info,cuicui_fab=trace,cuicui_richtext=trace,cuicui_richtext::modifiers=debug"
                         .to_string(),
             }),
         )
@@ -44,22 +44,25 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // UI camera
     commands.spawn(Camera2dBundle::default());
     commands.spawn((
-        MakeRichTextBundle::new("{Color:{color}|hello\n{greeted}!}")
-            .with_text_style(TextStyle {
-                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                font_size: 100.0,
-                color: Color::WHITE,
-            })
-            .with_text_alignment(TextAlignment::Center)
-            .with_style(Style {
-                position_type: PositionType::Absolute,
-                position: UiRect {
-                    bottom: Val::Px(5.0),
-                    right: Val::Px(15.0),
-                    ..default()
-                },
+        MakeRichTextBundle::new(
+            "{Color:{color}|{Rainbow:20.0|hello} {greeted}!}\n\
+            {Sine:80|We are having fun here, woopy! we use words as well, nice!}",
+        )
+        .with_text_style(TextStyle {
+            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+            font_size: 100.0,
+            color: Color::WHITE,
+        })
+        .with_text_alignment(TextAlignment::Center)
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            position: UiRect {
+                bottom: Val::Px(5.0),
+                right: Val::Px(15.0),
                 ..default()
-            }),
+            },
+            ..default()
+        }),
         ColorText,
         Name::new("Greet"),
     ));

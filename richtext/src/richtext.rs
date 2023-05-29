@@ -2,13 +2,17 @@ use std::fmt::{self, Write};
 
 use bevy::{
     asset::HandleId,
-    prelude::{Assets, Component, Handle, Resource},
+    prelude::{Assets, CardinalSpline, Component, CubicGenerator, Handle, Resource},
     text::{BreakLineOn, Font, Text, TextAlignment, TextSection},
 };
 use enumset::__internal::EnumSetTypePrivate;
 use fab::{binding, prefab::Changing, prefab::Prefab, resolve::Resolver};
 
-use crate::{modifiers::Modifier, modifiers::ModifierField, parse};
+use crate::{
+    modifiers::Modifier,
+    modifiers::ModifierField,
+    parse::{self, Repeat, TreeSplitter},
+};
 
 // TODO(clean): Make this private, only expose opaque wrappers
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -55,6 +59,10 @@ impl WorldBindings {
             let content = Modifier::content(value.to_string().into());
             self.0.set_neq(key, content);
         }
+    }
+    /// Get the `binding::Id` of `binding`
+    pub fn intern(&mut self, binding: &str) -> binding::Id {
+        self.0.get_or_add(binding)
     }
 }
 
@@ -119,12 +127,26 @@ pub(crate) fn mk<'fstr>(
     linebreak_behaviour: BreakLineOn,
     format_string: &'fstr str,
 ) -> anyhow::Result<(Text, RichText, Vec<parse::Hook<'fstr>>)> {
-    let mut pulls = Vec::new();
+    use Repeat::ByChar;
 
-    let modifiers = parse::richtext(bindings, format_string, &mut pulls)?;
+    let mut new_hooks = Vec::new();
 
-    let (rich_text, sections) = Resolver::new(modifiers.into_iter(), base_section, &get_font);
+    let sin_curve = CardinalSpline::new_catmull_rom([0., 1., 0., 1., 0., 1., 0., 1., 0., 1., 0.]);
+
+    let tree = parse::richtext(format_string)?;
+    let builder = TreeSplitter::new()
+        .repeat_acc(ByChar, "Rainbow", |hue_offset: &mut f32, i, _| {
+            Modifier::hue_offset(*hue_offset * i as f32)
+        })
+        .repeat_on_curve(ByChar, "Sine", sin_curve.to_curve(), |ampl: &mut f32, t| {
+            let size_change = (20.0 + t * *ampl).floor();
+            Modifier::font_size(size_change)
+        });
+    let parsed = tree.split(builder).parse(bindings, &mut new_hooks);
+    let parsed: Vec<_> = parsed.into_iter().collect::<anyhow::Result<_>>()?;
+
+    let (rich_text, sections) = Resolver::new(parsed.into_iter(), base_section, &get_font);
     let text = Text { sections, alignment, linebreak_behaviour };
 
-    Ok((text, RichText(rich_text), pulls))
+    Ok((text, RichText(rich_text), new_hooks))
 }

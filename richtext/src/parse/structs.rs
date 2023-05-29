@@ -2,9 +2,29 @@
 
 use crate::show::RuntimeFormat;
 
+use bevy::prelude::trace;
 use winnow::stream::Accumulate;
 
-const CONTENT_NAME: &str = "Content";
+pub(super) const CONTENT_NAME: &str = "Content";
+pub(super) fn is_content(m: &Modifier) -> bool {
+    m.name == CONTENT_NAME
+}
+pub(super) fn get_content<'a>(m: &Modifier<'a>) -> Option<&'a str> {
+    match m.value {
+        Dyn::Static(value) if is_content(m) => Some(value),
+        _ => {
+            trace!("no content: {m:?}");
+            None
+        }
+    }
+}
+pub(super) fn get_content_mut<'a, 'b>(m: &'b mut Modifier<'a>) -> Option<&'b mut &'a str> {
+    let is_content = is_content(m);
+    match &mut m.value {
+        Dyn::Static(value) if is_content => Some(value),
+        _ => None,
+    }
+}
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub(super) enum Path<'a> {
@@ -15,12 +35,12 @@ impl<'a> Path<'a> {
     pub(super) fn binding(&self) -> &'a str {
         use Path::*;
 
-        let (Binding(binding) | Tracked(Source{ binding, .. })) = self;
+        let (Binding(binding) | Tracked(Source { binding, .. })) = self;
         binding
     }
 }
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub(crate) struct Source<'a>{
+pub(crate) struct Source<'a> {
     pub(crate) query: Query<'a>,
     pub(crate) reflect_path: &'a str,
     /// Full name of the binding. This is query + reflect_path
@@ -86,15 +106,12 @@ pub(super) struct Binding<'a> {
 impl<'a> Binding<'a> {
     #[cfg(test)]
     pub(super) fn named(name: &'a str) -> Self {
-        Binding {
-            path: Path::Binding(name),
-            format: None,
-        }
+        Binding { path: Path::Binding(name), format: None }
     }
 
-    pub(crate) fn as_pull(&self) -> Option<Hook<'a>> {
+    pub(crate) fn as_hook(&self) -> Option<Hook<'a>> {
         if let Path::Tracked(source) = self.path {
-            Some(Hook { source, format: self.format})
+            Some(Hook { source, format: self.format })
         } else {
             None
         }
@@ -111,7 +128,7 @@ pub(crate) enum Format<'a> {
 #[derive(Debug, PartialEq, Clone)]
 pub(super) struct Sections<'a>(pub(super) Vec<Section<'a>>);
 impl<'a> Sections<'a> {
-    pub(super) fn tail((head, mut tail): (Option<Section<'a>>, Self)) -> Self {
+    pub(super) fn full_subsection((head, mut tail): (Option<Section<'a>>, Self)) -> Self {
         if let Some(head) = head {
             tail.0.insert(0, head);
         }
@@ -163,25 +180,64 @@ impl<'a> Binding<'a> {
     }
 }
 
+/// Create a section with given `modifers`
+///
+/// ```text
+/// {Modifier1: 1.32, Modifier2: hi|Some text{a_subsection}and more{Modifier3:34.3|subsections}}
+/// ```
+///
+/// Here, the `modifiers` would be:
+/// ```text
+/// [ Modifier1: 1.32, Modifier2: hi]
+/// ```
+///
+/// `content` would be:
+/// ```text
+/// [
+///     Some text
+///     {a_subsection}
+///     and more
+///     {Modifier3: 34.3[subsections]}
+/// ]
+/// ```
+///
+/// Applying `flatten_section` stores the modifiers in the first section.
+/// The `subsection_count` of each modifier is increased, this tells the rest
+/// of the code that the modifier affects not only this first section, but also
+/// all `subsection_count` other subsections existing afterward (including the first).
+///
+/// `flatten_section` will return a `Vec<Section>` with the first `Section`
+/// containing all the `modifiers`, where `subsection_count` is how many subsections
+/// there are.
+///
+/// A typical section doesn't have subsections:
+/// ```text
+/// {Modifier1: 1.32 |This is a typical section}
+/// ```
+///
+/// This produces a `Vec<Section>` with a single element.
 pub(super) fn flatten_section<'a>(
     (mut modifiers, content): (Vec<Modifier<'a>>, Option<Sections<'a>>),
 ) -> Vec<Section<'a>> {
     // Either we have a `content` metadata or we re-use section
-    let Some(Sections(mut sections)) = content else {
-        return match modifiers.iter().find(|m| m.name == CONTENT_NAME) {
-            // TODO(err): should error here, we have metadata and no content
-            None => vec![],
-            Some(_) => vec![Section { modifiers }],
-            
-        }
+    let mut sections = if let Some(Sections(sections)) = content {
+        sections
+    } else if modifiers.iter().any(is_content) {
+        vec![Section { modifiers: Vec::with_capacity(modifiers.len()) }]
+    } else {
+        // TODO(err): should error here, we have metadata and no content,
+        // this discard something the user wrote, means they probably didn't
+        // intend on this behavior.
+        return vec![];
     };
     let subsection_count = sections.len();
 
     // TODO(err): verify that we never have duplicate CONTENT_NAME
     if let Some(first_section) = sections.get_mut(0) {
-        let extended_modifiers = modifiers.drain(..).map(|m| Modifier { subsection_count,..m});
+        let extended_modifiers = modifiers
+            .drain(..)
+            .map(|m| Modifier { subsection_count, ..m });
         first_section.modifiers.extend(extended_modifiers);
     }
     sections
 }
-

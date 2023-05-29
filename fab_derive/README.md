@@ -14,7 +14,7 @@ trait implementation for `Modify<I>` as follow:
 
 Consider the following structs:
 
-```rust
+```text
 struct Color([f32;4]);
 impl Color {
   fn as_hsla(&self) -> [f32;4] { self.0 }
@@ -31,7 +31,7 @@ struct TextSection {
 }
 ```
 
-```rust
+```text
 use cuicui_fab_derive::impl_modify;
 
 #[impl_modify]
@@ -43,7 +43,7 @@ The first item (declaration) within that `impl` block should be a type
 definition for `Context`. The type definition accepts either 1 or 0 lifetime
 parameters:
 
-```rust
+```text
     // ...
     type Context<'a> = ();
     // ...
@@ -52,7 +52,7 @@ parameters:
 All other items are function declarations. They can be documented. You can
 decorate them with the `modify` attributes.
 
-```rust
+```text
     // ...
     #[modify(read_write(.style.color))]
     fn shift_hue(hue_offset: f32, color: &mut Color) {
@@ -83,7 +83,7 @@ All the `modify` attributes are:
    typically useful when you want to overwrite a string value without
    allocating anything.
 
-```rust
+```text
 #[modify(read(.style.font_size))]
 fn some_change(font_size: f32) {
     // ...
@@ -93,7 +93,7 @@ fn some_change(font_size: f32) {
 You might want to rename the field name before passing it as argument.
 To do so, use the following syntax:
 
-```rust
+```text
 #[modify(read(size = .style.font_size))]
 fn some_change(size: f32) {
     // ...
@@ -118,7 +118,7 @@ Those functions have two kinds of arguments:
 2. Passed parameters: they are fields of the modiify item `I`,
    here `TextSection`
 
-```rust
+```text
 #[impl_modify]
 impl Modify<TextSection> for CustomModify {
     type Context<'a> = GetFont<'a>;
@@ -144,7 +144,7 @@ defined function in `impl_modify`. In our last example, we defined:
 
 Therefore, our `CustomModify` will look as follow:
 
-```rust
+```text
 enum CustomModify {
   ShiftHue { offset: f32 },
   Color { set_to: Color },

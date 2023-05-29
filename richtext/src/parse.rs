@@ -13,10 +13,8 @@ mod tests;
 mod color;
 mod error;
 mod structs;
+mod tree;
 
-use std::borrow::Cow;
-
-use fab::{resolve::MakeModify, resolve::ModifyKind};
 use winnow::{
     ascii::{alpha1, alphanumeric1, digit1, escaped, multispace0},
     branch::alt,
@@ -30,18 +28,14 @@ use winnow::{
     Parser,
 };
 
-use crate::{
-    modifiers::Modifier as TextModifier,
-    richtext::{TextPrefab, WorldBindings},
-    show::RuntimeFormat,
-};
+use crate::show::RuntimeFormat;
 use structs::{flatten_section, Binding, Dyn, Modifier, Path, Section, Sections};
 
 pub(crate) use color::parse as color;
 pub(crate) use structs::{Format, Hook, Query, Source};
+pub(crate) use tree::{Repeat, Tree, TreeSplitter};
 
 type IResult<'a, O> = winnow::IResult<&'a str, O>;
-type AnyResult<T> = anyhow::Result<T>;
 
 // How to read the following code:
 // Look at the variable names for match with the grammar linked in module doc,
@@ -49,16 +43,17 @@ type AnyResult<T> = anyhow::Result<T>;
 
 /// Parse the prefix of the `Target` string.
 fn path(input: &str) -> IResult<Path> {
-    let namespace = alt((
-        preceded("Res.", ident).map(Query::Res),
-        preceded("One", delimited('(', ident, ')')).map(Query::One),
-        preceded("Name", (delimited('(', ident, ")."), ident)).map(Query::name),
-        preceded("Marked", (delimited('(', ident, ")."), ident)).map(Query::marked),
-    ));
+    let namespace = dispatch! {ident;
+        "Res" => preceded('.', ident).map(Query::Res),
+        "One" => delimited('(', ident, ')').map(Query::One),
+        "Name" => (delimited('(', ident, ")."), ident).map(Query::name),
+        "Marked" => (delimited('(', ident, ")."), ident).map(Query::marked),
+        _ => fail,
+    };
     let reflect_path = escaped(take_till0(":}\\"), '\\', one_of(":}\\"));
-    let target = (namespace, reflect_path).with_recognized().map(Source::new);
+    let source = (namespace, reflect_path).with_recognized().map(Source::new);
 
-    let mut path = alt((target.map(Path::Tracked), ident.map(Path::Binding)));
+    let mut path = alt((source.map(Path::Tracked), ident.map(Path::Binding)));
     path.parse_next(input)
 }
 
@@ -174,65 +169,15 @@ fn bare_content(input: &str) -> IResult<Sections> {
     let open_sub = open_subsection;
     (open_sub, repeat0((close_section, open_sub)))
         .context("section content")
-        .map(Sections::tail)
+        .map(Sections::full_subsection)
         .parse_next(input)
 }
-fn sections_inner(input: &str) -> IResult<Sections> {
+fn sections(input: &str) -> IResult<Sections> {
     (open_section, repeat0((close_section, open_section)))
-        .map(Sections::tail)
+        .map(Sections::full_subsection)
         .parse_next(input)
 }
-fn escape_backslashes(input: &mut Cow<str>) {
-    if !input.contains('\\') {
-        return;
-    }
-    let input = input.to_mut();
-    let mut prev_normal = true;
-    input.retain(|c| {
-        let backslash = c == '\\';
-        let remove = prev_normal && backslash;
-        let normal = !remove;
-        prev_normal = normal || !backslash;
-        normal
-    });
-}
-pub(super) fn richtext<'b, 'a: 'b>(
-    bindings: &mut WorldBindings,
-    input: &'a str,
-    pullers: &'b mut Vec<Hook<'a>>,
-) -> AnyResult<Vec<MakeModify<TextPrefab>>> {
-    let mut mk_kind = |name, value| match value {
-        Dyn::Dynamic(target) => {
-            let binding = bindings.0.get_or_add(target.path.binding());
-            if let Some(puller) = target.as_pull() {
-                pullers.push(puller);
-            }
-            Ok(ModifyKind::Bound(binding))
-        }
-        Dyn::Static(value) => {
-            let mut value = value.into();
-            escape_backslashes(&mut value);
-            TextModifier::parse(name, &value).map(ModifyKind::Modify)
-        }
-    };
-    let parsed = sections_inner.parse(input).map_err(|e| e.into_owned())?.0;
-
-    parsed
-        .into_iter()
-        .enumerate()
-        .flat_map(|(i, sec): (usize, Section)| -> Vec<_> {
-            let try_u32 = u32::try_from;
-            // NOTE: `ParseModifier` are sorted in ascending order (most specific
-            // to most general), but we want the `.rev()`, most general to most specific,
-            // so that, when we iterate through it, we can apply general, the specific etc.
-            let ret = sec.modifiers.into_iter().rev().map(|modi| {
-                let Modifier { name, value, subsection_count } = modi;
-                Ok(MakeModify {
-                    range: try_u32(i)?..try_u32(i + subsection_count)?,
-                    kind: mk_kind(name, value)?,
-                })
-            });
-            ret.collect()
-        })
-        .collect()
+pub(super) fn richtext(input: &str) -> anyhow::Result<Tree> {
+    let sections = sections.parse(input).map_err(|e| e.into_owned())?;
+    Ok(Tree::new(sections.0))
 }

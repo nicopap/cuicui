@@ -44,11 +44,24 @@ impl Modify<TextSection> for Modifier {
         trace!("Apply :rel_size: {relative_size:?}");
         *font_size *= relative_size;
     }
+    /// Increase the font size relative to the current section.
+    #[modify(write(.style.font_size))]
+    fn font_size(size: f32) -> f32 {
+        size
+    }
     /// Set the color of the [`TextSection`] to `statik`.
     #[modify(write(.style.color))]
     fn color(statik: Color) -> Color {
         trace!("Apply ~COLOR~: {statik:?}");
         statik
+    }
+    /// Offset the color's Hue by `offset`.
+    #[modify(read_write(.style.color))]
+    fn hue_offset(offset: f32, color: &mut Color) {
+        trace!("Apply ~HueOffset~: {offset:?}");
+        let mut hsl = color.as_hsla_f32();
+        hsl[0] = (hsl[0] + offset) % 360.0;
+        *color = Color::hsla(hsl[0], hsl[1], hsl[2], hsl[3]);
     }
     /// Set the text content of the [`TextSection`] to `statik`.
     #[modify(write_mut(.value))]

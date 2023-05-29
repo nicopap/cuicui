@@ -240,7 +240,7 @@ fn setup(
     commands.spawn(
         MakeRichTextBundle::new(
             "Score: {Font: fonts/FiraMono-Medium.ttf, Color: rgb(1.0, 0.5, 0.5), \
-            RelSize: 1.5, Content: {Res.Score:?}}\n\
+            RelSize: 1.5, Content: {Res.Score.score:}}\n\
             {Color: rgb(1.0, 0.2, 0.2), Content: {Res.Deaths:?}}\n\
             Paddle hits: {Color: pink, Content: {paddle_hits}}\n\
             Ball position: {Font: fonts/FiraMono-Medium.ttf, Color: pink|\
