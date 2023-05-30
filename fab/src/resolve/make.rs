@@ -150,12 +150,15 @@ where
 
             let mut ret = None;
 
-            if let Some((parent_i, parent_end)) = parent.pop() {
-                if parent_end >= modify.range.start {
+            while let Some((parent_i, parent_end)) = parent.pop() {
+                if parent_end > modify.range.start {
+                    trace!("{i:?} has parent {parent_i:?}");
                     parent.push((parent_i, parent_end));
                     if depends {
+                        trace!("AND DEPENDS ON IT!!!");
                         ret = Some((parent_i, i));
                     }
+                    break;
                 }
             }
             if changes {
