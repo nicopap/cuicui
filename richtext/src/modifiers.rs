@@ -34,30 +34,30 @@ impl Modify<TextSection> for Modifier {
 
     /// Set the font to provided `path`.
     #[modify(context(get_font), write(.style.font))]
-    fn font(path: &Cow<'static, str>, get_font: &GetFont) -> Handle<Font> {
+    pub fn font(path: &Cow<'static, str>, get_font: &GetFont) -> Handle<Font> {
         trace!("Apply =font=: {path:?}");
         get_font.get(path).unwrap_or_default()
     }
     /// Increase the font size relative to the current section.
     #[modify(read_write(.style.font_size))]
-    fn rel_size(relative_size: f32, font_size: &mut f32) {
+    pub fn rel_size(relative_size: f32, font_size: &mut f32) {
         trace!("Apply :rel_size: {relative_size:?}");
         *font_size *= relative_size;
     }
-    /// Increase the font size relative to the current section.
+    /// Set font size to `size`.
     #[modify(write(.style.font_size))]
-    fn font_size(size: f32) -> f32 {
+    pub fn font_size(size: f32) -> f32 {
         size
     }
     /// Set the color of the [`TextSection`] to `statik`.
     #[modify(write(.style.color))]
-    fn color(statik: Color) -> Color {
+    pub fn color(statik: Color) -> Color {
         trace!("Apply ~COLOR~: {statik:?}");
         statik
     }
     /// Offset the color's Hue by `offset`.
     #[modify(read_write(.style.color))]
-    fn hue_offset(offset: f32, color: &mut Color) {
+    pub fn hue_offset(offset: f32, color: &mut Color) {
         trace!("Apply ~HueOffset~: {offset:?}");
         let mut hsl = color.as_hsla_f32();
         hsl[0] = (hsl[0] + offset) % 360.0;
@@ -65,18 +65,30 @@ impl Modify<TextSection> for Modifier {
     }
     /// Set the text content of the [`TextSection`] to `statik`.
     #[modify(write_mut(.value))]
-    fn content(statik: &Cow<'static, str>, value: &mut String) {
+    pub fn content(statik: &Cow<'static, str>, value: &mut String) {
         trace!("Apply $CONTENT$: {statik:?}");
         value.clear();
         value.push_str(statik);
     }
     /// Use an arbitrary [`ModifyBox`] to modify this section.
     #[modify(dynamic_read_write(depends, changes, item), context(ctx))]
-    fn dynamic(boxed: &ModifyBox, ctx: &GetFont, item: &mut TextSection) {
+    pub fn dynamic(boxed: &ModifyBox, ctx: &GetFont, item: &mut TextSection) {
         boxed.apply(ctx, item);
     }
 }
 impl Modifier {
+    /// Returns the (depends, changes) field set of modifier named `name`.
+    pub fn dependencies_of(name: &str) -> Option<(EnumSet<ModifierField>, EnumSet<ModifierField>)> {
+        match name {
+            "Font" => Some((EnumSet::EMPTY, Self::font_changes())),
+            "FontSize" => Some((EnumSet::EMPTY, Self::font_size_changes())),
+            "RelSize" => Some((Self::rel_size_depends(), Self::rel_size_changes())),
+            "Color" => Some((EnumSet::EMPTY, Self::color_changes())),
+            "HueOffset" => Some((Self::hue_offset_depends(), Self::hue_offset_changes())),
+            "Content" => Some((EnumSet::EMPTY, Self::content_changes())),
+            _ => None,
+        }
+    }
     /// Set this [`Modifier`] to [`Modifier::Content`].
     ///
     /// Note that this **doesn't allocate** if `self` is already [`Modifier::Content`].
@@ -91,10 +103,12 @@ impl Modifier {
     }
     pub fn parse(name: &str, input: &str) -> anyhow::Result<Self> {
         match name {
-            n if n == "Font" => Ok(Self::font(input.to_string().into())),
-            n if n == "RelSize" => Ok(Self::rel_size(input.parse()?)),
-            n if n == "Color" => Ok(Self::color(crate::parse::color(input)?)),
-            n if n == "Content" => Ok(Self::content(input.to_string().into())),
+            "Font" => Ok(Self::font(input.to_string().into())),
+            "FontSize" => Ok(Self::font_size(input.parse()?)),
+            "RelSize" => Ok(Self::rel_size(input.parse()?)),
+            "Color" => Ok(Self::color(crate::parse::color(input)?)),
+            "HueOffset" => Ok(Self::hue_offset(input.parse()?)),
+            "Content" => Ok(Self::content(input.to_string().into())),
             // TODO(err): nice struct instead of anyhow
             n => Err(anyhow::anyhow!(format!("{n} is not a parseable modifier"))),
         }

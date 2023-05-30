@@ -273,7 +273,10 @@ fn foo<'a>(
             if let Some(hook) = target.as_hook() {
                 hooks.push(hook);
             }
-            Ok(ModifyKind::Bound { binding })
+            let Some((depends, changes)) = TextModifier::dependencies_of(name) else {
+                return Err(anyhow::anyhow!(format!("{name} is not a modifier")));
+            };
+            Ok(ModifyKind::Bound { binding, depends, changes })
         }
         Dyn::Static(value) => {
             let mut value = value.into();

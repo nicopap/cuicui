@@ -145,7 +145,7 @@ pub(crate) fn mk<'fstr>(
     let parsed = tree.split(builder).parse(bindings, &mut new_hooks);
     let parsed: Vec<_> = parsed.into_iter().collect::<anyhow::Result<_>>()?;
 
-    let (rich_text, sections) = Resolver::new(parsed.into_iter(), base_section, &get_font);
+    let (rich_text, sections) = Resolver::new(parsed, base_section, &get_font);
     let text = Text { sections, alignment, linebreak_behaviour };
 
     Ok((text, RichText(rich_text), new_hooks))
