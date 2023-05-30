@@ -120,7 +120,7 @@ where
     }
     fn binding_range(&self, start_at: usize, binding: Id) -> Option<(usize, Range<u32>)> {
         let subset = &self.b2m[start_at..];
-        let index = subset.binary_search_by_key(&binding, |d| d.0).ok()?;
+        let index = start_at + subset.binary_search_by_key(&binding, |d| d.0).ok()?;
         let mod_index = self.b2m[index].1;
         let mod_range = self.modify_at(mod_index).range.clone();
         Some((index, mod_range))
