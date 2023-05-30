@@ -256,3 +256,11 @@ is position in `VarMatrix` of relrevant `Modify` → Does not work
 because may have several `Modify` per binding.
 
 We could make a `VarMatrix` where the key is association `(BindingId, starts_at)`.
+
+## Binding to Modify dependencies
+
+Problem:
+
+- Static culling spuriously deletes `Modify` that only depends on bindings.
+
+Solution: Do not cull `Modify` that only depends on bindings.

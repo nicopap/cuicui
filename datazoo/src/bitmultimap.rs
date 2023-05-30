@@ -1,3 +1,4 @@
+use core::fmt;
 use std::collections::BinaryHeap;
 
 use sorted_iter::{assume::AssumeSortedByItemExt, SortedIterator};
@@ -35,12 +36,12 @@ use super::bitmatrix::BitMatrix;
 ///
 /// #### Associations
 ///
-/// | |E|G|H|M|S|T|
-/// |-|-|-|-|-|-|-|
-/// |-5| | |█|█| |█|
-/// |-1|█|█| | | |█|
-/// |10| | |█|█| | |
-/// |342| |█|█| |█| |
+/// |    |E|G|H|M|S|T|
+/// |----|-|-|-|-|-|-|
+/// |-5  | | |█|█| |█|
+/// |-1  |█|█| | | |█|
+/// |10  | | |█|█| | |
+/// |342 | |█|█| |█| |
 /// |1024| | | | | |█|
 ///
 /// ## Example
@@ -69,7 +70,6 @@ use super::bitmatrix::BitMatrix;
 /// ```
 ///
 /// [multimap]: https://en.wikipedia.org/wiki/Multimap
-#[derive(Debug)]
 pub struct BitMultiMap<K: Eq + Ord, V: Eq + Ord> {
     sparse_keys: sorted::Box<K>,
     sparse_values: sorted::Box<V>,
@@ -85,7 +85,8 @@ pub struct BitMultiMap<K: Eq + Ord, V: Eq + Ord> {
     associations: BitMatrix,
 }
 impl<K: Eq + Ord, V: Eq + Ord> BitMultiMap<K, V> {
-    /// Return indices in `sparse_values` of keys associated with key of index `row`.
+    /// Return indices in `sparse_values` of values associated with key of index `row`.
+    #[inline]
     fn mapped_associates_of(&self, row: usize) -> impl Iterator<Item = usize> + '_ {
         let width = self.sparse_values.len();
         self.associations.row(width, row)
@@ -154,5 +155,16 @@ impl<K: Eq + Ord + Clone, V: Eq + Ord + Clone> FromIterator<(K, V)> for BitMulti
                 .unwrap();
         }
         BitMultiMap { sparse_keys, sparse_values, associations }
+    }
+}
+
+impl<K: Eq + Ord + fmt::Debug, V: Eq + Ord + fmt::Debug> fmt::Debug for BitMultiMap<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (width, height) = (self.sparse_values.len(), self.sparse_keys.len());
+        f.debug_struct("BitMultiMap")
+            .field("values", &self.sparse_values)
+            .field("keys", &self.sparse_keys)
+            .field("map", &self.associations.sextant_display(width, height))
+            .finish()
     }
 }

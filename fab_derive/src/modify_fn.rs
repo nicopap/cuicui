@@ -29,6 +29,7 @@ fn mk_variant_type(ty: Box<syn::Type>) -> Box<syn::Type> {
 /// - Removes inputs appearing in `mods`
 /// - Remove prefix `&` that do not have a lifetime from the input type.
 /// - Add the `dynamic_field` `read` and `write` fields with type `dynamic_ty`
+/// - Add `#[doc(hidden)]` to private variants
 fn mk_variant(
     private: bool,
     attrs: &[syn::Attribute],

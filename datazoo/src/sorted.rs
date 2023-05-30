@@ -1,5 +1,6 @@
 //! Types marking slices as being sorted.
 
+use core::fmt;
 use std::{collections::BinaryHeap, marker::PhantomData, ops::Deref, slice};
 
 use sorted_iter::{sorted_iterator::SortedByItem, sorted_pair_iterator::SortedByKey};
@@ -34,9 +35,14 @@ pub type Slice<'a, T> = Sorted<&'a [T], T>;
 
 /// Slices where all elements are key-value pairs sorted in ascending ordeorder
 /// according to key's `K: Ord`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub struct KeySorted<A: AsRef<[(K, V)]>, K: Ord, V>(A, PhantomData<(K, V)>);
 
+impl<K: Ord, V, A: AsRef<[(K, V)]> + fmt::Debug> fmt::Debug for KeySorted<A, K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("key-sorted").field(&self.0).finish()
+    }
+}
 impl<K: Ord, V> From<std::vec::Vec<(K, V)>> for ByKeyVec<K, V> {
     fn from(mut value: std::vec::Vec<(K, V)>) -> Self {
         value.sort_unstable_by(|l, r| l.0.cmp(&r.0));
@@ -110,7 +116,7 @@ impl<A: AsRef<[(K, V)]> + FromIterator<(K, V)>, K: Ord, V> KeySorted<A, K, V> {
 
 /// Slices where all elements are sorted in ascending ordeorder according
 /// to `T: Ord`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub struct Sorted<A: AsRef<[T]>, T: Ord>(A, PhantomData<T>);
 impl<A: AsRef<[T]>, T: Ord> Sorted<A, T> {
     pub fn slice(&self) -> Slice<T> {
@@ -118,6 +124,11 @@ impl<A: AsRef<[T]>, T: Ord> Sorted<A, T> {
     }
 }
 
+impl<T: Ord, A: AsRef<[T]> + fmt::Debug> fmt::Debug for Sorted<A, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("sorted").field(&self.0).finish()
+    }
+}
 impl<T: Ord> From<std::vec::Vec<T>> for Vec<T> {
     fn from(mut value: std::vec::Vec<T>) -> Self {
         value.sort_unstable();

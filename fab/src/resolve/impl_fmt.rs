@@ -23,9 +23,9 @@ where
     FieldsOf<P>: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("MakeModify")
-            .field("kind", &self.kind)
-            .field("range", &self.range)
+        f.debug_tuple("Mk")
+            .field(&self.kind)
+            .field(&self.range)
             .finish()
     }
 }
@@ -38,15 +38,8 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ModifyKind::Bound { binding, depends, changes } => f
-                .debug_struct("ModifyKind::Bound")
-                .field("binding", binding)
-                .field("depends", depends)
-                .field("changes", changes)
-                .finish(),
-            ModifyKind::Modify(modify) => {
-                f.debug_tuple("ModifyKind::Modify").field(&modify).finish()
-            }
+            ModifyKind::Bound { binding, .. } => f.debug_tuple("Bound").field(binding).finish(),
+            ModifyKind::Modify(modify) => f.debug_tuple("Set").field(&modify).finish(),
         }
     }
 }

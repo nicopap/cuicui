@@ -28,7 +28,7 @@ pub type ModifyBox = Box<dyn TextModify + Send + Sync + 'static>;
 /// [`RichText`]: crate::RichText
 /// [format string]: https://github.com/nicopap/cuicui/blob/main/design_doc/richtext/informal_grammar.md
 #[impl_modify(cuicui_fab_path = fab)]
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq)]
 impl Modify<TextSection> for Modifier {
     type Context<'a> = GetFont<'a>;
 
@@ -74,6 +74,21 @@ impl Modify<TextSection> for Modifier {
     #[modify(dynamic_read_write(depends, changes, item), context(ctx))]
     pub fn dynamic(boxed: &ModifyBox, ctx: &GetFont, item: &mut TextSection) {
         boxed.apply(ctx, item);
+    }
+}
+impl fmt::Debug for Modifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Modifier::Font { path } => f.debug_tuple("Font").field(path).finish(),
+            Modifier::RelSize { relative_size } => {
+                f.debug_tuple("Size^").field(relative_size).finish()
+            }
+            Modifier::FontSize { size } => f.debug_tuple("FontSize").field(size).finish(),
+            Modifier::Color { statik } => f.debug_tuple("Color").field(statik).finish(),
+            Modifier::HueOffset { offset } => f.debug_tuple("Hue>").field(offset).finish(),
+            Modifier::Content { statik } => f.debug_tuple("Text").field(statik).finish(),
+            Modifier::Dynamic { boxed, .. } => write!(f, "{boxed:?}"),
+        }
     }
 }
 impl Modifier {

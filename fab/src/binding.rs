@@ -175,7 +175,9 @@ impl<P: Prefab> World<P> {
     }
 }
 impl<'a, P: Prefab> View<'a, P> {
-    pub(crate) fn changed(&self) -> impl Iterator<Item = (&Id, &P::Modify)> + '_ {
+    pub(crate) fn changed(
+        &self,
+    ) -> impl SortedPairIterator<&Id, &P::Modify, Item = (&Id, &P::Modify)> + '_ {
         // Due to Rust's poor type inference on closures, I must write this inline:
         // let changed = |(changed, modify): &(bool, _)| changed.then_some(modify);
         let overlay = self.overlay.iter().flat_map(|b| *b);

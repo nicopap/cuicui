@@ -127,18 +127,18 @@ pub(crate) fn mk<'fstr>(
     linebreak_behaviour: BreakLineOn,
     format_string: &'fstr str,
 ) -> anyhow::Result<(Text, RichText, Vec<parse::Hook<'fstr>>)> {
-    use Repeat::ByChar;
+    use Repeat::{ByChar, ByWord};
 
     let mut new_hooks = Vec::new();
 
-    let sin_curve = CardinalSpline::new_catmull_rom([0., 1., 0., 1., 0., 1., 0., 1., 0., 1., 0.]);
+    let sin_curve = CardinalSpline::new_catmull_rom([1., 0., 1., 0., 1., 0.]);
 
     let tree = parse::richtext(format_string)?;
     let builder = TreeSplitter::new()
         .repeat_acc(ByChar, "Rainbow", |hue_offset: &mut f32, i, _| {
             Modifier::hue_offset(*hue_offset * i as f32)
         })
-        .repeat_on_curve(ByChar, "Sine", sin_curve.to_curve(), |ampl: &mut f32, t| {
+        .repeat_on_curve(ByWord, "Sine", sin_curve.to_curve(), |ampl: &mut f32, t| {
             let size_change = (20.0 + t * *ampl).floor();
             Modifier::font_size(size_change)
         });

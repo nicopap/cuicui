@@ -45,7 +45,7 @@ impl JaggedBitset {
         is_not_empty.then_some(bits).into_iter().flatten()
     }
 }
-/// Helps create [`JaggedBitset`] with [`JaggedBitsetBuilder::build`].
+/// Helps create [`JaggedBitset`] with [`Builder::build`].
 ///
 /// [`JaggedBitset`] is immutable with a fixed capacity, so it is necessary
 /// to pass through a builder ot create one.
@@ -55,11 +55,11 @@ pub struct Builder {
     bits: Bitset<Vec<u32>>,
 }
 impl Builder {
-    /// Initialize a [`JaggedBitsetBuilder`].
+    /// Initialize a [`Builder`].
     pub fn new() -> Self {
         Self::default()
     }
-    /// Initialize a [`JaggedBitsetBuilder`] with capacity rows.
+    /// Initialize a [`Builder`] with capacity rows.
     pub fn with_capacity(cap: usize) -> Self {
         Builder {
             ends: Vec::with_capacity(cap),
@@ -73,7 +73,7 @@ impl Builder {
             bits: Bitset(self.bits.0.into_boxed_slice()),
         }
     }
-    /// Add a single row to this [`JaggedBitsetBuilder`],
+    /// Add a single row to this [`Builder`],
     /// each item of the iterator is a bit to enable in this row.
     pub fn add_row(&mut self, row: impl Iterator<Item = u32>) {
         let end = self.ends.last().map_or(0, |i| *i);

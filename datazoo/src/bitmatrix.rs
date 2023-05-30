@@ -1,7 +1,11 @@
+use core::fmt;
 use std::mem;
 
 use crate::{div_ceil, Bitset};
 
+// TODO(clean): move this after BitMatrix
+/// Iterator over a single column of a [`BitMatrix`],
+/// see [`BitMatrix::active_rows_in_column`] documentation for details.
 pub struct Column<'a> {
     width: usize,
     current_cell: usize,
@@ -27,10 +31,12 @@ impl Iterator for Column<'_> {
             }
         }
     }
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let upper = self.data.len().saturating_sub(self.current_cell) / self.width;
         (0, Some(upper))
     }
+    #[inline]
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
         self.current_cell = self.current_cell.saturating_add(n * self.width);
         self.next()
@@ -50,11 +56,8 @@ impl BitMatrix {
     ///
     /// When `width = 0` (this would otherwise mean there is an infinite
     /// amount of columns)
-    pub fn active_rows_in_column(
-        &self,
-        width: usize,
-        column: usize,
-    ) -> impl Iterator<Item = usize> + '_ {
+    #[inline]
+    pub fn active_rows_in_column(&self, width: usize, column: usize) -> Column {
         assert_ne!(width, 0);
         Column { data: &self.0 .0, width, current_cell: column }
     }
@@ -66,6 +69,7 @@ impl BitMatrix {
             .ones_in_range(start..end)
             .map(move |i| (i as usize) - start)
     }
+    #[inline]
     pub fn enable_bit(&mut self, width: usize, row: usize, column: usize) -> Option<()> {
         self.0.enable_bit(width * row + column)
     }
@@ -75,5 +79,64 @@ impl BitMatrix {
         let bit_size = width * height;
         let u32_size = div_ceil(bit_size, mem::size_of::<u32>());
         BitMatrix(Bitset(vec![0; u32_size].into_boxed_slice()))
+    }
+
+    /// `true` if bit at position `x, y` in matrix is enabled.
+    ///
+    /// `false` otherwise, included if `x, y` is outside of the matrix.
+    pub fn bit(&self, x: usize, y: usize, width: usize) -> bool {
+        x < width && self.0.bit(x + y * width)
+    }
+
+    /// Return a struct that when printed with [`fmt::Display`] or [`fmt::Debug`],
+    /// displays the matrix using unicode sextant characters.
+    pub const fn sextant_display(&self, width: usize, height: usize) -> SextantDisplay {
+        SextantDisplay { matrix: self, width, height }
+    }
+}
+
+/// Nice printing for [`BitMatrix`], see [`BitMatrix::sextant_display`] for details.
+#[derive(Copy, Clone)]
+pub struct SextantDisplay<'a> {
+    matrix: &'a BitMatrix,
+    width: usize,
+    height: usize,
+}
+impl<'a> fmt::Debug for SextantDisplay<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+impl<'a> fmt::Display for SextantDisplay<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.height == 0 {
+            write!(f, "\u{1fb74}\u{1fb70}")?;
+        }
+        for y in 0..div_ceil(self.height, 3) {
+            if y != 0 {
+                writeln!(f)?;
+            }
+            write!(f, "\u{1fb74}")?;
+            for x in 0..div_ceil(self.width, 2) {
+                let get_bit = |offset_x, offset_y| {
+                    let (x, y) = (x * 2 + offset_x, y * 3 + offset_y);
+                    self.matrix.bit(x, y, self.width) as u32
+                };
+                let offset = get_bit(0, 0)
+                    | get_bit(1, 0) << 1
+                    | get_bit(0, 1) << 2
+                    | get_bit(1, 1) << 3
+                    | get_bit(0, 2) << 4
+                    | get_bit(1, 2) << 5;
+                let character = match offset {
+                    0b111111 => '\u{2588}',
+                    0b000000 => ' ',
+                    offset => char::from_u32(0x1fb00 + offset - 1).unwrap(),
+                };
+                write!(f, "{character}")?;
+            }
+            write!(f, "\u{1fb70}")?;
+        }
+        Ok(())
     }
 }

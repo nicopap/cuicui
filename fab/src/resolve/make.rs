@@ -177,7 +177,10 @@ where
         mut self,
         ctx: &PrefabContext<'_, P>,
     ) -> (Resolver<P, MC>, Vec<P::Item>) {
-        trace!("Building a RichText from {self:?}");
+        trace!("Building a RichText from modifiers:");
+        for modi in &self.modifiers {
+            trace!("\t{modi:?}");
+        }
         let old_count = self.modifiers.len();
 
         let root_mask = self.root_mask();
@@ -186,7 +189,10 @@ where
         let sections = self.purge_static(ctx);
         let new_count = self.modifiers.len();
         trace!("Removed {} static modifiers", old_count - new_count);
-        trace!("now we have {:?}", &self.modifiers);
+        trace!("now we have:");
+        for modi in &self.modifiers {
+            trace!("\t{modi:?}");
+        }
 
         let m2m: BitMultiMap<_, _> = self.m2m().collect();
         trace!("m2m deps: {m2m:?}");
@@ -210,7 +216,7 @@ where
         let modifiers = modifiers.collect();
         trace!("modifiers: {modifiers:?}");
 
-        b2m.sort_by_key(|(id, _)| *id);
+        b2m.sort_by_key(|d| d.0);
         let b2m = KeySorted::from_sorted_iter(b2m.into_iter().assume_sorted_by_key());
         trace!("b2m: {b2m:?}");
 
@@ -287,7 +293,10 @@ impl<P: Prefab> CheckStatic<P> {
         self.update_parents(modify);
 
         let mut depends = modify.depends().iter();
-        let is_static = depends.all(|dep| self.all_static_fields.contains(dep));
+        let no_deps = depends.all(|dep| self.all_static_fields.contains(dep));
+        let is_binding = matches!(&modify.kind, ModifyKind::Bound { .. });
+
+        let is_static = no_deps && !is_binding;
 
         if is_static {
             self.push_parent(modify);

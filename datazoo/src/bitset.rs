@@ -46,11 +46,33 @@ impl BlockT for u32 {
 ///     as_box.ones_in_range(5..91),
 ///     as_array.ones_in_range(5..91),
 /// );
-/// // Since `Vec` allows mutable access to the underlying slice, you can use
-/// // mutable methods of `Bitset`, unlike with `&[u32]`.
+/// ```
+///
+/// To use mutable methods ([`Bitset::enable_bit`] is currently the only one),
+/// the backing storage `B` must be mutable. Otherwise, you just can't use them.
+///
+/// ```compile_fail
+/// # use cuicui_datazoo::Bitset;
+/// # let bunch_of_bits = [0xf0f0_00ff, 0xfff0_000f, 0xfff0_0f0f];
+/// let as_slice: Bitset<&[u32]> = Bitset(&bunch_of_bits);
+///
+/// as_slice.enable_bit(11);
+/// ```
+///
+/// `Vec<_>` and `&mut [_]` do support mutable access, so the following works:
+///
+/// ```
+/// # use cuicui_datazoo::Bitset;
+/// # let bunch_of_bits = [0xf0f0_00ff, 0xfff0_000f, 0xfff0_0f0f];
+/// let mut as_vec: Bitset<Vec<u32>> = Bitset(bunch_of_bits.to_vec());
+/// let as_mut_slice: Bitset<&mut [u32]> = Bitset(&mut bunch_of_bits);
+///
+/// assert_eq!(
+///     as_vec.ones_in_range(5..91),
+///     as_slice.ones_in_range(5..91),
+/// );
 /// as_vec.enable_bit(11);
-/// // The following wouldn't compile:
-/// // as_slice.enable_bit(11);
+/// // They aren't equal anymore.
 /// assert_ne!(
 ///     as_vec.ones_in_range(5..91),
 ///     as_slice.ones_in_range(5..91),
@@ -63,6 +85,7 @@ pub struct Bitset<B: AsRef<[u32]>>(pub B);
 
 impl<B: AsRef<[u32]> + AsMut<[u32]>> Bitset<B> {
     /// Returns `None` if `bit` is out of range
+    #[inline]
     pub fn enable_bit(&mut self, bit: usize) -> Option<()> {
         let block = bit / u32::BITS64;
         let offset = bit % u32::BITS64;
@@ -73,8 +96,18 @@ impl<B: AsRef<[u32]> + AsMut<[u32]>> Bitset<B> {
     }
 }
 impl<B: AsRef<[u32]>> Bitset<B> {
+    #[inline]
     pub fn bit_len(&self) -> usize {
         self.0.as_ref().len() * u32::BITS64
+    }
+    #[inline]
+    pub fn bit(&self, at: usize) -> bool {
+        let block = at / u32::BITS64;
+        let offset = u32::try_from(at % u32::BITS64).unwrap();
+        let offset = 1 << offset;
+        let Some(block) = self.0.as_ref().get(block) else { return false };
+
+        block & offset == offset
     }
     pub fn ones_in_range(&self, range: Range<usize>) -> Ones {
         let Range { start, end } = range;

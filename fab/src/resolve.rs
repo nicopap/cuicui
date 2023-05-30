@@ -3,6 +3,7 @@ mod make;
 
 use std::{fmt, iter, ops::Range};
 
+use datazoo::SortedPairIterator;
 use datazoo::{
     enumbitmatrix::Rows, sorted, BitMultiMap, EnumBitMatrix, EnumMultiMap, SortedIterator,
 };
@@ -187,7 +188,7 @@ where
     fn eval<'b>(
         &mut self,
         changes: FieldsOf<P>,
-        bindings: impl Iterator<Item = (&'b Id, &'b P::Modify)>,
+        bindings: impl SortedPairIterator<&'b Id, &'b P::Modify, Item = (&'b Id, &'b P::Modify)>,
     ) where
         P::Modify: 'b,
     {

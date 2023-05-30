@@ -45,8 +45,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2dBundle::default());
     commands.spawn((
         MakeRichTextBundle::new(
-            "{Color:{color}|{Rainbow:20.0|hello} {greeted}!}\n\
-            {Sine:80|We are having fun here, woopy! we use words as well, nice!}",
+            "{Color:{color}|{Rainbow:20.0|hi} {greeted}!\n\
+            {HueOffset:50.0, Sine:80|We are having fun here, woopy!}}",
         )
         .with_text_style(TextStyle {
             font: asset_server.load("fonts/FiraSans-Bold.ttf"),
