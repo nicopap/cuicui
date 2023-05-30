@@ -1,5 +1,5 @@
 use core::fmt;
-use std::collections::BinaryHeap;
+use std::collections::BTreeSet;
 
 use sorted_iter::{assume::AssumeSortedByItemExt, SortedIterator};
 
@@ -131,18 +131,18 @@ impl<K: Eq + Ord + Clone, V: Eq + Ord + Clone> FromIterator<(K, V)> for BitMulti
     ///
     /// Note that this takes into account
     fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
-        let mut values = BinaryHeap::new();
-        let mut keys = BinaryHeap::new();
+        let mut values = BTreeSet::new();
+        let mut keys = BTreeSet::new();
 
         let mut key_values = Vec::new();
 
         for (key, value) in iter {
             key_values.push((key.clone(), value.clone()));
-            keys.push(key);
-            values.push(value);
+            keys.insert(key);
+            values.insert(value);
         }
-        let sparse_keys: sorted::Box<_> = keys.into();
-        let sparse_values: sorted::Box<_> = values.into();
+        let sparse_keys = sorted::Box::from_sorted_iter(keys.into_iter());
+        let sparse_values = sorted::Box::from_sorted_iter(values.into_iter());
 
         let mut associations = BitMatrix::new_with_size(sparse_values.len(), sparse_keys.len());
 
