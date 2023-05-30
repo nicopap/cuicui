@@ -1,5 +1,49 @@
 # Rich text
 
+https://github.com/nicopap/cuicui/assets/26321040/e81b2dae-1dda-4188-ace1-6c2a8316c90c
+
+<details>
+  <summary>Click to see code</summary>
+  
+```rust
+fn setup_system(mut commands: Commands) {
+    commands.spawn((
+        MakeRichTextBundle::new(
+            "{Color:{color}|{Rainbow:20.0|Bonjour} {greeted}!}\n\
+            {Color:Yellow, Sine:80|We are having fun here, woopy!}",
+        )
+    ));    // ...
+    commands.spawn((
+        MakeRichTextBundle::new(
+            "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold, Content:{Res.Fps.fps:.1}}",
+        )
+    ));    // ...
+}
+fn color_update_system(time: Res<Time>, mut query: Query<&mut RichTextData, With<ColorText>>) {
+    for mut text in &mut query {
+        let seconds = time.elapsed_seconds();
+        let new_color = ;// ...;
+        text.bindings
+            .set("color", modifiers::Modifier::color(new_color));
+    }
+}
+fn greet_update_system(
+    mut query: Query<&mut RichTextData, With<ColorText>>,
+    mut current_guest: Local<usize>,
+) {
+    let at_interval = |t: f64| current_time % t < delta;
+    for mut text in &mut query {
+        if at_interval(1.3) {
+            *current_guest = (*current_guest + 1) % GUESTS.len();
+            text.set_content("greeted", &GUESTS[*current_guest]);
+        }
+    }
+}
+
+```
+
+</details>
+
 A rich text component for bevy.
 
 The current bevy `Text` component is [a misery to use][misery-bui].
