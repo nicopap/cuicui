@@ -12,7 +12,7 @@ mod tests;
 
 mod color;
 mod error;
-mod structs;
+mod post_process;
 mod tree;
 
 use winnow::{
@@ -33,7 +33,7 @@ use structs::{flatten_section, Binding, Dyn, Modifier, Path, Section, Sections};
 
 pub(crate) use color::parse as color;
 pub(crate) use structs::{Format, Hook, Query, Source};
-pub(crate) use tree::{Repeat, Tree, TreeSplitter};
+pub(crate) use post_process::{Repeat, Tree, TreeSplitter};
 
 type IResult<'a, O> = winnow::IResult<&'a str, O>;
 

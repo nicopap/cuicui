@@ -5,7 +5,7 @@ use std::{borrow::Cow, iter, str::FromStr};
 use bevy::math::cubic_splines::CubicCurve;
 use fab::resolve::{MakeModify, ModifyKind};
 
-use super::structs::{get_content, get_content_mut, is_content, Dyn, Hook, Modifier, Section};
+use super::tree::{get_content, get_content_mut, is_content, Dyn, Hook, Modifier, Section};
 use crate::{modifiers::Modifier as TextModifier, richtext::TextPrefab, WorldBindings};
 
 #[derive(Debug)]
@@ -261,6 +261,7 @@ fn escape_backslashes(input: &mut Cow<str>) {
         normal
     });
 }
+// TODO(clean): Clippy should have emitted a warning on this name.
 fn foo<'a>(
     sections: Vec<RSection<'a>>,
     bindings: &mut WorldBindings,
@@ -272,7 +273,7 @@ fn foo<'a>(
             if let Some(hook) = target.as_hook() {
                 hooks.push(hook);
             }
-            Ok(ModifyKind::Bound(binding))
+            Ok(ModifyKind::Bound { binding })
         }
         Dyn::Static(value) => {
             let mut value = value.into();
