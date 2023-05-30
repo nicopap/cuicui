@@ -4,8 +4,8 @@ use pretty_assertions::assert_eq;
 use winnow::error::ParseError;
 use winnow::Parser;
 
-use super::{balanced_text, bare_content, close_section, closed_element, sections, structs};
-use structs::{Binding, Dyn, Modifier, Section};
+use super::{balanced_text, bare_content, close_section, closed_element, sections, tree};
+use tree::{Binding, Dyn, Modifier, Section};
 
 macro_rules! sections {
     (@modifier {$binding:ident}) => {
@@ -192,7 +192,7 @@ fn closed_incomplete() {
 // ---------------------------------
 //        test rich_text parsing
 // ---------------------------------
-fn parse(input: &str) -> Result<Vec<structs::Section>, String> {
+fn parse(input: &str) -> Result<Vec<tree::Section>, String> {
     sections
         .parse(input)
         .map(|s| s.0)

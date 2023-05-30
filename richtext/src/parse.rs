@@ -29,11 +29,11 @@ use winnow::{
 };
 
 use crate::show::RuntimeFormat;
-use structs::{flatten_section, Binding, Dyn, Modifier, Path, Section, Sections};
+use tree::{flatten_section, Binding, Dyn, Modifier, Path, Section, Sections};
 
 pub(crate) use color::parse as color;
-pub(crate) use structs::{Format, Hook, Query, Source};
 pub(crate) use post_process::{Repeat, Tree, TreeSplitter};
+pub(crate) use tree::{Format, Hook, Query, Source};
 
 type IResult<'a, O> = winnow::IResult<&'a str, O>;
 

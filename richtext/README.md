@@ -435,6 +435,9 @@ impl IntoModify for UserColor {
 - [ ] richtext: Modify a Vec<&mut Text> over TextSections, to allow all kind of effects
 - [X] richtext: way to apply the same Modify in series, by splitting text word/character
 - [ ] richtext split: figure out why this isn't rendered nicely.
+- [X] richtext parse: Implement b2m (binding to modifier) probably with a smallvec of
+      (BindingId, ModifierIndex)
+- [ ] richtext: Post-process content splitting as described in `post_process_content.md`
 - [ ] richtext split: Make the API public.
 - [ ] richtext: Text2d support
 - [ ] everything: Document the hell out of everything
