@@ -118,14 +118,18 @@ where
     ) -> (Self, Vec<P::Item>) {
         make::Make::new(modifiers, default_section).build(ctx)
     }
-    fn binding_range(&self, start_at: usize, binding: Id) -> Option<(usize, Range<u32>)> {
+    fn binding_range(
+        &self,
+        start_at: usize,
+        binding: Id,
+    ) -> Option<(usize, ModifyIndex, Range<u32>)> {
         let subset = &self.b2m[start_at..];
         let index = start_at + subset.binary_search_by_key(&binding, |d| d.0).ok()?;
         let mod_index = self.b2m[index].1;
         let mod_range = self.modify_at(mod_index).range.clone();
-        Some((index, mod_range))
+        Some((index, mod_index, mod_range))
     }
-    fn change_modifies(&self, changes: FieldsOf<P>) -> impl Iterator<Item = ModifyIndex> + '_ {
+    fn depends_on(&self, changes: FieldsOf<P>) -> impl Iterator<Item = ModifyIndex> + '_ {
         self.f2m.all_rows(changes).copied()
     }
     fn root_mask_for(&self, changes: FieldsOf<P>, range: Range<u32>) -> Rows<PrefabField<P>> {
@@ -187,14 +191,14 @@ where
     }
     fn eval<'b>(
         &mut self,
-        changes: FieldsOf<P>,
+        fields: FieldsOf<P>,
         bindings: impl SortedPairIterator<&'b Id, &'b P::Modify, Item = (&'b Id, &'b P::Modify)>,
     ) where
         P::Modify: 'b,
     {
         let mut last_index = 0;
         for (id, modify) in bindings {
-            let Some((index, range)) = self.graph.binding_range(last_index, *id) else {
+            let Some((index, mod_index, range)) = self.graph.binding_range(last_index, *id) else {
                 continue;
             };
             last_index = index + 1;
@@ -206,9 +210,14 @@ where
                 }
                 // TODO(feat): insert modify with dependencies if !modify.depends().is_empty()
             }
-            // TODO(bug): we aren't updating modifiers that depends on bindings
+            // TODO(clean): this is copy/pasted from eval_with_dependencies
+            for &dep_index in self.graph.m2m.get(&mod_index) {
+                if let Err(err) = self.eval_exact(dep_index, iter::empty(), false) {
+                    warn!("when applying {dep_index:?} child of {index:?}: {err}");
+                }
+            }
         }
-        for index in self.graph.change_modifies(changes) {
+        for index in self.graph.depends_on(fields) {
             let Modifier { modify: Some(modify), range } = self.graph.modify_at(index) else {
                 continue;
             };
