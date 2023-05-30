@@ -94,6 +94,16 @@ impl<K, V> ExactSizeIterator for KeysortedIter<'_, K, V> {
 }
 impl<K, V> SortedByKey for KeysortedIter<'_, K, V> {}
 
+impl<A: AsRef<[(K, V)]> + FromIterator<(K, V)>, K: Ord, V> KeySorted<A, K, V> {
+    /// Create a [`KeySorted`] collection from a sorted iterator.
+    pub fn from_sorted_iter<I>(iter: I) -> Self
+    where
+        I: Iterator<Item = (K, V)> + SortedByKey,
+    {
+        KeySorted(iter.collect(), PhantomData)
+    }
+}
+
 // -------------------------
 //           Sorted
 // -------------------------
@@ -140,3 +150,13 @@ impl<A: AsRef<[T]>, T: Ord> Deref for Sorted<A, T> {
 }
 pub struct SortedIter<'a, T>(slice::Iter<'a, T>);
 impl<T> SortedByItem for SortedIter<'_, T> {}
+
+impl<A: AsRef<[T]> + FromIterator<T>, T: Ord> Sorted<A, T> {
+    /// Create a [`Sorted`] collection from a sorted iterator.
+    pub fn from_sorted_iter<I>(iter: I) -> Self
+    where
+        I: Iterator<Item = T> + SortedByItem,
+    {
+        Sorted(iter.collect(), PhantomData)
+    }
+}
