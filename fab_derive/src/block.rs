@@ -193,6 +193,7 @@ impl Block {
         let ty_matcher = fns().map(ModifyFn::ty_matcher);
         let changes_arms = fns().map(|f| f.changes_arm(enset, &field_ty));
         let depends_arms = fns().map(|f| f.depends_arm(enset, &field_ty));
+        let field_assoc_fns = fns().map(|f| f.fields_assoc_fns(enset, &field_ty));
         let ty_constructors = fns().map(|m| &m.constructor);
         let ty_function_defs = fns().map(|m| &m.declaration);
         let ty_function_calls = fns().map(|m| m.call(&ctx, &item));
@@ -220,7 +221,12 @@ impl Block {
                 #( #ty_variants ),*
             }
             impl #modify_ty {
-                #( #ty_constructors )*
+                #(
+                    #field_assoc_fns
+                )*
+                #(
+                    #ty_constructors
+                )*
             }
             #[allow(clippy::ptr_arg)]
             impl Modify<#impl_target> for #modify_ty {
@@ -243,12 +249,14 @@ impl Block {
                     Ok(())
                 }
 
+                #[inline]
                 fn depends(&self) -> ::#enset::EnumSet<Self::Field> {
                     match self {
                         #( #depends_arms ),*
                     }
                 }
 
+                #[inline]
                 fn changes(&self) -> ::#enset::EnumSet<Self::Field> {
                     match self {
                         #( #changes_arms ),*

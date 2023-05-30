@@ -38,23 +38,25 @@ impl Prefab for CityPrefab {
 impl Modify<City> for ModifyCity {
     type Context<'a> = ();
 
+    /// This adds to the chief's age to that of `additional_year` plus the city's name
     #[modify(read(admin_name = .admin.chief.surname), read(.name), write(.admin.chief.age))]
     fn add_chief_age(additional_years: usize, admin_name: &str, name: &str) -> usize {
         admin_name.len() + name.len() + additional_years
     }
 
+    /// This sets the name of the secretary to `set_name`
     #[modify(write_mut(.admin.secretary.name))]
-    fn secretary_name(set_name: &'static str, name: &mut &'static str) {
+    pub fn secretary_name(set_name: &'static str, name: &mut &'static str) {
         *name = set_name;
     }
 
     #[modify(write(.admin.secretary.age))]
-    fn secretary_age(set_age: usize) -> usize {
+    pub fn secretary_age(set_age: usize) -> usize {
         set_age
     }
 
     #[modify(write(.admin.lawyer))]
-    fn lawyer(set_lawyer: &Person) -> Person {
+    pub fn lawyer(set_lawyer: &Person) -> Person {
         set_lawyer.clone()
     }
 

@@ -1,6 +1,6 @@
-use std::mem;
+use std::{mem, ops::Not};
 
-use heck::AsUpperCamelCase;
+use heck::{AsSnakeCase, AsUpperCamelCase};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::{punctuated::Punctuated, spanned::Spanned, ItemFn, Token};
@@ -29,7 +29,14 @@ fn mk_variant_type(ty: Box<syn::Type>) -> Box<syn::Type> {
 /// - Removes inputs appearing in `mods`
 /// - Remove prefix `&` that do not have a lifetime from the input type.
 /// - Add the `dynamic_field` `read` and `write` fields with type `dynamic_ty`
-fn mk_variant(mods: &Modifiers, name: &Ident, inputs: &[syn::FnArg], dynamic_ty: Tokens) -> Tokens {
+fn mk_variant(
+    private: bool,
+    attrs: &[syn::Attribute],
+    mods: &Modifiers,
+    name: &Ident,
+    inputs: &[syn::FnArg],
+    dynamic_ty: Tokens,
+) -> Tokens {
     // TODO: document variant with path & modify target.
     let fields = inputs
         .iter()
@@ -44,7 +51,10 @@ fn mk_variant(mods: &Modifiers, name: &Ident, inputs: &[syn::FnArg], dynamic_ty:
             modified
         });
     let dynamic_fields = mods.dynamic_fields().map(|f| quote!( #f : #dynamic_ty ));
+    let hide = if private { quote!(#[doc(hidden)]) } else { quote!() };
     quote! {
+        #(#attrs)*
+        #hide
         #name { #( #fields, )* #( #dynamic_fields ),* }
     }
 }
@@ -78,7 +88,12 @@ fn mk_matcher(mods: &Modifiers, name: &Ident, inputs: &[syn::FnArg], site: Site)
 /// - Removes inputs appearing in `mods`
 /// - Remove prefix `&` that do not have a lifetime from the input type.
 /// - Add the `dynamic_field` `read` and `write` fields with type `dynamic_ty`
-fn mk_constructor(modifiers: &Modifiers, mut function: ItemFn, body: Box<syn::Block>) -> ItemFn {
+fn mk_constructor(
+    vis: syn::Visibility,
+    modifiers: &Modifiers,
+    mut function: ItemFn,
+    body: Box<syn::Block>,
+) -> ItemFn {
     let span = function.sig.span();
 
     // Constructor always return self
@@ -87,7 +102,7 @@ fn mk_constructor(modifiers: &Modifiers, mut function: ItemFn, body: Box<syn::Bl
     function.sig.output = syn::ReturnType::Type(Token![->](span), ty);
 
     // Constructor is `const` and public
-    function.vis = syn::Visibility::Public(Token![pub](span));
+    function.vis = vis;
     function.sig.constness = Some(Token![const](span));
 
     // Remove modify-dependent arguments
@@ -107,6 +122,7 @@ fn mk_constructor(modifiers: &Modifiers, mut function: ItemFn, body: Box<syn::Bl
 /// Declaration of modifier to insert into the match arms of the `apply` `Modify` method.
 fn mk_declaration(function: &mut ItemFn) {
     function.attrs.clear();
+    function.vis = syn::Visibility::Inherited;
 }
 
 #[derive(Debug)]
@@ -119,6 +135,7 @@ pub(crate) struct ModifyFn {
 }
 impl ModifyFn {
     pub fn new(mut input: ItemFn) -> syn::Result<Self> {
+        let vis = input.vis.clone();
         let name = input.sig.ident.clone();
         let ty_name = mk_tyname(&name);
 
@@ -130,8 +147,8 @@ impl ModifyFn {
         let block = quote!({ Self :: #matcher });
 
         let constructor = if modifiers.dynamic_field(Mode::Read).is_none() {
-            let block = syn::parse2(block)?;
-            Some(mk_constructor(&modifiers, input.clone(), Box::new(block)))
+            let block = Box::new(syn::parse2(block)?);
+            Some(mk_constructor(vis, &modifiers, input.clone(), block))
         } else {
             None
         };
@@ -160,10 +177,49 @@ impl ModifyFn {
     }
     pub fn ty_variant(&self, root: &Ident, field_ty_name: &Ident) -> Tokens {
         let field_ty = quote!(::#root::EnumSet<#field_ty_name>);
-        mk_variant(&self.modifiers, &self.ty_name(), &self.inputs, field_ty)
+        let ctor = self.constructor.as_ref();
+        mk_variant(
+            ctor.map_or(false, |c| c.vis == syn::Visibility::Inherited),
+            ctor.map_or(&[], |c| &c.attrs),
+            &self.modifiers,
+            &self.ty_name(),
+            &self.inputs,
+            field_ty,
+        )
     }
     pub fn ty_matcher(&self) -> Tokens {
         mk_matcher(&self.modifiers, &self.ty_name(), &self.inputs, Site::Arm)
+    }
+    pub fn fields_assoc_fns(&self, root: &Ident, field_ty_name: &Ident) -> Tokens {
+        let enums = quote!(::#root::EnumSet);
+        let ident = AsSnakeCase(self.name.to_string());
+        let vis = &self.declaration.vis;
+
+        let changes_name = Ident::new(&format!("{ident}_changes"), self.name.span());
+        let depends_name = Ident::new(&format!("{ident}_depends"), self.name.span());
+
+        let changes_fields: Vec<_> = self.modifiers.used_fields(Mode::Write).collect();
+        let depends_fields: Vec<_> = self.modifiers.used_fields(Mode::Read).collect();
+        match self.modifiers.dynamic_field(Mode::Read) {
+            Some(_) => quote!(),
+            None => {
+                let changes_fn = changes_fields.is_empty().not().then(|| {
+                    quote! {
+                        #vis fn #changes_name () -> #enums<#field_ty_name> {
+                            #enums::EMPTY #(| #field_ty_name::#changes_fields)*
+                        }
+                    }
+                });
+                let depends_fn = depends_fields.is_empty().not().then(|| {
+                    quote! {
+                        #vis fn #depends_name () -> #enums<#field_ty_name> {
+                            #enums::EMPTY #(| #field_ty_name::#depends_fields)*
+                        }
+                    }
+                });
+                quote!(#changes_fn #depends_fn)
+            }
+        }
     }
     fn arm(&self, root: &Ident, field_ty_name: &Ident, mode: Mode) -> Tokens {
         let ty_name = self.ty_name();

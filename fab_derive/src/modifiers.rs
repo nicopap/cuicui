@@ -255,7 +255,7 @@ impl Modifiers {
     ///
     /// If `arg` comes from a function that didn't pass the [`Self::validate`] check.
     pub fn is_constructor_input(&self, arg: &syn::FnArg) -> bool {
-        let Some(ident) = arg.get_ident() else { unreachable!() };
+        let Some(ident) = arg.get_ident() else { panic!("this function wasn't validated") };
         !self.0.iter().any(|m| m.has_ident(ident))
     }
 
@@ -263,9 +263,11 @@ impl Modifiers {
     pub fn from_attrs(attrs: &mut Vec<syn::Attribute>) -> syn::Result<Self> {
         let mut inner = Vec::new();
         attrs.retain_mut(|attr| {
-            let old_len = inner.len();
-            inner.push(Modify::parse(attr));
-            old_len == inner.len()
+            let parsed = Modify::parse(attr);
+            let modify_attr = matches!(&parsed, Ok(list) if !list.is_empty());
+            inner.push(parsed);
+
+            !modify_attr
         });
         let inner: Vec<_> = inner.into_iter().collect::<syn::Result<_>>()?;
         let inner = inner
