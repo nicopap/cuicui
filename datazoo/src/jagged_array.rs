@@ -1,4 +1,4 @@
-//! [`JaggedArray`], a variable length matrix optimized for read-only
+//! A variable length matrix optimized for read-only
 //! rows and statically known row count.
 
 use enumset::{EnumSet, EnumSetType, __internal::EnumSetTypePrivate};

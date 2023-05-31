@@ -3,6 +3,9 @@
 A collection of data structures used in `cuicui_richtext`.
 Mostly used for dependency resolution and specialized graph traversal tasks.
 
+Note that this library doesn't work on 16 bits plateforms.
+If you need support, consider opening an issue.
+
 You probably need to add [`enumset`] to your dependencies to use this crate.
 Due to a rust proc macro limitation, it's impossible to derive `EnumSetType`
 without directly depending on `enumset`.

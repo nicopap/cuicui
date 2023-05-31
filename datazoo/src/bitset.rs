@@ -1,4 +1,4 @@
-//! [`Bitset`], a slice of `u32` accessed on the bit level.
+//! A slice of `u32` accessed on the bit level.
 
 use std::ops::Range;
 
@@ -65,19 +65,25 @@ impl BlockT for u32 {
 ///
 /// ```
 /// # use cuicui_datazoo::Bitset;
-/// # let bunch_of_bits = [0xf0f0_00ff, 0xfff0_000f, 0xfff0_0f0f];
+/// # let mut bunch_of_bits = [0xf0f0_00ff, 0xfff0_000f, 0xfff0_0f0f];
 /// let mut as_vec: Bitset<Vec<u32>> = Bitset(bunch_of_bits.to_vec());
-/// let as_mut_slice: Bitset<&mut [u32]> = Bitset(&mut bunch_of_bits);
+/// let mut as_mut_slice: Bitset<&mut [u32]> = Bitset(&mut bunch_of_bits);
 ///
 /// assert_eq!(
 ///     as_vec.ones_in_range(5..91),
-///     as_slice.ones_in_range(5..91),
+///     as_mut_slice.ones_in_range(5..91),
 /// );
 /// as_vec.enable_bit(11);
-/// // They aren't equal anymore.
+///
 /// assert_ne!(
 ///     as_vec.ones_in_range(5..91),
-///     as_slice.ones_in_range(5..91),
+///     as_mut_slice.ones_in_range(5..91),
+/// );
+/// as_mut_slice.enable_bit(11);
+///
+/// assert_eq!(
+///     as_vec.ones_in_range(5..91),
+///     as_mut_slice.ones_in_range(5..91),
 /// );
 /// ```
 ///

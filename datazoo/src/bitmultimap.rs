@@ -1,4 +1,4 @@
-//! [`BitMultimap`], A sparse associative array.
+//! A sparse associative array.
 
 use std::{collections::BTreeSet, fmt};
 

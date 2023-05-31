@@ -1,4 +1,4 @@
-//! [`BitMatrix`], a [bitset](Bitset) with fixed-size rows.
+//! A [bitset](Bitset) with fixed-size rows.
 
 use std::{fmt, mem};
 
@@ -52,7 +52,7 @@ impl BitMatrix {
     /// Return a struct that, when printed with [`fmt::Display`] or [`fmt::Debug`],
     /// displays the matrix using unicode sextant characters([pdf]).
     ///
-    /// pdf: https://unicode.org/charts/PDF/U1FB00.pdf
+    /// [pdf]: https://unicode.org/charts/PDF/U1FB00.pdf
     pub const fn sextant_display(&self, width: usize, height: usize) -> SextantDisplay {
         SextantDisplay { matrix: self, width, height }
     }

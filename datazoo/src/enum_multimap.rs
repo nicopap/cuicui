@@ -1,4 +1,4 @@
-//! [`EnumMultimap`], a [multimap] optimized for [`EnumSetType`] keys.
+//! A [multimap] optimized for [`EnumSetType`] keys.
 //!
 //! [multimap]: https://en.wikipedia.org/wiki/Multimap
 

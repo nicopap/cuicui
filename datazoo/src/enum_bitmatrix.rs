@@ -1,4 +1,4 @@
-//! [`EnumBitMatrix`], a bitset similar to [`BitMatrix`][super::BitMatrix],
+//! A bitset similar to [`BitMatrix`][super::BitMatrix],
 //! indexed by [`EnumSetType`].
 
 use std::{any, fmt, marker::PhantomData, mem, ops::Range};
@@ -38,7 +38,6 @@ impl<R: EnumSetType> EnumBitMatrix<R> {
     ///
     /// Note that items of `iter` not within [`bit_width`](Self::bit_width) are ignored,
     /// and already enabled bits stay enabled.
-    #[allow(clippy::missing_panics_doc)] // False positive, see inline comment
     pub fn set_row(&mut self, row: R, iter: impl Iterator<Item = u32>) {
         let row = row.enum_into_u32();
         let width = self.bit_width();
@@ -46,8 +45,8 @@ impl<R: EnumSetType> EnumBitMatrix<R> {
         let start = row * width;
 
         for to_set in iter.filter(|i| *i < width).map(|i| i + start) {
-            // unwrap: to_set is always within range, as we `*i < width`
-            self.0.enable_bit(to_set as usize).unwrap();
+            // SAFETY: to_set is always within range, as we `*i < width`
+            unsafe { self.0.enable_bit(to_set as usize).unwrap_unchecked() };
         }
     }
     /// The width in bits of individual rows of this [`EnumBitMatrix`].
