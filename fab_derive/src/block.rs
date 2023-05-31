@@ -220,10 +220,18 @@ impl Block {
             #vis enum #modify_ty {
                 #( #ty_variants ),*
             }
+            /// Functions returning which field each modify function changes
+            /// and depends on.
+            ///
+            /// Note that if the modify function in question doesn't depend on
+            /// anything, no function is provided.
             impl #modify_ty {
                 #(
                     #field_assoc_fns
                 )*
+            }
+            /// Constructors for each individual modify variant.
+            impl #modify_ty {
                 #(
                     #ty_constructors
                 )*
