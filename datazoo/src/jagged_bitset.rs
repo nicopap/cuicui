@@ -36,7 +36,7 @@ use crate::{div_ceil, Bitset};
 /// let row_6: Vec<_> = jagged.row(6).collect();
 /// assert_eq!(&row_6, &[1, 3]);
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct JaggedBitset {
     ends: Box<[u32]>,
     bits: Bitset<Box<[u32]>>,
