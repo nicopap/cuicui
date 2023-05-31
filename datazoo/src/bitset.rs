@@ -1,6 +1,6 @@
 //! A slice of `u32` accessed on the bit level.
 
-use std::ops::Range;
+use std::{iter, ops::Range};
 
 use sorted_iter::sorted_iterator::SortedByItem;
 
@@ -91,8 +91,44 @@ impl BlockT for u32 {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Bitset<B: AsRef<[u32]>>(pub B);
 
+impl Bitset<Vec<u32>> {
+    /// Enables bit at position `bit`, extending the vector if necessary.
+    ///
+    /// When [`Bitset::bit(bit)`] will be called next, it will always be `true`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cuicui_datazoo::Bitset;
+    /// let mut as_vec = Bitset(vec![]);
+    /// assert!(as_vec.enable_bit(64).is_none());
+    /// assert_eq!(as_vec.0.len(), 0);
+    ///
+    /// as_vec.enable_bit_extending(73);
+    ///
+    /// assert!(as_vec.bit(73));
+    /// assert!(as_vec.enable_bit(64).is_some());
+    /// assert!(as_vec.bit(64));
+    /// assert_eq!(as_vec.0.len(), 3);
+    /// ```
+    pub fn enable_bit_extending(&mut self, bit: usize) {
+        let block = bit / u32::BITS64;
+        let offset = bit % u32::BITS64;
+
+        if block >= self.0.len() {
+            let extra_blocks = block - self.0.len() + 1;
+            self.0.extend(iter::repeat(0).take(extra_blocks));
+        }
+        self.0[block] |= 1 << offset;
+    }
+}
 impl<B: AsRef<[u32]> + AsMut<[u32]>> Bitset<B> {
-    /// Returns `None` if `bit` is out of range
+    /// Enables bit at position `bit`.
+    ///
+    /// Returns `None` and does nothing if `bit` is out of range.
+    ///
+    /// When [`Bitset::bit(bit)`] will be called next, it will be `true`
+    /// if this returned `Some`.
     #[inline]
     pub fn enable_bit(&mut self, bit: usize) -> Option<()> {
         let block = bit / u32::BITS64;
@@ -108,6 +144,7 @@ impl<B: AsRef<[u32]>> Bitset<B> {
     pub fn bit_len(&self) -> usize {
         self.0.as_ref().len() * u32::BITS64
     }
+    /// True if bit at `at` is enabled, false if out of bound or disabled.
     #[inline]
     pub fn bit(&self, at: usize) -> bool {
         let block = at / u32::BITS64;
@@ -149,6 +186,13 @@ impl<B: AsRef<[u32]>> Bitset<B> {
             bitset,
             remaining_blocks,
         }
+    }
+}
+impl<'a, B: AsRef<[u32]>> IntoIterator for &'a Bitset<B> {
+    type Item = u32;
+    type IntoIter = Ones<'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.ones_in_range(0..self.bit_len())
     }
 }
 

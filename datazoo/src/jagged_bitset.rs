@@ -246,10 +246,11 @@ impl Builder {
 
         let mut row_len = 0;
         for bit in row {
+            let bit_len = self.bits.bit_len();
             let bit_in_array = (bit + start) as usize;
 
-            if self.bits.bit_len() <= bit_in_array {
-                let extra_blocks = (bit_in_array - self.bits.bit_len()) / mem::size_of::<u32>() + 1;
+            if bit_len <= bit_in_array {
+                let extra_blocks = (bit_in_array - bit_len) / mem::size_of::<u32>() + 1;
                 self.bits.0.extend(iter::repeat(0).take(extra_blocks));
             }
             self.bits.enable_bit(bit_in_array);
