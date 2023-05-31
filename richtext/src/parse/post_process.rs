@@ -232,6 +232,13 @@ pub struct Tree<'a> {
 }
 impl<'a> Tree<'a> {
     pub(super) fn new(sections: Vec<Section<'a>>) -> Self {
+        let max_range = |s: &Section| s.modifiers.iter().map(|m| m.subsection_count).max();
+        let max_sect = |(i, s): (usize, _)| max_range(s).unwrap_or(0) + i;
+        let max_sect = sections.iter().enumerate().map(max_sect).max();
+        let max_sect = max_sect.unwrap_or(0);
+
+        assert!(max_sect < u32::MAX as usize, "Too many sections! over 2³²");
+
         Tree {
             sections: sections.into_iter().map(RSection::from).collect(),
         }
@@ -284,16 +291,15 @@ fn foo<'a>(
             TextModifier::parse(name, &value).map(ModifyKind::Modify)
         }
     };
-    let try_u32 = u32::try_from;
     let mut to_make_modify = |i, Modifier { name, value, subsection_count }| {
         Ok(MakeModify {
-            range: try_u32(i)?..try_u32(i + subsection_count)?,
+            range: i as u32..(i + subsection_count) as u32,
             kind: to_modify_kind(name, value)?,
         })
     };
     let to_make_rmodify = |i, RModifier { influence, inner }| {
         Ok(MakeModify {
-            range: try_u32(i)?..try_u32(i + influence)?,
+            range: i as u32..(i + influence) as u32,
             kind: ModifyKind::Modify(inner),
         })
     };

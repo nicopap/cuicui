@@ -1,17 +1,21 @@
 //! Create a dependency tree
 
-use std::fmt;
+mod is_static;
+mod mask_range;
 
-use datazoo::sorted::KeySorted;
-use datazoo::{enum_multimap, AssumeSortedByKeyExt, BitMultimap, EnumBitMatrix};
+use std::{fmt, mem::size_of};
+
+use datazoo::JaggedBitset;
+use datazoo::{enum_multimap, sorted::KeySorted, AssumeSortedByKeyExt, BitMultimap};
 use enumset::EnumSet;
-use log::trace;
-use smallvec::SmallVec;
+use log::{error, trace};
 
 use crate::binding::Id;
 use crate::prefab::{FieldsOf, Modify, Prefab, PrefabContext, PrefabField};
 
 use super::{MakeModify, ModifyIndex as Idx, ModifyKind, Resolver};
+use is_static::CheckStatic;
+use mask_range::MaskRange;
 
 pub(super) struct Make<'a, P: Prefab> {
     default_section: &'a P::Item,
@@ -48,27 +52,6 @@ where
     pub(super) fn new(modifiers: Vec<MakeModify<P>>, default_section: &'a P::Item) -> Self {
         Self { modifiers, default_section, errors: Vec::new() }
     }
-    fn field_root_mask(&self, field: PrefabField<P>) -> impl Iterator<Item = u32> + '_ {
-        let no_deps = move |modify: &&MakeModify<P>| {
-            !modify.depends().contains(field) && modify.changes().contains(field)
-        };
-        self.modifiers
-            .iter()
-            .filter(no_deps)
-            .flat_map(|modify| modify.range.clone())
-    }
-    /// The mask of static sections.
-    ///
-    /// If the bit is enabled, then it shouldn't be updated.
-    fn root_mask(&self) -> EnumBitMatrix<PrefabField<P>> {
-        let section_count = self.modifiers.iter().map(|m| m.range.end).max();
-        let mut root_mask = EnumBitMatrix::new(section_count.unwrap_or(0));
-
-        for field in EnumSet::ALL {
-            root_mask.set_row(field, self.field_root_mask(field));
-        }
-        root_mask
-    }
     /// Apply all static `Modify` and remove them from `modifiers`.
     ///
     /// A `Modify` is static when:
@@ -78,37 +61,40 @@ where
     ///    by a static modifier child of itself. (TODO(pref) this isn't done yet)
     ///
     /// Note that if there is no `modifiers`, this does nothing.
-    fn purge_static(&mut self, ctx: &PrefabContext<'_, P>) -> Vec<P::Item> {
+    fn purge_static(&mut self, ctx: &PrefabContext<'_, P>) -> (Vec<P::Item>, JaggedBitset) {
+        assert!(size_of::<usize>() >= size_of::<u32>());
+
         let Some(section_count) = self.modifiers.iter().map(|m| m.range.end).max() else {
-            return vec![]
+            return (vec![], JaggedBitset::default())
         };
-        let section_count = usize::try_from(section_count).unwrap();
-        let mut sections = vec![self.default_section.clone(); section_count];
+        let mut sections = vec![self.default_section.clone(); section_count as usize];
 
         let mut checker = CheckStatic::new();
+        let mut masker = MaskRange::new(&self.modifiers);
+        let mut i = 0;
+
         self.modifiers.retain(|modifier| {
+            let current_index = i;
+            i += 1;
+
             let is_static = checker.is_static(modifier);
 
             if !is_static {
+                masker.add_index(current_index);
                 return true;
             }
             for section in modifier.range.clone() {
-                let section = usize::try_from(section).unwrap();
-
                 // SAFETY: sections.len() == max(modifiers.range.end)
-                let section = unsafe { sections.get_unchecked_mut(section) };
+                let section = unsafe { sections.get_unchecked_mut(section as usize) };
+                let ModifyKind::Modify(modifier) = &modifier.kind else { continue; };
 
-                // TODO(clean): Check if this is reasonable
-                let ModifyKind::Modify(modifier) = &modifier.kind else {
-                    continue;
-                };
                 if let Err(err) = modifier.apply(ctx, section) {
                     self.errors.push(err);
                 };
             }
             false
         });
-        sections
+        (sections, masker.build())
     }
 
     /// The list of `Modify`s in `modifiers`.
@@ -152,12 +138,11 @@ where
 
             while let Some((parent_i, parent_end)) = parent.pop() {
                 if parent_end > modify.range.start {
-                    trace!("{i:?} has parent {parent_i:?}");
                     parent.push((parent_i, parent_end));
                     if depends {
-                        trace!("AND DEPENDS ON IT!!!");
                         ret = Some((parent_i, i));
                     }
+                    trace!("{i:?} has parent {parent_i:?} (depends: {depends})");
                     break;
                 }
             }
@@ -186,15 +171,14 @@ where
         }
         let old_count = self.modifiers.len();
 
-        let root_mask = self.root_mask();
-        trace!("Root mask is {root_mask:?}");
-
-        let sections = self.purge_static(ctx);
+        let (sections, masks) = self.purge_static(ctx);
         let new_count = self.modifiers.len();
+
+        trace!("masks are {}", masks.braille_trans_display());
         trace!("Removed {} static modifiers", old_count - new_count);
         trace!("now we have:");
-        for modi in &self.modifiers {
-            trace!("\t{modi:?}");
+        for (i, modi) in self.modifiers.iter().enumerate() {
+            trace!("\t<M{i}>: {modi:?}");
         }
 
         let m2m: BitMultimap<_, _> = self.m2m().collect();
@@ -223,87 +207,13 @@ where
         let b2m = KeySorted::from_sorted_iter(b2m.into_iter().assume_sorted_by_key());
         trace!("b2m: {b2m:?}");
 
-        let with_deps = Resolver { m2m, f2m, b2m, modifiers, root_mask };
-        (with_deps, sections)
-    }
-}
-struct CheckStatic<P: Prefab> {
-    parent_influence_ends: SmallVec<[u32; 4]>,
-    static_parent_fields: SmallVec<[FieldsOf<P>; 4]>,
-    all_static_fields: FieldsOf<P>,
-}
-impl<P: Prefab> CheckStatic<P> {
-    fn new() -> Self {
-        CheckStatic {
-            parent_influence_ends: SmallVec::default(),
-            static_parent_fields: SmallVec::default(),
-            all_static_fields: EnumSet::EMPTY,
-        }
-    }
-    fn ends_before_last(&self, modify: &MakeModify<P>) -> bool {
-        self.parent_influence_ends
-            .last()
-            .map_or(true, |end| modify.range.end < *end)
-    }
-    fn pop_parent(&mut self) {
-        if let Some(to_reset) = self.static_parent_fields.pop() {
-            // SAFETY: `parent_influence_ends` and `static_parent_fields` always
-            // have the same size
-            unsafe { self.parent_influence_ends.pop().unwrap_unchecked() };
-
-            self.all_static_fields -= to_reset;
-        }
-    }
-    fn push_parent(&mut self, modify: &MakeModify<P>) {
-        let changes = modify.changes();
-        let old_changes = self.all_static_fields;
-
-        let new_changes = changes - old_changes;
-        let new_layer = self.ends_before_last(modify);
-
-        if !new_changes.is_empty() {
-            self.all_static_fields |= changes;
-
-            if new_layer {
-                // Keep track of fields we added to `all_static_fields` so that
-                // we can remove them later
-                self.static_parent_fields.push(new_changes);
-                self.parent_influence_ends.push(modify.range.end);
-            } else {
-                // SAFETY: never fails because of `ends_before_last`
-                let last_changes =
-                    unsafe { self.static_parent_fields.last_mut().unwrap_unchecked() };
-                *last_changes |= changes;
+        if !self.errors.is_empty() {
+            error!("Errors while creating resolver:");
+            for err in &self.errors {
+                error!("\t{err}");
             }
         }
-    }
-    fn update_parents(&mut self, modify: &MakeModify<P>) {
-        let end = modify.range.end;
-        // any parent that has an end smaller than modify is actually not a parent,
-        // so we pop them.
-        let first_real_parent = self
-            .parent_influence_ends
-            .iter()
-            .rposition(|p_end| *p_end <= end);
-        let len = self.parent_influence_ends.len();
-
-        let pop_count = first_real_parent.map_or(len, |i| len - i);
-        for _ in 0..pop_count {
-            self.pop_parent();
-        }
-    }
-    fn is_static(&mut self, modify: &MakeModify<P>) -> bool {
-        self.update_parents(modify);
-
-        let mut depends = modify.depends().iter();
-        let no_deps = depends.all(|dep| self.all_static_fields.contains(dep));
-        let is_binding = matches!(&modify.kind, ModifyKind::Bound { .. });
-
-        let is_static = no_deps && !is_binding;
-
-        if is_static {
-            self.push_parent(modify);
-        }
-        is_static
+        let with_deps = Resolver { m2m, f2m, b2m, modifiers, masks };
+        (with_deps, sections)
     }
 }

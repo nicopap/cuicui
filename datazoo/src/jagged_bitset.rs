@@ -3,7 +3,7 @@
 
 use std::{fmt, hint, iter, mem};
 
-use sorted_iter::{assume::AssumeSortedByItemExt, SortedIterator};
+use sorted_iter::{assume::AssumeSortedByItemExt, sorted_iterator::SortedByItem};
 
 use crate::{div_ceil, Bitset};
 
@@ -94,7 +94,7 @@ impl JaggedBitset {
     ///
     /// # Panics
     /// If `index` is greater or equal to the [`height`](Self::height).
-    pub fn row(&self, index: usize) -> impl SortedIterator<Item = u32> + '_ {
+    pub fn row(&self, index: usize) -> impl Iterator<Item = u32> + SortedByItem + '_ {
         assert!(index < self.height());
 
         // SAFETY: we just checked index < self.ends.len()
@@ -104,7 +104,10 @@ impl JaggedBitset {
     ///
     /// # Safety
     /// `index` **must be** lower than the row count.
-    pub unsafe fn row_unchecked(&self, index: usize) -> impl SortedIterator<Item = u32> + '_ {
+    pub unsafe fn row_unchecked(
+        &self,
+        index: usize,
+    ) -> impl Iterator<Item = u32> + SortedByItem + '_ {
         if index >= self.height() {
             // SAFETY: upheld by function invariants
             unsafe { hint::unreachable_unchecked() }

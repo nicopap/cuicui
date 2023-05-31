@@ -1,11 +1,11 @@
 mod impl_fmt;
 mod make;
 
-use std::{fmt, iter, ops::Range};
+use std::{fmt, mem::size_of, ops::Range};
 
-use datazoo::SortedPairIterator;
 use datazoo::{
-    enumbitmatrix::Rows, sorted, BitMultimap, EnumBitMatrix, EnumMultimap, SortedIterator,
+    sorted, AssumeSortedByItemExt, BitMultimap, EnumMultimap, JaggedBitset, SortedByItem,
+    SortedIterator,
 };
 use log::warn;
 use smallvec::SmallVec;
@@ -13,7 +13,7 @@ use smallvec::SmallVec;
 use crate::binding::{Id, View};
 use crate::prefab::{Changing, FieldsOf, Indexed, Modify, Prefab, PrefabContext, PrefabField};
 
-pub type SmallSortedByKey<K, V, const C: usize> = sorted::KeySorted<SmallVec<[(K, V); C]>, K, V>;
+type SmallKeySorted<K, V, const C: usize> = sorted::KeySorted<SmallVec<[(K, V); C]>, K, V>;
 
 /// Index in `modifies`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -52,6 +52,9 @@ impl<P: Prefab> From<MakeModify<P>> for Modifier<P> {
     }
 }
 impl<P: Prefab> MakeModify<P> {
+    fn parent_of(&self, other: &MakeModify<P>) -> bool {
+        other.range.end <= self.range.end
+    }
     fn depends(&self) -> FieldsOf<P> {
         match &self.kind {
             ModifyKind::Bound { depends, .. } => *depends,
@@ -93,10 +96,13 @@ pub struct Resolver<P: Prefab, const MOD_COUNT: usize> {
 
     /// Index in `modifiers` of binding [`Id`].
     /// `b2m` stands for "binding to modifier dependencies".
-    b2m: SmallSortedByKey<Id, ModifyIndex, 2>,
+    b2m: SmallKeySorted<Id, ModifyIndex, 2>,
 
-    /// Sections **not** to update for a given field when a `f2m` dependency  is triggered.
-    root_mask: EnumBitMatrix<PrefabField<P>>,
+    /// Sections **not** to update when a modifier is triggered.
+    ///
+    /// Each row of the [`JaggedBitset`] corresponds to a [`Modifier`] in
+    /// `modifiers`. The row represents the sections to not update.
+    masks: JaggedBitset,
 }
 
 struct Evaluator<'a, P: Prefab, const MC: usize> {
@@ -104,6 +110,7 @@ struct Evaluator<'a, P: Prefab, const MC: usize> {
     graph: &'a Resolver<P, MC>,
     ctx: &'a PrefabContext<'a, P>,
     to_update: &'a mut P::Items,
+    bindings: &'a View<'a, P>,
 }
 
 impl<P: Prefab, const MC: usize> Resolver<P, MC>
@@ -116,43 +123,67 @@ where
         default_section: &P::Item,
         ctx: &PrefabContext<'_, P>,
     ) -> (Self, Vec<P::Item>) {
+        assert!(size_of::<usize>() >= size_of::<u32>());
+
         make::Make::new(modifiers, default_section).build(ctx)
     }
-    fn binding_range(
-        &self,
-        start_at: usize,
-        binding: Id,
-    ) -> Option<(usize, ModifyIndex, Range<u32>)> {
+    fn index_of(&self, binding: Id, start_at: usize) -> Option<(usize, ModifyIndex)> {
         let subset = &self.b2m[start_at..];
         let index = start_at + subset.binary_search_by_key(&binding, |d| d.0).ok()?;
         let mod_index = self.b2m[index].1;
-        let mod_range = self.modify_at(mod_index).range.clone();
-        Some((index, mod_index, mod_range))
+        Some((index, mod_index))
     }
     fn depends_on(&self, changes: FieldsOf<P>) -> impl Iterator<Item = ModifyIndex> + '_ {
         self.f2m.all_rows(changes).copied()
     }
-    fn root_mask_for(&self, changes: FieldsOf<P>, range: Range<u32>) -> Rows<PrefabField<P>> {
-        self.root_mask.rows(changes, range)
-    }
-    fn modify_at(&self, index: ModifyIndex) -> &Modifier<P> {
+    fn modifier_at(&self, index: ModifyIndex) -> &Modifier<P> {
         // SAFETY: we assume that it is not possible to build an invalid `ModifyIndex`.
         // Note: it is only possible to assume this because `ModifyIndex` is not exposed
         // publicly, therefore, the only source of `ModifyIndex` are methods on the very
         // same instance of `Resolver` they are used, and no operation on `Resolver` can
-        // invalidate a `ModifyIndex` since
+        // invalidate a `ModifyIndex` since all of `Resolver`s slices have fixed size.
         unsafe { self.modifiers.get_unchecked(index.0 as usize) }
+    }
+    fn masked(&self, index: ModifyIndex) -> impl Iterator<Item = u32> + SortedByItem + '_ {
+        // SAFETY: same as above
+        unsafe { self.masks.row_unchecked(index.0 as usize) }
+    }
+
+    fn modify_at<'a>(
+        &'a self,
+        index: ModifyIndex,
+        overlay: Option<&'a P::Modify>,
+    ) -> Option<(&'a P::Modify, impl Iterator<Item = u32> + SortedByItem + 'a)> {
+        let (modify, range) = match (self.modifier_at(index), overlay) {
+            (Modifier { range, .. }, Some(modify)) => (modify, range),
+            (Modifier { modify: Some(modify), range }, None) => (modify, range),
+            // `modify: None` yet `overlay: Some(_)`. This happens when a modify
+            // coming from a binding has itself a dependency, and that dependency
+            // is trying to trigger it.
+            // At construction time, `modify` is set to None. Only when bound
+            // (`bindings` parameter of `update`) will this `modify` be set to
+            // `Some(_)`. We can't do anything with this yet, so we skip.
+            (Modifier { modify: None, .. }, None) => return None,
+        };
+        let range = range.clone();
+        // note: the check skips reading `masks` when we know there can't be one.
+        let mask = (range.len() > 1)
+            .then(|| self.masked(index))
+            .into_iter()
+            .flatten()
+            .map(move |i| i + range.start)
+            .assume_sorted_by_item();
+        Some((modify, range.difference(mask)))
     }
     pub fn update<'a>(
         &'a self,
         to_update: &'a mut P::Items,
         updates: &'a Changing<P::Item, P::Modify>,
-        bindings: View<'a, P>,
+        bindings: &'a View<'a, P>,
         ctx: &'a PrefabContext<'a, P>,
     ) {
-        let bindings = bindings.changed();
         let Changing { updated, value } = updates;
-        Evaluator { graph: self, ctx, to_update, root: value }.eval(*updated, bindings);
+        Evaluator { graph: self, ctx, to_update, root: value, bindings }.update_all(*updated);
     }
 }
 impl<'a, P: Prefab, const MC: usize> Evaluator<'a, P, MC>
@@ -160,73 +191,37 @@ where
     P::Item: Clone + fmt::Debug,
     PrefabField<P>: fmt::Debug,
 {
-    fn eval_exact(
-        &mut self,
-        index: ModifyIndex,
-        mask: impl SortedIterator<Item = u32>,
-        // TODO(clean): flag argument
-        uses_root: bool,
-    ) -> anyhow::Result<()> {
-        let Modifier { modify: Some(modify), range } = self.graph.modify_at(index) else {
-            return Ok(());
-        };
-
-        for section in range.clone().difference(mask) {
+    // TODO(clean): flag arguments are icky
+    fn update(&mut self, index: ModifyIndex, field_depends: bool, overlay: Option<&P::Modify>) {
+        let Some((modify, range)) = self.graph.modify_at(index, overlay) else { return; };
+        for section in range {
             let section = self.to_update.get_mut(section as usize).unwrap();
-            if uses_root {
+            if field_depends {
                 *section = self.root.clone();
             }
-            modify.apply(self.ctx, section)?;
-        }
-        Ok(())
-    }
-    fn eval_with_dependencies<I>(&mut self, index: ModifyIndex, mask: impl Fn() -> I)
-    where
-        I: SortedIterator<Item = u32>,
-    {
-        if let Err(err) = self.eval_exact(index, mask(), true) {
-            warn!("when applying {index:?}: {err}");
+            if let Err(error) = modify.apply(self.ctx, section) {
+                warn!("Error when applying modifier {index:?} {modify:?}: {error}");
+            };
         }
         for &dep_index in self.graph.m2m.get(&index) {
-            if let Err(err) = self.eval_exact(dep_index, mask(), false) {
-                warn!("when applying {dep_index:?} child of {index:?}: {err}");
-            }
+            self.update(dep_index, false, None);
         }
     }
-    fn eval<'b>(
-        &mut self,
-        fields: FieldsOf<P>,
-        bindings: impl SortedPairIterator<&'b Id, &'b P::Modify, Item = (&'b Id, &'b P::Modify)>,
-    ) where
-        P::Modify: 'b,
-    {
-        let mut last_index = 0;
-        for (id, modify) in bindings {
-            let Some((index, mod_index, range)) = self.graph.binding_range(last_index, *id) else {
-                continue;
-            };
-            last_index = index + 1;
-            for section in range.difference(iter::empty()) {
-                let idx = section as usize;
-                let section = self.to_update.get_mut(idx).expect("Section within range");
-                if let Err(err) = modify.apply(self.ctx, section) {
-                    warn!("when applying {id:?}: {err}");
-                }
-                // TODO(feat): insert modify with dependencies if !modify.depends().is_empty()
-            }
-            // TODO(clean): this is copy/pasted from eval_with_dependencies
-            for &dep_index in self.graph.m2m.get(&mod_index) {
-                if let Err(err) = self.eval_exact(dep_index, iter::empty(), false) {
-                    warn!("when applying {dep_index:?} child of {index:?}: {err}");
-                }
-            }
+    fn update_all(&mut self, updated_fields: FieldsOf<P>) {
+        let bindings = self.bindings.changed();
+
+        let mut lookup_start = 0;
+        for (&binding, bound_modify) in bindings {
+            let Some(ret) = self.graph.index_of(binding, lookup_start) else { continue; };
+            let (index, mod_index) = ret;
+
+            lookup_start = index + 1;
+
+            self.update(mod_index, false, Some(bound_modify));
+            // TODO(feat): insert modify with dependencies if !modify.depends().is_empty()
         }
-        for index in self.graph.depends_on(fields) {
-            let Modifier { modify: Some(modify), range } = self.graph.modify_at(index) else {
-                continue;
-            };
-            let mask = || self.graph.root_mask_for(modify.changes(), range.clone());
-            self.eval_with_dependencies(index, mask);
+        for index in self.graph.depends_on(updated_fields) {
+            self.update(index, true, None);
         }
     }
 }

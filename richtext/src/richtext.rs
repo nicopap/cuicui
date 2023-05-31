@@ -87,7 +87,8 @@ impl RichTextData {
 
         // TODO(clean): this code should be in cuicui_fab
         let view = world.0.view_with_local(bindings).unwrap();
-        text.0.update(&mut to_update.sections, &inner.0, view, &ctx);
+        text.0
+            .update(&mut to_update.sections, &inner.0, &view, &ctx);
         inner.0.reset_updated();
         bindings.reset_changes();
     }

@@ -455,7 +455,9 @@ impl IntoModify for UserColor {
 
 ## TODO
 
-- [ ] fab_derive: Write the doc strings of modify functions on the modify enum variants and constructor.
+- [X] fab/datazoo cleanup: remove all u32::try_from(usize) and add a const () = assert!(sizeof);
+- [X] fab_derive: Write the doc strings of modify functions on the modify enum variants and constructor.
+- [ ] fab_derive: Document which fields are accessed in modify enum variant and constructor.
 - [ ] fab_derive: Fix doc compilation with `fab_derive`
 - [ ] fab_derive: Also handle Context field access.
 - [ ] fab_derive: Document `impl_modify` macro fully. Specifically: settle on a naming convention
@@ -463,12 +465,16 @@ impl IntoModify for UserColor {
 - [ ] fab_derive: Test `impl_modify` more thourougfully
 - [ ] fab_derive: Define error messages as txt files and use `include_str` in both doc and code.
 - [ ] fab: Let user specify `track::Write`s
+- [ ] fab resolve: Verify validaty of multiple write fields
 - [X] fab: Entry api to bindings, allows skipping allocations wholesale.
 - [X] fab resolve: Implement proper dependency resolution
-- [ ] fab resolve: Fix modifiers overwritting static children
+- [X] fab resolve: Fix modifiers overwritting static children
+- [ ] fab resolve: Handle binding that depends on fields (Option<Modifier> in binding view)
+- [ ] fab resolve + fab_derive: Context field access tracking
+- [ ] fab resolve + fab_derive: Nested fields handling (modifying .foo modifies .foo.x and .foo.y).
 - [ ] fab resolve: Lightweight dumb resolver
 - [ ] richtext trackers: Cleanup error handling
-- [ ] richtext tree: Cleanup error handling (major issue)
+- [ ] richtext post_process: Cleanup error handling (major issue)
 - [ ] richtext trackers: Manage when cached entity changes/not accessible
 - [ ] richtext trackers: Cleanup module tree
 - [ ] richtext trackers: Check is_changed of resources and components before updating binding
@@ -477,6 +483,7 @@ impl IntoModify for UserColor {
 - [ ] richtext builder: Let user specify `track::Write`s
 - [ ] richtext parser: test and improve error messages
 - [ ] richtext parser: review the informal_grammar.md file
+- [ ] richtext: Text2d support
 - [ ] richtext: Modify a Vec<&mut Text> over TextSections, to allow all kind of effects
 - [X] richtext: way to apply the same Modify in series, by splitting text word/character
 - [ ] richtext split: figure out why this isn't rendered nicely.
@@ -484,7 +491,6 @@ impl IntoModify for UserColor {
       (BindingId, ModifierIndex)
 - [ ] richtext: Post-process content splitting as described in `post_process_content.md`
 - [ ] richtext split: Make the API public.
-- [ ] richtext: Text2d support
 - [ ] everything: Document the hell out of everything
 - [ ] (unsure) optimization: take inspiration from https://github.com/Wallacoloo/jagged_array/blob/master/src/lib.rs#L68 for `VarMatrix`s impls
 - [ ] (unsure) richtext parser: Allow compile-time verification of rich text spec through a proc macro

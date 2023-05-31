@@ -24,4 +24,7 @@ pub use enum_multimap::EnumMultimap;
 pub use jagged_array::JaggedArray;
 pub use jagged_bitset::JaggedBitset;
 pub use sorted_iter::assume::{AssumeSortedByItemExt, AssumeSortedByKeyExt};
-pub use sorted_iter::{SortedIterator, SortedPairIterator};
+pub use sorted_iter::{
+    sorted_iterator::SortedByItem, sorted_pair_iterator::SortedByKey, SortedIterator,
+    SortedPairIterator,
+};
