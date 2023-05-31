@@ -264,3 +264,58 @@ Problem:
 - Static culling spuriously deletes `Modify` that only depends on bindings.
 
 Solution: Do not cull `Modify` that only depends on bindings.
+
+## Fix the range dependency mask
+
+Problem:  `root_mask` is underspecified. We want to:
+
+- Leave alone nested binding modifier that do not depend on parent
+- Leave alone nested static modifier that do not depend on any parent
+
+Currently, we add sections that both depend on static and binding modifiers
+to the `root_mask`.
+
+`root_mask` loses the distinction between static and binding modifiers.
+We can use it for f2m modifiers, but we can't use it for b2m, since it would
+leave out all of what the binding touches.
+
+We can't drop the b2ms from the `root_mask`, because then we would update the
+binding deps, when they shouldn't be updated.
+
+### Modifier-specific masks
+
+We could use a `JaggedBitset`, one entry per `ModifyIndex`.
+Each row is the mask for range of the modify. would need to increment by
+modify.range.start for it to work.
+
+Consider skipping it for modify of range length = 1. Avoids deferrencing
+the `JaggedBitset` just to learn it has size 0 always.
+
+However, still need to have an index in `JaggedBitset`, otherwise desync between
+`ModifyIndex` and it.
+
+This seems a lot. We need to store an additional u32 per modifier, and when
+relevant we have to dereference **two** slices!
+
+But I don't see an alternative. Short of storing a `Bitset` in each `Modifer`,
+which would increase by 16 bytes the size of each `Modifier`.
+
+#### m2m-specific masks
+
+We can't limit this to modifiers that trigger dependecies, because with culling,
+we just remove static modifiers.
+
+#### Implementaiton
+
+We should create the static mask per Modifier, same place as we cull statics.
+
+_M0 masks M1_ when:
+_M0 child of M1_
+and ∃ _c_ ∈ _M1.C_,
+  _c_ ∈ _M0.C_
+  and _c_ ∉ _M0.D_
+
+- For each `modifier` following this one:
+  - If `modifier` range is subset of this one and masks it:
+    - Add the range to the mask,
+    - (opt) Skip all next `modifier`s in that range

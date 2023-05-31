@@ -183,10 +183,10 @@ Each `Section` has `Modifier`s that apply to the current `content`, but also
 all the next *n* `Section`s where *n* is `Modifier::subsection_count`.
 
 ```
-{M4 | { M2 | {M1, M3 | Hello}{M2, R |{M1 | This has several}{M5 | words here }}}{M6 | also more}}
-Four sections:         -----               ----------------       ----------          ---------
+{M4|{ M2|{M1, M3|Hello}{M2, R|{M1 |This has several}{M5|words here}}}{M6|also more}}
+Four sections:   -----             ----------------     ----------       ---------
 
-R: (Repeat::ByWord, fn(_) ─-> M8)
+R: (Repeat::ByWord, fn(_) -> M8)
 
   Hello  │      This has several      │    words here    │  also more
 M2───────┼────────────────────────────┼──────────────    │M6─────────
