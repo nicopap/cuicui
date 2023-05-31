@@ -3,7 +3,7 @@
 use std::fmt;
 
 use datazoo::sorted::KeySorted;
-use datazoo::{enum_multimap, AssumeSortedByKeyExt, BitMultiMap, EnumBitMatrix};
+use datazoo::{enum_multimap, AssumeSortedByKeyExt, BitMultimap, EnumBitMatrix};
 use enumset::EnumSet;
 use log::trace;
 use smallvec::SmallVec;
@@ -197,7 +197,7 @@ where
             trace!("\t{modi:?}");
         }
 
-        let m2m: BitMultiMap<_, _> = self.m2m().collect();
+        let m2m: BitMultimap<_, _> = self.m2m().collect();
         trace!("m2m deps: {m2m:?}");
 
         let mut f2m = enum_multimap::Builder::new();

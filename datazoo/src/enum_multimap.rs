@@ -1,5 +1,8 @@
-use core::fmt;
-use std::marker::PhantomData;
+//! [`EnumMultimap`], a [multimap] optimized for [`EnumSetType`] keys.
+//!
+//! [multimap]: https://en.wikipedia.org/wiki/Multimap
+
+use std::{fmt, marker::PhantomData};
 
 use enumset::{EnumSet, EnumSetType};
 
@@ -11,20 +14,20 @@ use crate::{jagged_array, JaggedArray};
 /// ie: it must be an enum derived with `#[derive(EnumSetType)]`.
 ///
 /// Use it as follow:
-/// `EnumMultiMap<MyEnumSet, ModifyIndex, { (MyEnumSet::BIT_WIDTH - 1) as usize }>`
+/// `EnumMultimap<MyEnumSet, ModifyIndex, { (MyEnumSet::BIT_WIDTH - 1) as usize }>`
 ///
 /// [multimap]: https://en.wikipedia.org/wiki/Multimap
-pub struct EnumMultiMap<K: EnumSetType, V, const CLM: usize> {
+pub struct EnumMultimap<K: EnumSetType, V, const CLM: usize> {
     inner: JaggedArray<V, CLM>,
     _key: PhantomData<K>,
 }
-impl<K: EnumSetType, V: fmt::Debug, const CLM: usize> fmt::Debug for EnumMultiMap<K, V, CLM> {
+impl<K: EnumSetType, V: fmt::Debug, const CLM: usize> fmt::Debug for EnumMultimap<K, V, CLM> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("EnumMultiMap").field(&self.inner).finish()
+        f.debug_tuple("EnumMultimap").field(&self.inner).finish()
     }
 }
 #[allow(clippy::let_unit_value)] // false positive: we just want to inline the panic
-impl<K: EnumSetType, V, const CLM: usize> EnumMultiMap<K, V, CLM> {
+impl<K: EnumSetType, V, const CLM: usize> EnumMultimap<K, V, CLM> {
     /// Compile time error when `CLM` is not the correct value.
     ///
     /// This works around a limitation of rust' type system,
@@ -71,7 +74,7 @@ impl<K: EnumSetType, V, const CLM: usize> Builder<K, V, CLM> {
         let row = key.enum_into_u32() as usize;
         self.rows.insert(row, values.collect());
     }
-    pub fn build(self) -> Result<EnumMultiMap<K, V, CLM>, jagged_array::Error> {
+    pub fn build(self) -> Result<EnumMultimap<K, V, CLM>, jagged_array::Error> {
         let mut end = 0;
         let mut ends = Box::new([0; CLM]);
         let mut data = Vec::new();
@@ -82,7 +85,7 @@ impl<K: EnumSetType, V, const CLM: usize> Builder<K, V, CLM> {
                 ends[i] = end;
             }
         }
-        Ok(EnumMultiMap {
+        Ok(EnumMultimap {
             inner: JaggedArray::new(ends, data.into_boxed_slice())?,
             _key: PhantomData,
         })

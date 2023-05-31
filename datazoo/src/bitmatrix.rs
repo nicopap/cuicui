@@ -1,52 +1,13 @@
-use core::fmt;
-use std::mem;
+//! [`BitMatrix`], a [bitset](Bitset) with fixed-size rows.
+
+use std::{fmt, mem};
 
 use crate::{div_ceil, Bitset};
 
-// TODO(clean): move this after BitMatrix
-/// Iterator over a single column of a [`BitMatrix`],
-/// see [`BitMatrix::active_rows_in_column`] documentation for details.
-pub struct Column<'a> {
-    width: usize,
-    current_cell: usize,
-    data: &'a [u32],
-}
-impl Iterator for Column<'_> {
-    type Item = usize;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let bit = self.current_cell;
-            let row = self.current_cell / self.width;
-            self.current_cell += self.width;
-
-            let block = bit / u32::BITS as usize;
-            let offset = bit % u32::BITS as usize;
-
-            let is_active = |block: u32| block & (1 << offset) != 0;
-            match self.data.get(block) {
-                Some(block) if is_active(*block) => return Some(row),
-                Some(_) => continue,
-                None => return None,
-            }
-        }
-    }
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let upper = self.data.len().saturating_sub(self.current_cell) / self.width;
-        (0, Some(upper))
-    }
-    #[inline]
-    fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.current_cell = self.current_cell.saturating_add(n * self.width);
-        self.next()
-    }
-}
-
-/// A [bitset](Bitset) accessible by range.
+/// A [bitset](Bitset) with fixed-size rows.
 ///
 /// Note that only the total size is tracked in `BitMatrix` and you must provide
-/// the `width` value when calling methods on it.
+/// the `width` value when calling methods on `BitMatrix`.
 #[derive(Debug)]
 pub struct BitMatrix(Bitset<Box<[u32]>>);
 impl BitMatrix {
@@ -88,10 +49,51 @@ impl BitMatrix {
         x < width && self.0.bit(x + y * width)
     }
 
-    /// Return a struct that when printed with [`fmt::Display`] or [`fmt::Debug`],
-    /// displays the matrix using unicode sextant characters.
+    /// Return a struct that, when printed with [`fmt::Display`] or [`fmt::Debug`],
+    /// displays the matrix using unicode sextant characters([pdf]).
+    ///
+    /// pdf: https://unicode.org/charts/PDF/U1FB00.pdf
     pub const fn sextant_display(&self, width: usize, height: usize) -> SextantDisplay {
         SextantDisplay { matrix: self, width, height }
+    }
+}
+
+/// Iterator over a single column of a [`BitMatrix`],
+/// see [`BitMatrix::active_rows_in_column`] documentation for details.
+pub struct Column<'a> {
+    width: usize,
+    current_cell: usize,
+    data: &'a [u32],
+}
+impl Iterator for Column<'_> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let bit = self.current_cell;
+            let row = self.current_cell / self.width;
+            self.current_cell += self.width;
+
+            let block = bit / u32::BITS as usize;
+            let offset = bit % u32::BITS as usize;
+
+            let is_active = |block: u32| block & (1 << offset) != 0;
+            match self.data.get(block) {
+                Some(block) if is_active(*block) => return Some(row),
+                Some(_) => continue,
+                None => return None,
+            }
+        }
+    }
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let upper = self.data.len().saturating_sub(self.current_cell) / self.width;
+        (0, Some(upper))
+    }
+    #[inline]
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.current_cell = self.current_cell.saturating_add(n * self.width);
+        self.next()
     }
 }
 

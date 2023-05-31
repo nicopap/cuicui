@@ -1,3 +1,6 @@
+//! [`JaggedBitset`], a bit matrix similar to [`BitMatrix`](super::BitMatrix),
+//! but with columns of variable length like [`JaggedArray`](super::JaggedArray).
+
 use std::{iter, mem};
 
 use crate::Bitset;

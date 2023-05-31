@@ -1,7 +1,6 @@
 //! Types marking slices as being sorted.
 
-use core::fmt;
-use std::{collections::BinaryHeap, marker::PhantomData, ops::Deref, slice};
+use std::{collections::BinaryHeap, fmt, marker::PhantomData, ops::Deref, slice};
 
 use sorted_iter::{sorted_iterator::SortedByItem, sorted_pair_iterator::SortedByKey};
 

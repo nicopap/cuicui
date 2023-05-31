@@ -1,3 +1,5 @@
+//! [`Bitset`], a slice of `u32` accessed on the bit level.
+
 use std::ops::Range;
 
 use sorted_iter::sorted_iterator::SortedByItem;

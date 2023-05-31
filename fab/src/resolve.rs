@@ -5,7 +5,7 @@ use std::{fmt, iter, ops::Range};
 
 use datazoo::SortedPairIterator;
 use datazoo::{
-    enumbitmatrix::Rows, sorted, BitMultiMap, EnumBitMatrix, EnumMultiMap, SortedIterator,
+    enumbitmatrix::Rows, sorted, BitMultimap, EnumBitMatrix, EnumMultimap, SortedIterator,
 };
 use log::warn;
 use smallvec::SmallVec;
@@ -81,7 +81,7 @@ pub struct Resolver<P: Prefab, const MOD_COUNT: usize> {
 
     /// `Modify` that can be triggered by a `PrefabField` change.
     /// `f2m` stands for "field to modifier dependencies".
-    f2m: EnumMultiMap<PrefabField<P>, ModifyIndex, MOD_COUNT>,
+    f2m: EnumMultimap<PrefabField<P>, ModifyIndex, MOD_COUNT>,
 
     // TODO(feat): RichText without m2m dependency. This is fairly costly to
     // build and uses several kilobytes of memory.
@@ -89,7 +89,7 @@ pub struct Resolver<P: Prefab, const MOD_COUNT: usize> {
     ///
     /// When a `Modify` changes, sometimes, other `Modify` need to run.
     /// `m2m` stands for "modifier to modifier dependencies".
-    m2m: BitMultiMap<ModifyIndex, ModifyIndex>,
+    m2m: BitMultimap<ModifyIndex, ModifyIndex>,
 
     /// Index in `modifiers` of binding [`Id`].
     /// `b2m` stands for "binding to modifier dependencies".
@@ -136,7 +136,11 @@ where
         self.root_mask.rows(changes, range)
     }
     fn modify_at(&self, index: ModifyIndex) -> &Modifier<P> {
-        // SAFETY: we kinda assume that it is not possible to build an invalid `ModifyIndex`.
+        // SAFETY: we assume that it is not possible to build an invalid `ModifyIndex`.
+        // Note: it is only possible to assume this because `ModifyIndex` is not exposed
+        // publicly, therefore, the only source of `ModifyIndex` are methods on the very
+        // same instance of `Resolver` they are used, and no operation on `Resolver` can
+        // invalidate a `ModifyIndex` since
         unsafe { self.modifiers.get_unchecked(index.0 as usize) }
     }
     pub fn update<'a>(

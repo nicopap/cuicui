@@ -1,11 +1,10 @@
-use core::fmt;
-use std::collections::BTreeSet;
+//! [`BitMultimap`], A sparse associative array.
+
+use std::{collections::BTreeSet, fmt};
 
 use sorted_iter::{assume::AssumeSortedByItemExt, SortedIterator};
 
-use crate::sorted;
-
-use super::bitmatrix::BitMatrix;
+use crate::{sorted, BitMatrix};
 
 /// A sparse associative array.
 ///
@@ -14,11 +13,11 @@ use super::bitmatrix::BitMatrix;
 ///
 /// Furthermore, you can not only get all `values` associated with a given `key`,
 /// but also all `keys` associated with a given `value`.
-/// See [`BitMultiMap::get_keys_of`] and [`BitMultiMap::get`].
+/// See [`BitMultimap::get_keys_of`] and [`BitMultimap::get`].
 ///
 /// # Representation
 ///
-/// Consider `K = char` and `V = i64`. A `BitMultiMap` stores a limited subset of
+/// Consider `K = char` and `V = i64`. A `BitMultimap` stores a limited subset of
 /// `char` and `i64` and an association list.
 ///
 /// Keys and values are stored in two sorted lists, associations in a [bitset
@@ -47,7 +46,7 @@ use super::bitmatrix::BitMatrix;
 /// ## Example
 ///
 /// ```rust
-/// use cuicui_datazoo::BitMultiMap;
+/// use cuicui_datazoo::BitMultimap;
 ///
 /// let associations: Vec<(char, i64)> = vec![
 ///     ('E', -1),
@@ -57,7 +56,7 @@ use super::bitmatrix::BitMatrix;
 ///     ('S', 342),
 ///     ('T',-5), ('T',-1), ('T',1024),
 /// ];
-/// let map: BitMultiMap<char, i64> = associations.into_iter().collect();
+/// let map: BitMultimap<char, i64> = associations.into_iter().collect();
 ///
 /// let assocs = map.get(&'V').copied().collect::<Vec<_>>();
 /// assert_eq!(&assocs, &[]);
@@ -70,7 +69,7 @@ use super::bitmatrix::BitMatrix;
 /// ```
 ///
 /// [multimap]: https://en.wikipedia.org/wiki/Multimap
-pub struct BitMultiMap<K: Eq + Ord, V: Eq + Ord> {
+pub struct BitMultimap<K: Eq + Ord, V: Eq + Ord> {
     sparse_keys: sorted::Box<K>,
     sparse_values: sorted::Box<V>,
     // TODO(feat): When the nº Modify that have Modify dependencies become very
@@ -84,7 +83,7 @@ pub struct BitMultiMap<K: Eq + Ord, V: Eq + Ord> {
     /// Specifically, the column is the index in `sparse_values` of relevant `V`s.
     associations: BitMatrix,
 }
-impl<K: Eq + Ord, V: Eq + Ord> BitMultiMap<K, V> {
+impl<K: Eq + Ord, V: Eq + Ord> BitMultimap<K, V> {
     /// Return indices in `sparse_values` of values associated with key of index `row`.
     #[inline]
     fn mapped_associates_of(&self, row: usize) -> impl Iterator<Item = usize> + '_ {
@@ -126,8 +125,8 @@ impl<K: Eq + Ord, V: Eq + Ord> BitMultiMap<K, V> {
             .assume_sorted_by_item()
     }
 }
-impl<K: Eq + Ord + Clone, V: Eq + Ord + Clone> FromIterator<(K, V)> for BitMultiMap<K, V> {
-    /// Create a [`BitMultiMap`] with all associations.
+impl<K: Eq + Ord + Clone, V: Eq + Ord + Clone> FromIterator<(K, V)> for BitMultimap<K, V> {
+    /// Create a [`BitMultimap`] with all associations.
     ///
     /// Note that this takes into account
     fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
@@ -154,14 +153,14 @@ impl<K: Eq + Ord + Clone, V: Eq + Ord + Clone> FromIterator<(K, V)> for BitMulti
                 .enable_bit(sparse_values.len(), key_i, value_i)
                 .unwrap();
         }
-        BitMultiMap { sparse_keys, sparse_values, associations }
+        BitMultimap { sparse_keys, sparse_values, associations }
     }
 }
 
-impl<K: Eq + Ord + fmt::Debug, V: Eq + Ord + fmt::Debug> fmt::Debug for BitMultiMap<K, V> {
+impl<K: Eq + Ord + fmt::Debug, V: Eq + Ord + fmt::Debug> fmt::Debug for BitMultimap<K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (width, height) = (self.sparse_values.len(), self.sparse_keys.len());
-        f.debug_struct("BitMultiMap")
+        f.debug_struct("BitMultimap")
             .field("values", &self.sparse_values)
             .field("keys", &self.sparse_keys)
             .field("map", &self.associations.sextant_display(width, height))

@@ -1,5 +1,7 @@
-use core::fmt;
-use std::{any, marker::PhantomData, mem, ops::Range};
+//! [`EnumBitMatrix`], a bitset similar to [`BitMatrix`][super::BitMatrix],
+//! indexed by [`EnumSetType`].
+
+use std::{any, fmt, marker::PhantomData, mem, ops::Range};
 
 use enumset::{EnumSet, EnumSetType};
 use sorted_iter::{assume::AssumeSortedByItemExt, sorted_iterator::SortedByItem, SortedIterator};
@@ -8,14 +10,14 @@ use crate::{div_ceil, Bitset};
 
 // TODO(clean): Manual impl of Debug using braile to show internal state.
 /// A bitset similar to [`BitMatrix`][super::BitMatrix],
-/// but with a fixed column and row count, one row per `R` variant.
+/// but with a fixed column and row count, indexed by `R` [`EnumSetType`].
 #[derive(Clone, PartialEq, Eq)]
 pub struct EnumBitMatrix<R: EnumSetType>(Bitset<Box<[u32]>>, PhantomData<R>);
 impl<R: EnumSetType> fmt::Debug for EnumBitMatrix<R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("EnumBitMatrix")
-            .field("R", &any::type_name::<R>())
-            .field("inner", &self.0)
+        f.debug_tuple("EnumBitMatrix")
+            .field(&any::type_name::<R>())
+            .field(&self.0)
             .finish()
     }
 }
