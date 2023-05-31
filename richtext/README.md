@@ -464,7 +464,8 @@ impl IntoModify for UserColor {
 - [ ] fab_derive: Define error messages as txt files and use `include_str` in both doc and code.
 - [ ] fab: Let user specify `track::Write`s
 - [X] fab: Entry api to bindings, allows skipping allocations wholesale.
-- [ ] fab resolve: Implement proper dependency resolution
+- [X] fab resolve: Implement proper dependency resolution
+- [ ] fab resolve: Fix modifiers overwritting static children
 - [ ] fab resolve: Lightweight dumb resolver
 - [ ] richtext trackers: Cleanup error handling
 - [ ] richtext tree: Cleanup error handling (major issue)

@@ -21,6 +21,7 @@ fn main() {
         .add_plugin(RichTextPlugin)
         .add_plugin(WorldInspectorPlugin::default())
         .init_resource::<Fps>()
+        .insert_resource(ClearColor(Color::BLACK))
         .register_type::<Fps>()
         .add_startup_system(setup)
         .add_system(fps_update)
@@ -45,15 +46,15 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2dBundle::default());
     commands.spawn((
         MakeRichTextBundle::new(
-            "{Color:{color}|{Rainbow:20.0|hi} {greeted}!\n\
-            {HueOffset:50.0, Sine:80|We are having fun here, woopy!}}",
+            "{Color:{color}|{Rainbow:20.0|Bonjour} {greeted}!}\n\
+            {Color:Yellow, Sine:80|We are having fun here, woopy!}",
         )
         .with_text_style(TextStyle {
             font: asset_server.load("fonts/FiraSans-Bold.ttf"),
             font_size: 100.0,
             color: Color::WHITE,
         })
-        .with_text_alignment(TextAlignment::Center)
+        .with_text_alignment(TextAlignment::Left)
         .with_style(Style {
             position_type: PositionType::Absolute,
             position: UiRect {
