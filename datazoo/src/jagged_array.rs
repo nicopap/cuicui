@@ -1,6 +1,8 @@
 //! A variable length matrix optimized for read-only
 //! rows and statically known row count.
 
+use std::mem::size_of;
+
 use enumset::{EnumSet, EnumSetType, __internal::EnumSetTypePrivate};
 
 use thiserror::Error;
@@ -67,6 +69,8 @@ impl<V, const R: usize> JaggedArray<V, R> {
     /// );
     /// ```
     pub fn new(ends: Box<[u32; R]>, data: Box<[V]>) -> Result<Self, Error> {
+        assert!(size_of::<usize>() >= size_of::<u32>());
+
         let mut previous_end = 0;
         let last_end = data.len() as u32;
         for (i, end) in ends.iter().enumerate() {
@@ -83,8 +87,7 @@ impl<V, const R: usize> JaggedArray<V, R> {
     pub(super) fn all_rows<T: EnumSetType>(&self, set: EnumSet<T>) -> impl Iterator<Item = &V> {
         set.iter()
             .map(EnumSetTypePrivate::enum_into_u32)
-            .map(|u32| usize::try_from(u32).unwrap())
-            .flat_map(|elem| self.row(elem).iter())
+            .flat_map(|elem| self.row(elem as usize).iter())
     }
     /// Get slice to row at given `index`.
     ///
@@ -147,7 +150,7 @@ impl<V, const R: usize> JaggedArray<V, R> {
         let mut iliffe = Vec::with_capacity(ends.len());
         let mut last_end = 0;
         for end in ends.into_iter() {
-            let size = usize::try_from(end - last_end).unwrap();
+            let size = (end - last_end) as usize;
             iliffe.push(data.drain(..size).collect());
             last_end = end;
         }

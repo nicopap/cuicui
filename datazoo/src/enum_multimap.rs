@@ -2,7 +2,7 @@
 //!
 //! [multimap]: https://en.wikipedia.org/wiki/Multimap
 
-use std::{fmt, marker::PhantomData};
+use std::{fmt, marker::PhantomData, mem::size_of};
 
 use enumset::{EnumSet, EnumSetType};
 
@@ -26,23 +26,13 @@ impl<K: EnumSetType, V: fmt::Debug, const CLM: usize> fmt::Debug for EnumMultima
         f.debug_tuple("EnumMultimap").field(&self.inner).finish()
     }
 }
-#[allow(clippy::let_unit_value)] // false positive: we just want to inline the panic
 impl<K: EnumSetType, V, const CLM: usize> EnumMultimap<K, V, CLM> {
-    /// Compile time error when `CLM` is not the correct value.
-    ///
-    /// This works around a limitation of rust' type system,
-    /// where it is impossible to use associated constants in generic const position.
-    const SENSIBLE: () = {
-        assert!(K::BIT_WIDTH as usize == CLM + 1);
-    };
     pub fn all_rows(&self, set: EnumSet<K>) -> impl Iterator<Item = &V> {
-        () = Self::SENSIBLE;
         self.inner.all_rows(set)
     }
     #[must_use]
     pub fn row(&self, key: K) -> &[V] {
-        () = Self::SENSIBLE;
-        let index = usize::try_from(key.enum_into_u32()).unwrap();
+        let index = key.enum_into_u32() as usize;
         self.inner.row(index)
     }
     /// Get `V` at exact `direct_index` ignoring row sizes,
@@ -75,6 +65,12 @@ impl<K: EnumSetType, V, const CLM: usize> Builder<K, V, CLM> {
         self.rows.insert(row, values.collect());
     }
     pub fn build(self) -> Result<EnumMultimap<K, V, CLM>, jagged_array::Error> {
+        // Compile time error when `CLM` is not the correct value.
+        // This works around a limitation of rust' type system,
+        // where it is impossible to use associated constants in generic const position.
+        assert!(K::BIT_WIDTH as usize == CLM + 1);
+        assert!(size_of::<usize>() >= size_of::<u32>());
+
         let mut end = 0;
         let mut ends = Box::new([0; CLM]);
         let mut data = Vec::new();

@@ -111,7 +111,7 @@ impl<B: AsRef<[u32]>> Bitset<B> {
     #[inline]
     pub fn bit(&self, at: usize) -> bool {
         let block = at / u32::BITS64;
-        let offset = u32::try_from(at % u32::BITS64).unwrap();
+        let offset = (at % u32::BITS64) as u32;
         let offset = 1 << offset;
         let Some(block) = self.0.as_ref().get(block) else { return false };
 
@@ -124,10 +124,8 @@ impl<B: AsRef<[u32]>> Bitset<B> {
 
         // the offset to "crop" the bits at the edges of the [u32]
         let crop = Range {
-            // TODO(perf): verify that this unwrap is always elided,
-            // We `% 32` just before, so it should be fine.
-            start: u32::try_from(start % u32::BITS64).unwrap(),
-            end: u32::try_from(end % u32::BITS64).unwrap(),
+            start: (start % u32::BITS64) as u32,
+            end: (end % u32::BITS64) as u32,
         };
         // The indices of Blocks of [u32] (ie: NOT bits) affected by range
         let range = Range {
