@@ -1,6 +1,6 @@
 //! Types marking slices as being sorted.
 
-use std::{collections::BinaryHeap, fmt, marker::PhantomData, ops::Deref, slice};
+use std::{borrow::Borrow, collections::BinaryHeap, fmt, marker::PhantomData, ops::Deref, slice};
 
 use sorted_iter::{sorted_iterator::SortedByItem, sorted_pair_iterator::SortedByKey};
 
@@ -34,9 +34,13 @@ pub type Slice<'a, T> = Sorted<&'a [T], T>;
 
 /// Slices where all elements are key-value pairs sorted in ascending ordeorder
 /// according to key's `K: Ord`.
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct KeySorted<A: AsRef<[(K, V)]>, K: Ord, V>(A, PhantomData<(K, V)>);
-
+impl<K: Ord, V, A: AsRef<[(K, V)]> + Default> Default for KeySorted<A, K, V> {
+    fn default() -> Self {
+        KeySorted(A::default(), PhantomData)
+    }
+}
 impl<K: Ord, V, A: AsRef<[(K, V)]> + fmt::Debug> fmt::Debug for KeySorted<A, K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("key-sorted").field(&self.0).finish()
@@ -46,6 +50,47 @@ impl<K: Ord, V> From<std::vec::Vec<(K, V)>> for ByKeyVec<K, V> {
     fn from(mut value: std::vec::Vec<(K, V)>) -> Self {
         value.sort_unstable_by(|l, r| l.0.cmp(&r.0));
         Self(value, PhantomData)
+    }
+}
+impl<K: Ord, V, A: AsRef<[(K, V)]>> KeySorted<A, K, V> {
+    pub fn contains_key<Q>(&self, key: &Q) -> bool
+    where
+        K: Borrow<Q>,
+        Q: Ord + ?Sized,
+    {
+        let slice = self.0.as_ref();
+        slice.binary_search_by_key(&key, |e| e.0.borrow()).is_ok()
+    }
+    pub fn get<Q>(&self, key: &Q) -> Option<&V>
+    where
+        K: Borrow<Q>,
+        Q: Ord + ?Sized,
+    {
+        let slice = self.0.as_ref();
+        let index = slice.binary_search_by_key(&key, |e| e.0.borrow()).ok()?;
+        let elem = self.0.as_ref().get(index)?;
+        Some(&elem.1)
+    }
+}
+impl<K: Ord, V, A: AsRef<[(K, V)]> + AsMut<[(K, V)]>> KeySorted<A, K, V> {
+    pub fn values_mut(&mut self) -> impl Iterator<Item = &mut V> {
+        self.0.as_mut().iter_mut().map(|e| &mut e.1)
+    }
+    pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
+    where
+        K: Borrow<Q>,
+        Q: Ord + ?Sized,
+    {
+        let slice = self.0.as_ref();
+        let index = slice.binary_search_by_key(&key, |e| e.0.borrow()).ok()?;
+        let elem = self.0.as_mut().get_mut(index)?;
+        Some(&mut elem.1)
+    }
+}
+impl<K: Ord, V> ByKeyVec<K, V> {
+    pub fn insert(&mut self, key: K, value: V) {
+        let (Ok(index) | Err(index)) = self.0.binary_search_by_key(&&key, |e| &e.0);
+        self.0.insert(index, (key, value));
     }
 }
 impl<K: Ord, V> From<std::vec::Vec<(K, V)>> for ByKeyBox<K, V> {
@@ -109,17 +154,32 @@ impl<A: AsRef<[(K, V)]> + FromIterator<(K, V)>, K: Ord, V> KeySorted<A, K, V> {
     }
 }
 
+impl<'a, 'b: 'a, A: AsRef<[(K, V)]> + 'b, K: Ord, V> IntoIterator for &'a KeySorted<A, K, V> {
+    type Item = (&'a K, &'a V);
+
+    type IntoIter = KeysortedIter<'a, K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 // -------------------------
 //           Sorted
 // -------------------------
 
 /// Slices where all elements are sorted in ascending ordeorder according
 /// to `T: Ord`.
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Sorted<A: AsRef<[T]>, T: Ord>(A, PhantomData<T>);
 impl<A: AsRef<[T]>, T: Ord> Sorted<A, T> {
     pub fn slice(&self) -> Slice<T> {
         Sorted(self.0.as_ref(), PhantomData)
+    }
+}
+impl<T: Ord, A: AsRef<[T]> + Default> Default for Sorted<A, T> {
+    fn default() -> Self {
+        Sorted(A::default(), PhantomData)
     }
 }
 
