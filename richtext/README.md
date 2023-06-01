@@ -459,7 +459,6 @@ impl IntoModify for UserColor {
 - [X] fab_derive: Write the doc strings of modify functions on the modify enum variants and constructor.
 - [ ] fab_derive: Document which fields are accessed in modify enum variant and constructor.
 - [ ] fab_derive: Fix doc compilation with `fab_derive`
-- [ ] fab_derive: Also handle Context field access.
 - [ ] fab_derive: Document `impl_modify` macro fully. Specifically: settle on a naming convention
       and use it consistently.
 - [ ] fab_derive: Test `impl_modify` more thourougfully
@@ -469,9 +468,8 @@ impl IntoModify for UserColor {
 - [X] fab: Entry api to bindings, allows skipping allocations wholesale.
 - [X] fab resolve: Implement proper dependency resolution
 - [X] fab resolve: Fix modifiers overwritting static children
-- [ ] fab resolve: Handle binding that depends on fields (Option<Modifier> in binding view)
 - [ ] fab resolve + fab_derive: Context field access tracking
-- [ ] fab resolve + fab_derive: Nested fields handling (modifying .foo modifies .foo.x and .foo.y).
+- [ ] fab resolve + fab_derive: Nested fields handling, modifying (.foo → .foo.x + .foo.y)
 - [ ] fab resolve: Lightweight dumb resolver
 - [ ] richtext trackers: Cleanup error handling
 - [ ] richtext post_process: Cleanup error handling (major issue)
@@ -494,5 +492,7 @@ impl IntoModify for UserColor {
 - [ ] everything: Document the hell out of everything
 - [ ] (unsure) optimization: take inspiration from https://github.com/Wallacoloo/jagged_array/blob/master/src/lib.rs#L68 for `VarMatrix`s impls
 - [ ] (unsure) richtext parser: Allow compile-time verification of rich text spec through a proc macro
+- [ ] (unsure) fab resolve: Handle binding that depends on fields (Option<Modifier> in binding view)
+    -> Problem: Requires clone + updating it is non-trivial
 
 [misery-bui]: https://github.com/bevyengine/bevy/blob/22121e69fb4a72bb514d43240df220b8938a1e13/examples/3d/shadow_biases.rs#L107-L141
