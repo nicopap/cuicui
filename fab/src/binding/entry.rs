@@ -1,13 +1,13 @@
-use std::collections::BTreeMap;
+use datazoo::sorted;
 
 use super::Id;
 
 pub enum Entry<'a, V> {
     Occupied(&'a mut V),
-    Vacant(Id, &'a mut BTreeMap<Id, (bool, V)>),
+    Vacant(Id, &'a mut sorted::ByKeyVec<Id, (bool, V)>),
 }
 impl<'a, V> Entry<'a, V> {
-    pub(super) fn new(parent: &'a mut BTreeMap<Id, (bool, V)>, key: Id) -> Self {
+    pub(super) fn new(parent: &'a mut sorted::ByKeyVec<Id, (bool, V)>, key: Id) -> Self {
         if parent.contains_key(&key) {
             let (change, value) = parent.get_mut(&key).unwrap();
             *change = true;

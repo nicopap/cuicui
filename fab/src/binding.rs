@@ -2,10 +2,10 @@
 
 mod entry;
 
-use std::{collections::BTreeMap, fmt, mem};
+use std::{fmt, mem};
 
 use anyhow::anyhow;
-use datazoo::SortedPairIterator;
+use datazoo::{sorted, SortedPairIterator};
 use smallvec::SmallVec;
 use string_interner::{backend::StringBackend, StringInterner, Symbol};
 
@@ -33,13 +33,13 @@ impl fmt::Debug for Id {
 
 #[derive(Debug)]
 pub struct Local<P: Prefab> {
-    bindings: BTreeMap<Id, (bool, P::Modify)>,
+    bindings: sorted::ByKeyVec<Id, (bool, P::Modify)>,
     buffered: Vec<(Box<str>, P::Modify)>,
     resolved: SmallVec<[(Box<str>, Id); 2]>,
 }
 #[derive(Debug)]
 pub struct World<P: Prefab> {
-    bindings: BTreeMap<Id, (bool, P::Modify)>,
+    bindings: sorted::ByKeyVec<Id, (bool, P::Modify)>,
     interner: StringInterner<StringBackend<Id>>,
 }
 impl<P: Prefab> Default for Local<P> {
@@ -54,15 +54,15 @@ impl<P: Prefab> Default for Local<P> {
 impl<P: Prefab> Default for World<P> {
     fn default() -> Self {
         World {
-            bindings: BTreeMap::default(),
+            bindings: Default::default(),
             interner: StringInterner::new(),
         }
     }
 }
 #[derive(Clone, Copy)]
 pub struct View<'a, P: Prefab> {
-    root: &'a BTreeMap<Id, (bool, P::Modify)>,
-    overlay: Option<&'a BTreeMap<Id, (bool, P::Modify)>>,
+    root: &'a sorted::ByKeyVec<Id, (bool, P::Modify)>,
+    overlay: Option<&'a sorted::ByKeyVec<Id, (bool, P::Modify)>>,
 }
 
 impl<P: Prefab> Local<P> {
