@@ -1,7 +1,4 @@
-use cuicui_fab::{
-    impl_modify,
-    prefab::{Modify, Prefab},
-};
+use cuicui_fab::{impl_modify, prefab::Modify};
 
 #[derive(Clone, Debug)]
 pub struct Person {
@@ -28,18 +25,12 @@ pub struct City {
     admin: Administration,
 }
 
-struct CityPrefab;
-impl Prefab for CityPrefab {
-    type Item = City;
-    type Modify = ModifyCity;
-    type Items = Vec<City>;
-}
-
 /// Modify a [`City`].
 #[impl_modify]
 impl Modify for ModifyCity {
     type Context<'a> = ();
     type Item = City;
+    type Items = Vec<City>;
 
     /// This adds to the chief's age to that of `additional_year` plus the city's name
     #[modify(read(admin_name = .admin.chief.surname), read(.name), write(.admin.chief.age))]

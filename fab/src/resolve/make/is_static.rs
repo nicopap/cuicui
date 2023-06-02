@@ -2,14 +2,14 @@ use enumset::EnumSet;
 use smallvec::SmallVec;
 
 use super::{MakeModify, ModifyKind};
-use crate::prefab::{FieldsOf, Prefab};
+use crate::prefab::{FieldsOf, Modify};
 
-pub(super) struct CheckStatic<P: Prefab> {
+pub(super) struct CheckStatic<M: Modify> {
     parents_range_end: SmallVec<[u32; 4]>,
-    static_parent_fields: SmallVec<[FieldsOf<P>; 4]>,
-    all_static_fields: FieldsOf<P>,
+    static_parent_fields: SmallVec<[FieldsOf<M>; 4]>,
+    all_static_fields: FieldsOf<M>,
 }
-impl<P: Prefab> CheckStatic<P> {
+impl<M: Modify> CheckStatic<M> {
     pub(super) fn new() -> Self {
         CheckStatic {
             parents_range_end: SmallVec::default(),
@@ -17,7 +17,7 @@ impl<P: Prefab> CheckStatic<P> {
             all_static_fields: EnumSet::EMPTY,
         }
     }
-    fn ends_before_last(&self, modify: &MakeModify<P>) -> bool {
+    fn ends_before_last(&self, modify: &MakeModify<M>) -> bool {
         self.parents_range_end
             .last()
             .map_or(true, |end| modify.range.end < *end)
@@ -31,7 +31,7 @@ impl<P: Prefab> CheckStatic<P> {
             self.all_static_fields -= to_reset;
         }
     }
-    fn push_parent(&mut self, modify: &MakeModify<P>) {
+    fn push_parent(&mut self, modify: &MakeModify<M>) {
         let changes = modify.changes();
         let old_changes = self.all_static_fields;
         let modify_changes = changes - old_changes;
@@ -53,7 +53,7 @@ impl<P: Prefab> CheckStatic<P> {
             *last_changes |= changes;
         }
     }
-    fn update_parents(&mut self, modify: &MakeModify<P>) {
+    fn update_parents(&mut self, modify: &MakeModify<M>) {
         let end = modify.range.end;
         // any parent that has an end smaller than modify is actually not a parent,
         // so we pop them.
@@ -69,7 +69,7 @@ impl<P: Prefab> CheckStatic<P> {
             self.pop_parent();
         }
     }
-    pub(super) fn is_static(&mut self, modify: &MakeModify<P>) -> bool {
+    pub(super) fn is_static(&mut self, modify: &MakeModify<M>) -> bool {
         self.update_parents(modify);
 
         let mut depends = modify.depends().iter();

@@ -4,7 +4,7 @@ use std::{borrow::Cow, iter, marker::PhantomData, ops::Range, str::FromStr};
 
 use bevy_math::cubic_splines::CubicCurve;
 use enumset::{EnumSet, EnumSetType};
-use fab::{binding, prefab::Prefab, prefab::PrefabField, resolve::MakeModify, resolve::ModifyKind};
+use fab::{binding, prefab::Modify, resolve::MakeModify, resolve::ModifyKind};
 
 use crate::tree::{self, get_content, get_content_mut, is_content, Dyn, Hook};
 
@@ -47,11 +47,11 @@ pub enum Deps<F: EnumSetType> {
         depends: EnumSet<F>,
     },
 }
-pub trait ParsablePrefab: Prefab + Sized {
+pub trait Parsable: Modify {
     type Err: Into<anyhow::Error> + Send + Sync;
 
-    fn dependencies_of(name: &str) -> Deps<PrefabField<Self>>;
-    fn parse(name: &str, value: &str) -> Result<Self::Modify, Self::Err>;
+    fn dependencies_of(name: &str) -> Deps<Self::Field>;
+    fn parse(name: &str, value: &str) -> Result<Self, Self::Err>;
 }
 pub trait StringPair {
     fn string_pair(self) -> (Box<str>, Box<str>);
@@ -70,30 +70,30 @@ impl<V: Into<String>> StringPair for (String, V) {
     }
 }
 
-struct Alias<'a, P, I, M> {
+struct Alias<'a, Mk, I> {
     alias: &'a str,
-    producer: M,
-    _p: PhantomData<(P, I)>,
+    producer: Mk,
+    _p: PhantomData<I>,
 }
-impl<'a, SP: StringPair, I: IntoIterator<Item = SP>, M: FnMut(&str) -> I> Alias<'a, SP, I, M> {
-    fn process<P: Prefab>(self, _sections: Vec<Section<P>>) -> Vec<Section<P>> {
+impl<'a, Sp: StringPair, I: IntoIterator<Item = Sp>, Mk: FnMut(&str) -> I> Alias<'a, Mk, I> {
+    fn process<M>(self, _sections: Vec<Section<M>>) -> Vec<Section<M>> {
         todo!()
     }
 }
 
 #[derive(Debug)]
-struct Modifier<P: Prefab> {
+struct Modifier<M> {
     influence: usize,
-    inner: P::Modify,
+    inner: M,
 }
 #[derive(Debug)]
-struct Section<'a, P: Prefab>(tree::Section<'a>, Vec<Modifier<P>>);
-impl<'a, P: Prefab> From<tree::Section<'a>> for Section<'a, P> {
+struct Section<'a, M>(tree::Section<'a>, Vec<Modifier<M>>);
+impl<'a, M> From<tree::Section<'a>> for Section<'a, M> {
     fn from(value: tree::Section<'a>) -> Self {
         Section(value, Vec::new())
     }
 }
-impl<'a, P: Prefab> Section<'a, P> {
+impl<'a, M> Section<'a, M> {
     fn get_content(&self) -> Option<&'a str> {
         self.0.modifiers.iter().find_map(get_content)
     }
@@ -156,26 +156,29 @@ impl Split {
         (head, iter.collect())
     }
 
-    fn count<P: Prefab>(self, sections: &[Section<P>]) -> usize {
-        let count_one = |s: &Section<P>| s.get_content().map_or(0, |m| self.iter(m).count());
+    fn count<M: Modify>(self, sections: &[Section<M>]) -> usize {
+        let count_one = |s: &Section<M>| s.get_content().map_or(0, |m| self.iter(m).count());
         sections.iter().map(|s| count_one(s)).sum()
     }
 }
 
-struct Splitter<'a, P: Prefab, M: FnMut(&str, usize) -> P::Modify> {
+struct Splitter<'a, Mk: FnMut(&str, usize) -> M, M: Modify> {
     split: Split,
     alias: &'a str,
-    chopper: M,
-    _p: PhantomData<P>,
+    chopper: Mk,
+    _p: PhantomData<M>,
 }
-impl<'a, P: Prefab, M: FnMut(&str, usize) -> P::Modify> Splitter<'a, P, M> {
-    fn rmod(&mut self, input: &str, count: usize) -> Modifier<P> {
+impl<'a, Mk, M: Modify> Splitter<'a, Mk, M>
+where
+    Mk: FnMut(&str, usize) -> M,
+{
+    fn rmod(&mut self, input: &str, count: usize) -> Modifier<M> {
         Modifier { influence: 1, inner: (self.chopper)(input, count) }
     }
     fn is(&self, modi: &tree::Modifier) -> bool {
         modi.name == self.alias
     }
-    fn extract_from<'b>(&self, section: &mut Section<'b, P>) -> Option<(&'b str, usize)> {
+    fn extract_from<'b>(&self, section: &mut Section<'b, M>) -> Option<(&'b str, usize)> {
         let index = section.0.modifiers.iter().position(|m| self.is(m))?;
         let modifier = section.0.modifiers.remove(index);
 
@@ -185,7 +188,7 @@ impl<'a, P: Prefab, M: FnMut(&str, usize) -> P::Modify> Splitter<'a, P, M> {
             Dyn::Static(value) => Some((value, modifier.subsection_count)),
         }
     }
-    fn process(mut self, mut sections: Vec<Section<P>>) -> Vec<Section<P>> {
+    fn process(mut self, mut sections: Vec<Section<M>>) -> Vec<Section<M>> {
         let mut i = 0;
         loop {
             let Some(section) = sections.get_mut(i) else {
@@ -229,15 +232,15 @@ impl<'a, P: Prefab, M: FnMut(&str, usize) -> P::Modify> Splitter<'a, P, M> {
     }
 }
 
-pub struct TransformedTree<'a, P: Prefab> {
-    sections: Vec<Section<'a, P>>,
+pub struct TransformedTree<'a, M> {
+    sections: Vec<Section<'a, M>>,
 }
 impl<'a> tree::Tree<'a> {
-    pub fn transform<P: ParsablePrefab>(self) -> TransformedTree<'a, P> {
+    pub fn transform<M: Parsable>(self) -> TransformedTree<'a, M> {
         TransformedTree::new(self.sections)
     }
 }
-impl<'a, P: ParsablePrefab> TransformedTree<'a, P> {
+impl<'a, M: Parsable> TransformedTree<'a, M> {
     pub(super) fn new(sections: Vec<tree::Section<'a>>) -> Self {
         let max_range = |s: &tree::Section| s.modifiers.iter().map(|m| m.subsection_count).max();
         let max_sect = |(i, s): (usize, _)| max_range(s).unwrap_or(0) + i;
@@ -252,10 +255,10 @@ impl<'a, P: ParsablePrefab> TransformedTree<'a, P> {
     }
     pub fn finish(
         self,
-        bindings: &mut binding::World<P>,
+        bindings: &mut binding::World<M>,
         hooks: &mut Vec<Hook<'a>>,
-        // TODO encapsulate MakeModify<P>
-    ) -> Vec<anyhow::Result<MakeModify<P>>> {
+        // TODO encapsulate MakeModify<M>
+    ) -> Vec<anyhow::Result<MakeModify<M>>> {
         let sections = self.sections;
         let mut to_modify_kind = |name, value| match value {
             Dyn::Dynamic(target) => {
@@ -263,7 +266,7 @@ impl<'a, P: ParsablePrefab> TransformedTree<'a, P> {
                 if let Some(hook) = target.as_hook() {
                     hooks.push(hook);
                 }
-                let Deps::Some{ depends, changes } = P::dependencies_of(name) else {
+                let Deps::Some{ depends, changes } = M::dependencies_of(name) else {
                     return Err(anyhow::anyhow!(format!("{name} is not a modifier")));
                 };
                 Ok(ModifyKind::Bound { binding, depends, changes })
@@ -271,7 +274,7 @@ impl<'a, P: ParsablePrefab> TransformedTree<'a, P> {
             Dyn::Static(value) => {
                 let mut value = value.into();
                 escape_backslashes(&mut value);
-                let parsed = P::parse(name, &value).map_err(|t| t.into())?;
+                let parsed = M::parse(name, &value).map_err(|t| t.into())?;
                 Ok(ModifyKind::Modify(parsed))
             }
         };
@@ -304,7 +307,7 @@ impl<'a, P: ParsablePrefab> TransformedTree<'a, P> {
     }
 }
 /// Add aliases
-impl<'a, P: Prefab> TransformedTree<'a, P> {
+impl<'a, M: Modify> TransformedTree<'a, M> {
     // .alias("Bleepoo", |_| [
     //   ("Zooba", "whoop_whoop"),
     //   ("Bazinga", "whaab"),
@@ -321,13 +324,8 @@ impl<'a, P: Prefab> TransformedTree<'a, P> {
     }
 }
 /// Cut the tree in various ways
-impl<'a, P: Prefab> TransformedTree<'a, P> {
-    pub fn chop(
-        self,
-        split: Split,
-        alias: &str,
-        chopper: impl FnMut(&str, usize) -> P::Modify,
-    ) -> Self {
+impl<'a, M: Modify> TransformedTree<'a, M> {
+    pub fn chop(self, split: Split, alias: &str, chopper: impl FnMut(&str, usize) -> M) -> Self {
         let split = Splitter { split, alias, chopper, _p: PhantomData };
         TransformedTree { sections: split.process(self.sections) }
     }
@@ -335,7 +333,7 @@ impl<'a, P: Prefab> TransformedTree<'a, P> {
         self,
         split: Split,
         alias: &str,
-        mut chopper: impl FnMut(&mut Acc, usize, usize) -> P::Modify,
+        mut chopper: impl FnMut(&mut Acc, usize, usize) -> M,
     ) -> Self {
         let mut acc = None;
         let mut i = 0;
@@ -352,7 +350,7 @@ impl<'a, P: Prefab> TransformedTree<'a, P> {
         split: Split,
         alias: &str,
         spline: CubicCurve<f32>,
-        mut chopper: impl FnMut(&mut Acc, f32) -> P::Modify,
+        mut chopper: impl FnMut(&mut Acc, f32) -> M,
     ) -> Self {
         let segment_count = spline.iter_samples(1, |_, i| i).last().unwrap();
 

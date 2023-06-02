@@ -1,10 +1,6 @@
-use std::{
-    fmt::{self, Write},
-    marker::PhantomData,
-};
+use std::{fmt, fmt::Write, marker::PhantomData};
 
 use bevy::{
-    asset::HandleId,
     ecs::{
         query::WorldQuery,
         system::{lifetimeless::SRes, SystemParam, SystemParamItem},
@@ -12,12 +8,11 @@ use bevy::{
     prelude::*,
     text::{BreakLineOn, Font, Text, TextAlignment, TextSection},
 };
-use bevy_fab::{BevyPrefab, FabPlugin, ParseFormatString, PrefabLocal, PrefabWorld};
+use bevy_fab::{BevyModify, FabPlugin, ParseFormatString, PrefabLocal, PrefabWorld};
 use enumset::__internal::EnumSetTypePrivate;
-use fab::{prefab::Indexed, prefab::Prefab, prefab::PrefabContext};
 use fab_parse::{Split, TransformedTree};
 
-use crate::modifiers::{Modifier, ModifierField};
+use crate::modifiers::{GetFont, Modifier, ModifierField};
 
 #[derive(Clone, Copy)]
 pub struct TextGlobalStyle {
@@ -35,13 +30,13 @@ impl Default for TextGlobalStyle {
 
 #[derive(SystemParam)]
 pub struct WorldBindings<'w, 's> {
-    bindings: Res<'w, PrefabWorld<TextPrefab>>,
+    bindings: Res<'w, PrefabWorld<Modifier>>,
     context: Res<'w, Assets<Font>>,
     _p: PhantomData<&'s ()>,
 }
 #[derive(SystemParam)]
 pub struct WorldBindingsMut<'w, 's> {
-    bindings: ResMut<'w, PrefabWorld<TextPrefab>>,
+    bindings: ResMut<'w, PrefabWorld<Modifier>>,
     _p: PhantomData<&'s ()>,
 }
 impl<'w, 's> WorldBindingsMut<'w, 's> {
@@ -50,13 +45,13 @@ impl<'w, 's> WorldBindingsMut<'w, 's> {
             self.bindings.0.set(key, value.to_string().into());
             return;
         };
-        modifier.write_fmt(format_args!("{value}")).unwrap();
+        write!(modifier, "{value}").unwrap();
     }
 }
 #[derive(WorldQuery)]
 #[world_query(mutable)]
 pub struct RichText {
-    inner: &'static mut PrefabLocal<TextPrefab, { (ModifierField::BIT_WIDTH - 1) as usize }>,
+    inner: &'static mut PrefabLocal<Modifier, { (ModifierField::BIT_WIDTH - 1) as usize }>,
     text: &'static mut Text,
 }
 impl RichTextItem<'_> {
@@ -77,12 +72,12 @@ impl RichTextItem<'_> {
             self.inner.bindings.set(key, value.to_string().into());
             return;
         };
-        modifier.write_fmt(format_args!("{value}")).unwrap();
+        write!(modifier, "{value}").unwrap();
     }
 }
 #[derive(Bundle)]
 pub struct MakeRichText {
-    inner: ParseFormatString<TextPrefab>,
+    inner: ParseFormatString<Modifier>,
     pub text_bundle: TextBundle,
 }
 impl MakeRichText {
@@ -114,20 +109,7 @@ impl MakeRichText {
     }
 }
 
-// TODO(clean): Make this private, only expose opaque wrappers
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum TextPrefab {}
-impl Prefab for TextPrefab {
-    type Modify = Modifier;
-    type Item = TextSection;
-    type Items = Text;
-}
-impl Indexed<TextPrefab> for Text {
-    fn get_mut(&mut self, index: usize) -> Option<&mut TextSection> {
-        self.sections.as_mut_slice().get_mut(index)
-    }
-}
-impl BevyPrefab for TextPrefab {
+impl BevyModify for Modifier {
     type Param = SRes<Assets<Font>>;
 
     type ItemsCtorData = TextGlobalStyle;
@@ -140,7 +122,7 @@ impl BevyPrefab for TextPrefab {
         }
     }
 
-    fn context<'a>(fonts: &'a SystemParamItem<Self::Param>) -> PrefabContext<'a, Self> {
+    fn context<'a>(fonts: &'a SystemParamItem<Self::Param>) -> Self::Context<'a> {
         GetFont::new(fonts)
     }
 
@@ -159,18 +141,7 @@ impl BevyPrefab for TextPrefab {
     }
 }
 
-#[derive(Default, Clone, Copy)]
-pub struct GetFont<'a>(Option<&'a Assets<Font>>);
-impl<'a> GetFont<'a> {
-    pub fn new(assets: &'a Assets<Font>) -> Self {
-        GetFont(Some(assets))
-    }
-    pub fn get(&self, name: &str) -> Option<Handle<Font>> {
-        self.0.map(|a| a.get_handle(HandleId::from(name)))
-    }
-}
-
-pub struct RichTextPlugin(FabPlugin<TextPrefab, { (ModifierField::BIT_WIDTH - 1) as usize }>);
+pub struct RichTextPlugin(FabPlugin<Modifier, { (ModifierField::BIT_WIDTH - 1) as usize }>);
 impl RichTextPlugin {
     pub fn new() -> Self {
         RichTextPlugin(FabPlugin::new())

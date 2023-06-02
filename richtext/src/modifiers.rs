@@ -1,37 +1,49 @@
 //! Provided implementations for the [`Modify<TextPrefab>`] trait for cuicui.
 use std::{any::Any, borrow::Cow, fmt};
 
-use bevy::prelude::{trace, Color, Handle};
-use bevy::text::{Font, TextSection};
+use bevy::asset::HandleId;
+use bevy::prelude::{trace, Assets, Color, Handle};
+use bevy::text::{Font, Text, TextSection};
 use enumset::EnumSet;
+use fab::prefab::Indexed;
 use fab::{impl_modify, prefab::Modify};
-use fab_parse::{Deps, ParsablePrefab};
+use fab_parse::{Deps, Parsable};
 
-use crate::richtext::{GetFont, TextPrefab};
-
-/// A Boxed [`Modify<TextPrefab>`] trait object, with all necessary bounds to make it work
-/// with bevy's [`Resource`] and [`Component`] types.
+/// A Boxed [`TextModifier`]. This allows you to extend [`Modifier`] with your
+/// own modifiers.
 ///
 /// [`Resource`]: bevy::prelude::Resource
 /// [`Component`]: bevy::prelude::Component
 pub type ModifyBox = Box<dyn TextModify + Send + Sync + 'static>;
 
+#[derive(Default, Clone, Copy)]
+pub struct GetFont<'a>(Option<&'a Assets<Font>>);
+impl<'a> GetFont<'a> {
+    pub fn new(assets: &'a Assets<Font>) -> Self {
+        GetFont(Some(assets))
+    }
+    pub fn get(&self, name: &str) -> Option<Handle<Font>> {
+        self.0.map(|a| a.get_handle(HandleId::from(name)))
+    }
+}
+
+impl Indexed<Modifier> for Text {
+    fn get_mut(&mut self, index: usize) -> Option<&mut TextSection> {
+        self.sections.as_mut_slice().get_mut(index)
+    }
+}
+
 /// Operations on bevy [`TextSection`]s.
-///
-/// You typically get a [`RichText`] from parsing a [format string]. The modifiers
-/// are then managed by [`RichText`].
 ///
 /// You can create your own operations. At the cost of storing them as a [`ModifyBox`]
 /// and having to be careful about what you update. You create such a `Modifier`
 /// using [`Modifier::Dynamic`].
-///
-/// [`RichText`]: crate::RichText
-/// [format string]: https://github.com/nicopap/cuicui/blob/main/design_doc/richtext/informal_grammar.md
 #[impl_modify(cuicui_fab_path = fab, no_derive(Debug))]
 #[derive(PartialEq)]
 impl Modify for Modifier {
     type Context<'a> = GetFont<'a>;
     type Item = TextSection;
+    type Items = Text;
 
     /// Set the font to provided `path`.
     #[modify(context(get_font), write(.style.font))]
@@ -92,7 +104,7 @@ impl fmt::Debug for Modifier {
         }
     }
 }
-impl ParsablePrefab for TextPrefab {
+impl Parsable for Modifier {
     type Err = anyhow::Error;
 
     /// Returns the (depends, changes) field set of modifier named `name`.
@@ -117,7 +129,7 @@ impl ParsablePrefab for TextPrefab {
         Deps::Some { changes, depends }
     }
 
-    fn parse(name: &str, input: &str) -> Result<Self::Modify, Self::Err> {
+    fn parse(name: &str, input: &str) -> Result<Self, Self::Err> {
         match name {
             "Font" => Ok(Modifier::font(input.to_string().into())),
             "FontSize" => Ok(Modifier::font_size(input.parse()?)),
@@ -169,6 +181,12 @@ pub trait TextModify {
     fn as_any(&self) -> &dyn Any;
     fn eq_dyn(&self, other: &dyn TextModify) -> bool;
     fn debug_dyn(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
+    fn clone_dyn(&self) -> ModifyBox;
+}
+impl Clone for ModifyBox {
+    fn clone(&self) -> Self {
+        self.clone_dyn()
+    }
 }
 impl PartialEq for ModifyBox {
     fn eq(&self, other: &Self) -> bool {

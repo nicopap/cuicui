@@ -32,7 +32,7 @@ use tree::{
     flatten_section, Binding, Dyn, Format, Modifier, Path, Query, Section, Sections, Source,
 };
 
-pub use post_process::{Deps, ParsablePrefab, Split, StringPair, TransformedTree};
+pub use post_process::{Deps, Parsable, Split, StringPair, TransformedTree};
 pub use rt_fmt::RuntimeFormat;
 pub use tree::Tree;
 

@@ -5,38 +5,27 @@ use crate::resolve::Resolver;
 
 use enumset::{EnumSet, EnumSetType};
 
-pub trait Indexed<P: Prefab + ?Sized> {
-    fn get_mut(&mut self, index: usize) -> Option<&mut P::Item>;
+pub trait Indexed<M: Modify + ?Sized> {
+    fn get_mut(&mut self, index: usize) -> Option<&mut M::Item>;
 }
-impl<T, P: Prefab<Item = T>> Indexed<P> for [T] {
+impl<T, M: Modify<Item = T>> Indexed<M> for [T] {
     fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         <[T]>::get_mut(self, index)
     }
 }
-impl<T, P: Prefab<Item = T>> Indexed<P> for Vec<T> {
+impl<T, M: Modify<Item = T>> Indexed<M> for Vec<T> {
     fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         <[T]>::get_mut(self, index)
     }
 }
-
-/// The [`Modify::Field`] of the [`Prefab::Modify`] of `P`.
-pub type PrefabField<P> = Key<<P as Prefab>::Modify>;
-type Key<M> = <M as Modify>::Field;
 
 /// Several [`Modify::Field`] of the [`Prefab::Modify`] of `P`.
-pub type FieldsOf<P> = EnumSet<PrefabField<P>>;
+pub type FieldsOf<M> = EnumSet<<M as Modify>::Field>;
 
-/// The [`Modify::Context`] of the [`Prefab::Modify`] of `P`.
-pub type PrefabContext<'a, P> = Ctx<'a, <P as Prefab>::Modify>;
-type Ctx<'a, M> = <M as Modify>::Context<'a>;
-
-/// A set of operations on `I`.
+/// A set of operations on `Item`.
 ///
-/// A type `T` that implements `Modify<I>` represents a set of operations
-/// possible on `I` — an `item`.
-///
-/// A `Modify` value declares which fields of `I` it will [read] and [update].
-/// [`Modify::apply`] takes an `I` and updates its.
+/// A `Modify` value declares which fields of `Modify::Item` it will [read] and [update].
+/// [`Modify::apply`] takes an `Item` and updates its.
 /// This allows fine grained update propagation in [`Resolver`].
 ///
 /// `cuicui_fab` provides the [`impl_modify!`] macro to define [`Modify`]
@@ -44,13 +33,18 @@ type Ctx<'a, M> = <M as Modify>::Context<'a>;
 ///
 /// [read]: Modify::depends
 /// [update]: Modify::changes
-pub trait Modify {
-    /// The [set](EnumSet) of fields that `Self` accesses on `I`.
+pub trait Modify: Clone + fmt::Debug {
+    /// The type on which `Modify` operates
+    type Item: Clone + fmt::Debug + Send + Sync;
+
+    /// The underlying [`Self::Item`] storage.
+    type Items: Indexed<Self> + Send + Sync;
+
+    /// The [set](EnumSet) of fields that `Self` accesses on `Item`.
     type Field: EnumSetType + fmt::Debug + Send + Sync;
-    type Item;
 
     // TODO(perf): Change detection on context as well.
-    /// An additional context **outside of `I`** that is relevant to operations on `I`.
+    /// An additional context **outside of `Item`** that is relevant to operations on `Item`.
     type Context<'a>
     where
         Self: 'a;
@@ -70,21 +64,6 @@ pub trait Modify {
 
     /// What data in [`Self::Item`] does this `Modify` changes?
     fn changes(&self) -> EnumSet<Self::Field>;
-}
-
-/// A series of [`Prefab::Item`] that allow [`Prefab::Modify`] operations.
-///
-/// A `Prefab` may never exists. It's an interface to work with [`Modify`]
-/// in a principled way through [`Resolver`]s.
-pub trait Prefab {
-    /// The individual element of the `Prefab`.
-    type Item: Clone + fmt::Debug + Send + Sync;
-
-    /// Operations allowed on [`Self::Item`].
-    type Modify: Modify<Item = Self::Item> + fmt::Debug + Send + Sync;
-
-    /// The underlying [`Self::Item`] storage.
-    type Items: Indexed<Self> + Send + Sync;
 }
 
 /// Holds a [`Prefab::Item`] and keeps track of changes to it.

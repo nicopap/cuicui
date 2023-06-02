@@ -1,9 +1,9 @@
 use std::{fmt, marker::PhantomData};
 
 use bevy::{ecs::world::EntityRef, prelude::*};
-use fab::{binding, prefab::Prefab};
+use fab::binding;
 
-use crate::{BevyPrefab, PrefabWorld};
+use crate::{BevyModify, PrefabWorld};
 
 /// Track a component of this entity and keep the binding `binding_name`
 /// in [`WorldBindings`] up to date with its value.
@@ -37,12 +37,12 @@ impl<T: Component, M> TrackerBundle<T, M> {
     pub fn content(binding_name: &'static str, t: T) -> Self
     where
         T: fmt::Display,
-        M: fmt::Write + From<String>,
+        M: BevyModify,
     {
         Self::new(t, binding_name, |entity, entry| {
             let Some(s) = entity.get::<T>() else { return; };
             let write = |m: &mut M| {
-                m.write_fmt(format_args!("{s}")).unwrap();
+                write!(m, "{s}").unwrap();
             };
             entry.modify(write).or_insert_with(|| s.to_string().into());
         })
@@ -58,12 +58,12 @@ impl<T: Component, M> TrackerBundle<T, M> {
     pub fn debug(binding_name: &'static str, t: T) -> Self
     where
         T: fmt::Debug,
-        M: fmt::Write + From<String>,
+        M: BevyModify,
     {
         Self::new(t, binding_name, |entity, entry| {
             let Some(s) = entity.get::<T>() else { return; };
             let write = |m: &mut M| {
-                m.write_fmt(format_args!("{s:?}")).unwrap();
+                write!(m, "{s:?}").unwrap();
             };
             let debug_text = || M::from(format!("{s:?}"));
             entry.modify(write).or_insert_with(debug_text);
@@ -94,24 +94,18 @@ impl<M> Clone for TrackerBinding<M> {
         TrackerBinding(self.0, PhantomData)
     }
 }
-type Q<P> = (
-    Entity,
-    Option<&'static TrackerBinding<<P as Prefab>::Modify>>,
-);
+type Q<M> = (Entity, Option<&'static TrackerBinding<M>>);
 
-pub fn update_component_trackers_system<P>(
+pub fn update_component_trackers_system<M: BevyModify>(
     world: &mut World,
-    mut entities: Local<Vec<(Entity, Option<TrackerBinding<P::Modify>>)>>,
+    mut entities: Local<Vec<(Entity, Option<TrackerBinding<M>>)>>,
     mut cache_binding_id: Local<Vec<(Entity, binding::Id)>>,
-) where
-    P: BevyPrefab + 'static,
-    P::Modify: fmt::Write + From<String> + Send + Sync,
-{
-    world.resource_scope(|world, mut world_bindings: Mut<PrefabWorld<P>>| {
+) {
+    world.resource_scope(|world, mut world_bindings: Mut<PrefabWorld<M>>| {
         // We do this weird dance because we need to pass a EntityRef to proto_fetch
         entities.extend(
             world
-                .query_filtered::<Q<P>, With<Tracker<P::Modify>>>()
+                .query_filtered::<Q<M>, With<Tracker<M>>>()
                 .iter(world)
                 .map(|(e, id)| (e, id.cloned())),
         );
@@ -120,7 +114,7 @@ pub fn update_component_trackers_system<P>(
             // SAFETY: all entity in entities has a Tracker component and exist.
             // because of that query_filtered
             let entity_ref = unsafe { world.get_entity(entity).unwrap_unchecked() };
-            let tracker = unsafe { entity_ref.get::<Tracker<P::Modify>>().unwrap_unchecked() };
+            let tracker = unsafe { entity_ref.get::<Tracker<M>>().unwrap_unchecked() };
             let id = match binding {
                 Some(binding) => binding.0,
                 None => {
@@ -137,6 +131,6 @@ pub fn update_component_trackers_system<P>(
     for (entity, to_insert) in cache_binding_id.drain(..) {
         world
             .entity_mut(entity)
-            .insert(TrackerBinding::<P::Modify>(to_insert, PhantomData));
+            .insert(TrackerBinding::<M>(to_insert, PhantomData));
     }
 }

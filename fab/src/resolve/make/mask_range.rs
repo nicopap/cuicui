@@ -3,7 +3,7 @@ use std::{mem::size_of, ops::Range};
 use datazoo::{jagged_bitset, Bitset, JaggedBitset};
 use enumset::EnumSet;
 
-use crate::{prefab::Prefab, resolve::MakeModify};
+use crate::{prefab::Modify, resolve::MakeModify};
 
 type Mask = Bitset<Vec<u32>>;
 
@@ -12,7 +12,7 @@ type Mask = Bitset<Vec<u32>>;
 // and ∃ c ∈ M1.C,
 //   c ∈ M0.C
 //   and c ∉ M0.D
-fn mask_range<P: Prefab>(parent: &MakeModify<P>, child: &MakeModify<P>) -> Range<u32> {
+fn mask_range<M: Modify>(parent: &MakeModify<M>, child: &MakeModify<M>) -> Range<u32> {
     if parent.changes() & child.changes() & !child.depends() != EnumSet::EMPTY {
         let offset = parent.range.start;
         let r = child.range.clone();
@@ -21,7 +21,7 @@ fn mask_range<P: Prefab>(parent: &MakeModify<P>, child: &MakeModify<P>) -> Range
         0..0
     }
 }
-fn mask<P: Prefab>(modifiers: &[MakeModify<P>], i: usize, m: &MakeModify<P>) -> Mask {
+fn mask<M: Modify>(modifiers: &[MakeModify<M>], i: usize, m: &MakeModify<M>) -> Mask {
     let capacity = m.range.len() / size_of::<u32>();
     let mut mask = Bitset(Vec::with_capacity(capacity));
 
@@ -36,7 +36,7 @@ pub(super) struct MaskRange {
     builder: jagged_bitset::Builder,
 }
 impl MaskRange {
-    pub(super) fn new<P: Prefab>(modifiers: &[MakeModify<P>]) -> Self {
+    pub(super) fn new<M: Modify>(modifiers: &[MakeModify<M>]) -> Self {
         let masks = modifiers.iter().enumerate();
         let masks = masks.map(|(i, m)| mask(modifiers, i, m)).collect();
         Self {

@@ -92,9 +92,9 @@ pub mod modifiers;
 mod richtext;
 mod track_macro;
 
-pub use modifiers::Modifier;
+pub use modifiers::{GetFont, Modifier};
 pub use richtext::{
-    GetFont, MakeRichText, RichText, RichTextFetch, RichTextItem, RichTextPlugin, WorldBindings,
+    MakeRichText, RichText, RichTextFetch, RichTextItem, RichTextPlugin, WorldBindings,
     WorldBindingsMut,
 };
 pub mod __track_richtext_private {

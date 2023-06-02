@@ -9,6 +9,14 @@ use crate::{
     modify_fn::ModifyFn,
 };
 
+const BAD_ASSOC_TYPE: &str = "Modify as a trait requires the following \
+    associated types: \n\
+    - `type Context<'a>`: The immutable context external to `Item` passed to \
+      to the modify through the `#[modify(ctx)]` attribute\n\
+    - `type Item`: The item on which Modify operates.\n\
+    - `type Items`: The collection of items passed to `Resolve` to run the \
+      modifiers specifed in this macro on.";
+
 /// Store encountered associated types used in the `Modify` definition.
 #[derive(Default)]
 struct AssociatedTypes {
@@ -18,12 +26,12 @@ struct AssociatedTypes {
 
     /// `Modify::Item`.
     item: Option<syn::Type>,
+
+    /// `Modify::Items`.
+    items: Option<syn::Type>,
 }
 fn read_item(item: syn::ImplItem, assoc: &mut AssociatedTypes) -> syn::Result<Option<ModifyFn>> {
     use syn::ImplItem::{Fn, Type};
-    let msg = "modify_impl accepts only `type Context` as associated type. \
-        Other items in the #[modify_impl] block MUST be functions, \
-        the modify functions.";
     match item {
         Type(assoc_type) if assoc_type.ident == "Context" => {
             assoc.context = Some((assoc_type.ty, assoc_type.generics));
@@ -31,6 +39,10 @@ fn read_item(item: syn::ImplItem, assoc: &mut AssociatedTypes) -> syn::Result<Op
         }
         Type(assoc_type) if assoc_type.ident == "Item" => {
             assoc.item = Some(assoc_type.ty);
+            Ok(None)
+        }
+        Type(assoc_type) if assoc_type.ident == "Items" => {
+            assoc.items = Some(assoc_type.ty);
             Ok(None)
         }
         Fn(fn_item) => {
@@ -42,7 +54,7 @@ fn read_item(item: syn::ImplItem, assoc: &mut AssociatedTypes) -> syn::Result<Op
             };
             ModifyFn::new(fn_item).map(Some)
         }
-        item => Err(syn::Error::new(item.span(), msg)),
+        item => Err(syn::Error::new(item.span(), BAD_ASSOC_TYPE)),
     }
 }
 
@@ -51,6 +63,7 @@ pub(crate) struct Config {
     enumset_crate: Ident,
     visibility: syn::Visibility,
     no_debug_derive: bool,
+    no_clone_derive: bool,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -59,6 +72,7 @@ impl Default for Config {
             enumset_crate: Ident::new("enumset", Span::call_site()),
             visibility: Visibility::Public(syn::token::Pub { span: Span::call_site() }),
             no_debug_derive: false,
+            no_clone_derive: false,
         }
     }
 }
@@ -67,7 +81,7 @@ const CONFIG_ATTR_DESCR: &str = "\
   by default, it is `::cuicui_fab`
 - `enumset_crate = identifier`: specify which path to use for the `enumset` crate
   by default, it is `enumset`
-- `no_derive(Debug)`: Do not automatically implement Debug for Modifier.
+- `no_derive(Debug | Clone)`: Do not automatically implement given trait for Modifier.
 - `visibility = [pub(crate)]`: specify the visibility for the generated enums.
   by default, it is `pub`\n";
 impl Config {
@@ -83,6 +97,9 @@ impl Config {
             }
             () if meta.path.is_ident("no_derive") => meta.parse_nested_meta(|meta| {
                 if meta.path.is_ident("Debug") {
+                    self.no_debug_derive = true;
+                }
+                if meta.path.is_ident("Clone") {
                     self.no_debug_derive = true;
                 }
                 Ok(())
@@ -103,7 +120,8 @@ impl Config {
 #[derive(Debug)]
 pub(crate) struct Block {
     attributes: Vec<syn::Attribute>,
-    impl_target: syn::Type,
+    item: syn::Type,
+    items: syn::Type,
     context: syn::Type,
     context_generics: syn::Generics,
     functions: Vec<ModifyFn>,
@@ -114,6 +132,7 @@ pub(crate) struct Block {
     enumset_ident: Ident,
     visibility: Visibility,
     no_debug_derive: bool,
+    no_clone_derive: bool,
 }
 impl Block {
     pub fn parse(config: Config, mut input: syn::ItemImpl) -> syn::Result<Self> {
@@ -141,13 +160,18 @@ impl Block {
                 If you are not using it, use `type Context = ();`";
             return Err(syn::Error::new(input.span(), msg));
         };
-        let Some(impl_target) = assocs.item else {
+        let Some(item) = assocs.item else {
             let msg = "modify_impl MUST declare a `type Item` associated type.";
+            return Err(syn::Error::new(input.span(), msg));
+        };
+        let Some(items) = assocs.items else {
+            let msg = "modify_impl MUST declare a `type Items` associated type.";
             return Err(syn::Error::new(input.span(), msg));
         };
         Ok(Block {
             attributes,
-            impl_target,
+            item,
+            items,
             context,
             context_generics,
             functions,
@@ -157,6 +181,7 @@ impl Block {
             enumset_ident: config.enumset_crate,
             visibility: config.visibility,
             no_debug_derive: config.no_debug_derive,
+            no_clone_derive: config.no_clone_derive,
         })
     }
     pub fn generate_impl(self) -> TokenStream {
@@ -168,12 +193,13 @@ impl Block {
         let context = &self.context;
         let context_generics = &self.context_generics;
         let ctx = Ident::new("ctx", Span::call_site());
-        let item = Ident::new("item", Span::call_site());
+        let item_param = Ident::new("item", Span::call_site());
 
         let modify_ty = &self.modify_ty;
         let field_ty = format_ident!("{modify_ty}Field");
         let field_variants = &self.fields;
-        let impl_target = &self.impl_target;
+        let item = &self.item;
+        let items = &self.items;
 
         let fns = || self.functions.iter();
         let ty_variants = fns().map(|f| f.ty_variant(enset, &field_ty));
@@ -183,11 +209,16 @@ impl Block {
         let field_assoc_fns = fns().map(|f| f.fields_assoc_fns(enset, &field_ty));
         let ty_constructors = fns().map(|m| &m.constructor);
         let ty_function_defs = fns().map(|m| &m.declaration);
-        let ty_function_calls = fns().map(|m| m.call(&ctx, &item));
+        let ty_function_calls = fns().map(|m| m.call(&ctx, &item_param));
         let debug_derive = if self.no_debug_derive {
             quote!()
         } else {
             quote!(#[derive( ::std::fmt::Debug )])
+        };
+        let clone_derive = if self.no_clone_derive {
+            quote!()
+        } else {
+            quote!(#[derive( ::std::clone::Clone )])
         };
 
         let ty_attributes = &self.attributes;
@@ -196,7 +227,7 @@ impl Block {
             #[doc = "\n\n"]
             #[doc = concat!(
                 "Fields may be members of [`",
-                stringify!(#impl_target),
+                stringify!(#item),
                 "`], the prefab items of sections modified by [`",
                 stringify!(#modify_ty),
                 "`], or fields of the context [`",
@@ -210,6 +241,7 @@ impl Block {
             }
             #( #ty_attributes )*
             #debug_derive
+            #clone_derive
             #vis enum #modify_ty {
                 #( #ty_variants ),*
             }
@@ -233,12 +265,13 @@ impl Block {
             impl Modify for #modify_ty {
                 type Field = #field_ty;
                 type Context #context_generics = #context;
-                type Item = #impl_target;
+                type Item = #item;
+                type Items = #items;
 
                 fn apply(
                     &self,
                     #ctx: &Self::Context<'_>,
-                    #item: &mut #impl_target,
+                    #item_param: &mut #item,
                 ) -> #fab::__private::anyhow::Result<()> {
                     match self {
                         #(

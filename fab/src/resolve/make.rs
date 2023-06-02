@@ -10,20 +10,20 @@ use enumset::EnumSet;
 use log::{error, trace};
 
 use crate::binding::Id;
-use crate::prefab::{FieldsOf, Modify, Prefab, PrefabContext, PrefabField};
+use crate::prefab::{FieldsOf, Modify};
 
 use super::{MakeModify, ModifyIndex as Idx, ModifyKind, Resolver};
 use is_static::CheckStatic;
 use mask_range::MaskRange;
 
-pub(super) struct Make<'a, P: Prefab> {
-    default_section: &'a P::Item,
-    modifiers: Vec<super::MakeModify<P>>,
+pub(super) struct Make<'a, M: Modify> {
+    default_section: &'a M::Item,
+    modifiers: Vec<super::MakeModify<M>>,
     errors: Vec<anyhow::Error>,
 }
-// Manual `impl` because we don't want `Make: Debug where P: Debug`, only
-// `Make: Debug where P::Item: Debug, PrefabField<P>: Debug`
-impl<P: Prefab> fmt::Debug for Make<'_, P> {
+// Manual `impl` because we don't want `Make: Debug where M: Debug`, only
+// `Make: Debug where M::Item: Debug, PrefabField<M>: Debug`
+impl<M: Modify> fmt::Debug for Make<'_, M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Make")
             .field("default_section", &self.default_section)
@@ -33,14 +33,14 @@ impl<P: Prefab> fmt::Debug for Make<'_, P> {
     }
 }
 
-impl<'a, P: Prefab> Make<'a, P> {
+impl<'a, M: Modify> Make<'a, M> {
     /// Initialize a [`Make`] to create a [`Resolver`] using [`Make::build`].
     ///
     /// # Limitations
     ///
     /// - All [`Modify::changes`] of `modifiers` **must** be a subset of [`Modify::depends`].
     /// - [`Modify::depends`] may have exactly 1 or 0 components.
-    pub(super) fn new(modifiers: Vec<MakeModify<P>>, default_section: &'a P::Item) -> Self {
+    pub(super) fn new(modifiers: Vec<MakeModify<M>>, default_section: &'a M::Item) -> Self {
         Self { modifiers, default_section, errors: Vec::new() }
     }
     /// Apply all static `Modify` and remove them from `modifiers`.
@@ -52,7 +52,7 @@ impl<'a, P: Prefab> Make<'a, P> {
     ///    by a static modifier child of itself. (TODO(pref) this isn't done yet)
     ///
     /// Note that if there is no `modifiers`, this does nothing.
-    fn purge_static(&mut self, ctx: &PrefabContext<'_, P>) -> (Vec<P::Item>, JaggedBitset) {
+    fn purge_static(&mut self, ctx: &M::Context<'_>) -> (Vec<M::Item>, JaggedBitset) {
         assert!(size_of::<usize>() >= size_of::<u32>());
 
         let Some(section_count) = self.modifiers.iter().map(|m| m.range.end).max() else {
@@ -89,7 +89,7 @@ impl<'a, P: Prefab> Make<'a, P> {
     }
 
     /// The list of `Modify`s in `modifiers`.
-    fn indices(&self) -> impl Iterator<Item = (Idx, &MakeModify<P>)> {
+    fn indices(&self) -> impl Iterator<Item = (Idx, &MakeModify<M>)> {
         self.modifiers
             .iter()
             .enumerate()
@@ -98,7 +98,7 @@ impl<'a, P: Prefab> Make<'a, P> {
     /// The list of `Modify`s that directly depend on a root field.
     ///
     /// `field` is the property in question. A root field is the "parent style".
-    fn field_f2m(&self, field: PrefabField<P>) -> impl Iterator<Item = Idx> + '_ {
+    fn field_f2m(&self, field: M::Field) -> impl Iterator<Item = Idx> + '_ {
         let mut parent_field_range_end = 0;
 
         self.indices().filter_map(move |(i, modify)| {
@@ -118,7 +118,7 @@ impl<'a, P: Prefab> Make<'a, P> {
     /// The list of `Modify`s that depend on other `Modify` for their value on `field`.
     ///
     /// This is a list of parent→child tuples.
-    fn field_m2m(&self, field: PrefabField<P>) -> impl Iterator<Item = (Idx, Idx)> + '_ {
+    fn field_m2m(&self, field: M::Field) -> impl Iterator<Item = (Idx, Idx)> + '_ {
         let mut parent = Vec::new();
 
         self.indices().filter_map(move |(i, modify)| {
@@ -154,8 +154,8 @@ impl<'a, P: Prefab> Make<'a, P> {
     }
     pub(super) fn build<const MC: usize>(
         mut self,
-        ctx: &PrefabContext<'_, P>,
-    ) -> (Resolver<P, MC>, Vec<P::Item>) {
+        ctx: &M::Context<'_>,
+    ) -> (Resolver<M, MC>, Vec<M::Item>) {
         trace!("Building a RichText from modifiers:");
         for modi in &self.modifiers {
             trace!("\t{modi:?}");
@@ -176,7 +176,7 @@ impl<'a, P: Prefab> Make<'a, P> {
         trace!("m2m deps: {m2m:?}");
 
         let mut f2m = enum_multimap::Builder::new();
-        for change in FieldsOf::<P>::ALL {
+        for change in FieldsOf::<M>::ALL {
             f2m.insert(change, self.field_f2m(change));
         }
         // TODO(err): unwrap

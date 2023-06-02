@@ -1,10 +1,8 @@
-use std::fmt;
-
 use bevy::ecs::prelude::{Mut, Resource, World};
 use fab::binding;
 
 use super::{Read, Write};
-use crate::{BevyPrefab, PrefabWorld};
+use crate::{BevyModify, PrefabWorld};
 
 /// A hook from a value in the ECS to a [`M: Modify`] associated with
 /// a binding.
@@ -23,7 +21,7 @@ pub struct Hook<M> {
     read: Read,
     write: Write<M>,
 }
-impl<M: fmt::Write + From<String>> Hook<M> {
+impl<M: BevyModify> Hook<M> {
     pub fn from_parsed(
         hook: fab_parse::tree::Hook,
         world: &mut World,
@@ -42,10 +40,10 @@ impl<M: fmt::Write + From<String>> Hook<M> {
     ///
     /// Note: `self` is mutable here, this is because [`Read`] caches world
     /// access to later access the value it reads much faster.
-    fn read_into_binding<P: BevyPrefab<Modify = M>>(
+    fn read_into_binding(
         &mut self,
         world: &World,
-        bindings: &mut Mut<PrefabWorld<P>>,
+        bindings: &mut Mut<PrefabWorld<M>>,
     ) -> Option<()> {
         let value = self.read.world(world)?;
         self.write.modify(value, bindings.0.entry(self.binding));
@@ -74,13 +72,9 @@ impl<M> Hooks<M> {
         self.0.extend(iter)
     }
 }
-pub fn update_hooked<P>(world: &mut World)
-where
-    P::Modify: fmt::Write + From<String> + Send + Sync,
-    P: BevyPrefab + 'static,
-{
-    world.resource_scope(|world, mut bindings: Mut<PrefabWorld<P>>| {
-        world.resource_scope(|world, mut trackers: Mut<Hooks<P::Modify>>| {
+pub fn update_hooked<M: BevyModify>(world: &mut World) {
+    world.resource_scope(|world, mut bindings: Mut<PrefabWorld<M>>| {
+        world.resource_scope(|world, mut trackers: Mut<Hooks<M>>| {
             for tracker in trackers.0.iter_mut() {
                 tracker.read_into_binding(world, &mut bindings);
             }

@@ -11,7 +11,7 @@ use log::warn;
 use smallvec::SmallVec;
 
 use crate::binding::{Id, View};
-use crate::prefab::{Changing, FieldsOf, Indexed, Modify, Prefab, PrefabContext, PrefabField};
+use crate::prefab::{Changing, FieldsOf, Indexed, Modify};
 
 type SmallKeySorted<K, V, const C: usize> = sorted::KeySorted<SmallVec<[(K, V); C]>, K, V>;
 
@@ -25,25 +25,25 @@ impl ModifyIndex {
 }
 
 /// A [`Modify`] either described as a [`Prefab::Modify`] or a binding [`Id`].
-pub enum ModifyKind<P: Prefab> {
+pub enum ModifyKind<M: Modify> {
     Bound {
         binding: Id,
-        depends: FieldsOf<P>,
-        changes: FieldsOf<P>,
+        depends: FieldsOf<M>,
+        changes: FieldsOf<M>,
     },
-    Modify(P::Modify),
+    Modify(M),
 }
 
 /// Describes a [`Modify`] affecting a range of items in the [`Prefab`]
 /// and dependency described as [`ModifyKind`].
 ///
 /// Used in [`Resolver::new`] to create a [`Resolver`].
-pub struct MakeModify<P: Prefab> {
-    pub kind: ModifyKind<P>,
+pub struct MakeModify<M: Modify> {
+    pub kind: ModifyKind<M>,
     pub range: Range<u32>,
 }
-impl<P: Prefab> From<MakeModify<P>> for Modifier<P> {
-    fn from(value: MakeModify<P>) -> Self {
+impl<M: Modify> From<MakeModify<M>> for Modifier<M> {
+    fn from(value: MakeModify<M>) -> Self {
         let modify = match value.kind {
             ModifyKind::Bound { .. } => None,
             ModifyKind::Modify(modify) => Some(modify),
@@ -51,17 +51,17 @@ impl<P: Prefab> From<MakeModify<P>> for Modifier<P> {
         Modifier { modify, range: value.range }
     }
 }
-impl<P: Prefab> MakeModify<P> {
-    fn parent_of(&self, other: &MakeModify<P>) -> bool {
+impl<M: Modify> MakeModify<M> {
+    fn parent_of(&self, other: &MakeModify<M>) -> bool {
         other.range.end <= self.range.end
     }
-    fn depends(&self) -> FieldsOf<P> {
+    fn depends(&self) -> FieldsOf<M> {
         match &self.kind {
             ModifyKind::Bound { depends, .. } => *depends,
             ModifyKind::Modify(modify) => modify.depends(),
         }
     }
-    fn changes(&self) -> FieldsOf<P> {
+    fn changes(&self) -> FieldsOf<M> {
         match &self.kind {
             ModifyKind::Bound { changes, .. } => *changes,
             ModifyKind::Modify(modify) => modify.changes(),
@@ -70,9 +70,10 @@ impl<P: Prefab> MakeModify<P> {
 }
 
 /// A [`ModifyBox`] that apply to a given [`Range`] of [`TextSection`]s on a [`Text`].
-struct Modifier<P: Prefab> {
+#[derive(Debug)]
+struct Modifier<M> {
     /// The modifier to apply in the given `range`.
-    modify: Option<P::Modify>,
+    modify: Option<M>,
 
     /// The range to which to apply the `modify`.
     range: Range<u32>,
@@ -82,12 +83,12 @@ struct Modifier<P: Prefab> {
 // MOD_COUNT. We could then use it as an associated type of `Prefab` instead
 // of propagating it all the way.
 #[derive(Debug)]
-pub struct Resolver<P: Prefab, const MOD_COUNT: usize> {
-    modifiers: Box<[Modifier<P>]>,
+pub struct Resolver<M: Modify, const MOD_COUNT: usize> {
+    modifiers: Box<[Modifier<M>]>,
 
     /// `Modify` that can be triggered by a `PrefabField` change.
     /// `f2m` stands for "field to modifier dependencies".
-    f2m: EnumMultimap<PrefabField<P>, ModifyIndex, MOD_COUNT>,
+    f2m: EnumMultimap<M::Field, ModifyIndex, MOD_COUNT>,
 
     // TODO(feat): RichText without m2m dependency. This is fairly costly to
     // build and uses several kilobytes of memory.
@@ -109,17 +110,17 @@ pub struct Resolver<P: Prefab, const MOD_COUNT: usize> {
 }
 
 // TODO(clean): move this after the impl Resolver
-struct Evaluator<'a, P: Prefab, const MC: usize> {
-    root: &'a P::Item,
-    graph: &'a Resolver<P, MC>,
-    bindings: View<'a, P>,
+struct Evaluator<'a, M: Modify, const MC: usize> {
+    root: &'a M::Item,
+    graph: &'a Resolver<M, MC>,
+    bindings: View<'a, M>,
 }
-impl<P: Prefab, const MC: usize> Resolver<P, MC> {
+impl<M: Modify, const MC: usize> Resolver<M, MC> {
     pub fn new(
-        modifiers: Vec<MakeModify<P>>,
-        default_section: &P::Item,
-        ctx: &PrefabContext<'_, P>,
-    ) -> (Self, Vec<P::Item>) {
+        modifiers: Vec<MakeModify<M>>,
+        default_section: &M::Item,
+        ctx: &M::Context<'_>,
+    ) -> (Self, Vec<M::Item>) {
         assert!(size_of::<usize>() >= size_of::<u32>());
 
         make::Make::new(modifiers, default_section).build(ctx)
@@ -130,10 +131,10 @@ impl<P: Prefab, const MC: usize> Resolver<P, MC> {
         let mod_index = self.b2m[index].1;
         Some((index, mod_index))
     }
-    fn depends_on(&self, changes: FieldsOf<P>) -> impl Iterator<Item = ModifyIndex> + '_ {
+    fn depends_on(&self, changes: FieldsOf<M>) -> impl Iterator<Item = ModifyIndex> + '_ {
         self.f2m.all_rows(changes).copied()
     }
-    fn modifier_at(&self, index: ModifyIndex) -> &Modifier<P> {
+    fn modifier_at(&self, index: ModifyIndex) -> &Modifier<M> {
         // SAFETY: we assume that it is not possible to build an invalid `ModifyIndex`.
         // Note: it is only possible to assume this because `ModifyIndex` is not exposed
         // publicly, therefore, the only source of `ModifyIndex` are methods on the very
@@ -149,8 +150,8 @@ impl<P: Prefab, const MC: usize> Resolver<P, MC> {
     fn modify_at<'a>(
         &'a self,
         index: ModifyIndex,
-        overlay: Option<&'a P::Modify>,
-    ) -> Option<(&'a P::Modify, impl Iterator<Item = u32> + SortedByItem + 'a)> {
+        overlay: Option<&'a M>,
+    ) -> Option<(&'a M, impl Iterator<Item = u32> + SortedByItem + 'a)> {
         let (modify, range) = match (self.modifier_at(index), overlay) {
             (Modifier { range, .. }, Some(modify)) => (modify, range),
             (Modifier { modify: Some(modify), range }, None) => (modify, range),
@@ -174,25 +175,25 @@ impl<P: Prefab, const MC: usize> Resolver<P, MC> {
     }
     pub fn update<'a>(
         &'a self,
-        to_update: &mut P::Items,
-        updates: &'a Changing<P::Modify>,
-        bindings: View<'a, P>,
-        ctx: &PrefabContext<P>,
+        to_update: &mut M::Items,
+        updates: &'a Changing<M>,
+        bindings: View<'a, M>,
+        ctx: &M::Context<'_>,
     ) {
         let Changing { updated, value } = updates;
         Evaluator { graph: self, root: value, bindings }.update_all(*updated, to_update, ctx);
     }
 }
 
-impl<'a, P: Prefab, const MC: usize> Evaluator<'a, P, MC> {
+impl<'a, M: Modify, const MC: usize> Evaluator<'a, M, MC> {
     // TODO(clean): flag arguments are icky
     fn update(
         &self,
         index: ModifyIndex,
-        to_update: &mut P::Items,
-        ctx: &PrefabContext<P>,
+        to_update: &mut M::Items,
+        ctx: &M::Context<'_>,
         field_depends: bool,
-        overlay: Option<&P::Modify>,
+        overlay: Option<&M>,
     ) {
         let Some((modify, range)) = self.graph.modify_at(index, overlay) else { return; };
         for section in range {
@@ -210,9 +211,9 @@ impl<'a, P: Prefab, const MC: usize> Evaluator<'a, P, MC> {
     }
     fn update_all(
         &self,
-        updated_fields: FieldsOf<P>,
-        to_update: &mut P::Items,
-        ctx: &PrefabContext<P>,
+        updated_fields: FieldsOf<M>,
+        to_update: &mut M::Items,
+        ctx: &M::Context<'_>,
     ) {
         let bindings = self.bindings.changed();
 

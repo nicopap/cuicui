@@ -4,6 +4,8 @@ use bevy::reflect::Reflect;
 use fab::binding;
 use fab_parse::{tree as parse, RuntimeFormat};
 
+use crate::BevyModify;
+
 /// Turn a [`&dyn Reflect`] into a [`TextModifier`].
 pub enum Write<M> {
     /// Print the `Reflect` as a [`TextModifier::content`] displayed with the
@@ -17,7 +19,7 @@ pub enum Write<M> {
     /// [`Reflect::debug`].
     Debug,
 }
-impl<M: fmt::Write + From<String>> Write<M> {
+impl<M: BevyModify> Write<M> {
     pub fn modify(&self, value: &dyn Reflect, entry: binding::Entry<M>) {
         match self {
             // TODO(feat): Proper runtime formatter
@@ -35,9 +37,9 @@ impl<M: fmt::Write + From<String>> Write<M> {
         }
     }
 }
-fn set_content<M: fmt::Write + From<String>>(entry: binding::Entry<M>, s: impl fmt::Display) {
+fn set_content<M: BevyModify>(entry: binding::Entry<M>, s: impl fmt::Display) {
     entry
-        .modify(|m| m.write_fmt(format_args!("{s}")).unwrap())
+        .modify(|m| write!(m, "{s}").unwrap())
         .or_insert(s.to_string().into());
 }
 struct DisplayReflect<'a>(&'a dyn Reflect, Option<&'a RuntimeFormat>);

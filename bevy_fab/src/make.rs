@@ -1,24 +1,23 @@
-use std::{fmt, marker::PhantomData, mem};
+use std::{marker::PhantomData, mem};
 
 use bevy::ecs::{prelude::*, system::SystemState};
-use fab::prefab::{FieldsOf, PrefabContext};
-use fab::resolve::Resolver;
+use fab::{prefab::FieldsOf, resolve::Resolver};
 use fab_parse::tree as parse;
 use log::error;
 
 use crate::{
     track::{Hook, Hooks},
-    BevyPrefab, PrefabLocal, PrefabWorld,
+    BevyModify, PrefabLocal, PrefabWorld,
 };
 
 #[derive(Component)]
-pub struct ParseFormatString<P: BevyPrefab> {
+pub struct ParseFormatString<BM: BevyModify> {
     pub format_string: String,
-    pub default_item: P::Item,
-    pub items_extra: Option<P::ItemsCtorData>,
-    _p: PhantomData<fn(P)>,
+    pub default_item: BM::Item,
+    pub items_extra: Option<BM::ItemsCtorData>,
+    _p: PhantomData<fn(BM)>,
 }
-impl<P: BevyPrefab> ParseFormatString<P> {
+impl<P: BevyModify> ParseFormatString<P> {
     pub fn new(
         format_string: String,
         default_item: P::Item,
@@ -42,24 +41,24 @@ impl<P: BevyPrefab> ParseFormatString<P> {
 ///
 /// Effects:
 ///
-/// - Returns `Vec<BP::Item>`: The list of items the [`Resolver`] will work on.
-/// - Returns `Resolver<BP, R>`: The resolver containing the parsed [`Modify`].
+/// - Returns `Vec<BM::Item>`: The list of items the [`Resolver`] will work on.
+/// - Returns `Resolver<BM, R>`: The resolver containing the parsed [`Modify`].
 /// - Returns `Vec<parse::Hook<'fstr>>`: The parsed but not created [`Hook`]s used in
 ///   the format string. It has the lifetime of `format_string`.
-/// - Interns in [`PrefabWorld<BP>`] bindings found in `format_string`.
-fn mk<'fstr, BP: BevyPrefab, const R: usize>(
-    bindings: &mut PrefabWorld<BP>,
-    default_item: &BP::Item,
-    context: &PrefabContext<BP>,
+/// - Interns in [`PrefabWorld<BM>`] bindings found in `format_string`.
+fn mk<'fstr, BM: BevyModify, const R: usize>(
+    bindings: &mut PrefabWorld<BM>,
+    default_item: &BM::Item,
+    context: &BM::Context<'_>,
     format_string: &'fstr str,
-) -> anyhow::Result<(Vec<BP::Item>, Resolver<BP, R>, Vec<parse::Hook<'fstr>>)>
+) -> anyhow::Result<(Vec<BM::Item>, Resolver<BM, R>, Vec<parse::Hook<'fstr>>)>
 where
-    BP::Items: Component,
+    BM::Items: Component,
 {
     let mut new_hooks = Vec::new();
 
     let tree = fab_parse::format_string(format_string)?;
-    let tree = BP::transform(tree.transform());
+    let tree = BM::transform(tree.transform());
     let parsed = tree.finish(&mut bindings.0, &mut new_hooks);
     let parsed: Vec<_> = parsed.into_iter().collect::<anyhow::Result<_>>()?;
 
@@ -69,18 +68,17 @@ where
 }
 
 /// Replaces [`ParseFormatString`] with [`PrefabLocal`],
-/// updating [`PrefabWorld<BP>`] and [`Hooks`].
+/// updating [`PrefabWorld<BM>`] and [`Hooks`].
 ///
 /// This is an exclusive system, as it requires access to the [`World`] to generate
 /// the [`Hook`]s specified in the format string.
-pub fn parse_into_resolver_system<BP: BevyPrefab + 'static, const R: usize>(
+pub fn parse_into_resolver_system<BM: BevyModify + 'static, const R: usize>(
     world: &mut World,
-    mut to_make: Local<QueryState<(Entity, &mut ParseFormatString<BP>)>>,
-    mut cache: Local<SystemState<(Commands, ResMut<PrefabWorld<BP>>, BP::Param)>>,
+    mut to_make: Local<QueryState<(Entity, &mut ParseFormatString<BM>)>>,
+    mut cache: Local<SystemState<(Commands, ResMut<PrefabWorld<BM>>, BM::Param)>>,
 ) where
-    BP::Items: Component,
-    BP::Modify: fmt::Write + From<String>,
-    FieldsOf<BP>: Sync + Send,
+    BM::Items: Component,
+    FieldsOf<BM>: Sync + Send,
 {
     // The `format_string` are field of `ParseFormatString`, components of the ECS.
     // we use `ParseFormatString::take` to extract them from the ECS, and own them
@@ -106,7 +104,7 @@ pub fn parse_into_resolver_system<BP: BevyPrefab + 'static, const R: usize>(
     {
         let (mut cmds, mut world_bindings, params) = cache.get_mut(world);
 
-        let context = BP::context(&params);
+        let context = BM::context(&params);
 
         // TODO(perf): batch commands update.
         for (entity, (ctor_data, default_item, format_string)) in to_make.iter() {
@@ -115,11 +113,11 @@ pub fn parse_into_resolver_system<BP: BevyPrefab + 'static, const R: usize>(
                     new_hooks.append(&mut hooks);
 
                     let local = PrefabLocal::new(resolver, default_item.clone());
-                    let items = BP::make_items(ctor_data, items);
+                    let items = BM::make_items(ctor_data, items);
 
                     cmds.entity(*entity)
                         .insert((local, items))
-                        .remove::<ParseFormatString<BP>>();
+                        .remove::<ParseFormatString<BM>>();
                 }
                 Err(err) => {
                     error!("Error when building a resolver: {err}");
@@ -131,8 +129,8 @@ pub fn parse_into_resolver_system<BP: BevyPrefab + 'static, const R: usize>(
 
     // To convert the parse::Hook into an actual track::Hook that goes into track::Hooks,
     // we need excluisve world access.
-    world.resource_scope(|world, mut hooks: Mut<Hooks<BP::Modify>>| {
-        world.resource_scope(|world, mut bindings: Mut<PrefabWorld<BP>>| {
+    world.resource_scope(|world, mut hooks: Mut<Hooks<BM>>| {
+        world.resource_scope(|world, mut bindings: Mut<PrefabWorld<BM>>| {
             new_hooks.iter().for_each(|hook| {
                 if let Some(hook) = Hook::from_parsed(*hook, world, |n| bindings.0.get_or_add(n)) {
                     hooks.extend(Some(hook));
