@@ -11,7 +11,7 @@ use bevy::{
     sprite::MaterialMesh2dBundle,
     utils::HashMap,
 };
-use cuicui_richtext::{track, MakeRichTextBundle, RichTextPlugin, WorldBindings};
+use cuicui_richtext::{track, MakeRichText, RichTextPlugin, WorldBindingsMut};
 
 const TIME_STEP: f32 = 1.0 / 60.0;
 
@@ -62,7 +62,7 @@ fn main() {
             }),
         )
         .init_resource::<FontHandles>()
-        .add_plugin(RichTextPlugin)
+        .add_plugin(RichTextPlugin::new())
         .register_type::<Score>()
         .register_type::<Deaths>()
         .init_resource::<Score>()
@@ -238,7 +238,7 @@ fn setup(
 
     // Score
     commands.spawn(
-        MakeRichTextBundle::new(
+        MakeRichText::new(
             "Score: {Font: fonts/FiraMono-Medium.ttf, Color: rgb(1.0, 0.5, 0.5), \
             RelSize: 1.5, Content: {Res.Score.score:}}\n\
             {Color: rgb(1.0, 0.2, 0.2), Content: {Res.Deaths:?}}\n\
@@ -307,10 +307,7 @@ fn setup(
     }
 }
 
-fn update_ball_bindings(
-    mut context: ResMut<WorldBindings>,
-    ball_pos: Query<&Transform, With<Ball>>,
-) {
+fn update_ball_bindings(mut context: WorldBindingsMut, ball_pos: Query<&Transform, With<Ball>>) {
     let Ok(ball_pos) = ball_pos.get_single() else { return; };
     context.set_content("ball_x", &format!("{:.1}", ball_pos.translation.x));
     context.set_content("ball_y", &format!("{:.1}", ball_pos.translation.y));

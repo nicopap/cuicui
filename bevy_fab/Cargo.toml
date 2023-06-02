@@ -1,11 +1,11 @@
 [package]
-name = "cuicui_richtext"
+name = "cuicui_bevy_fab"
 authors = ["Nicola Papale"]
-description = "A bevy plugin to manage text without boilerplate"
+description = "Integrate cuicui_fab and cuicui_fab_parse with bevy"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["bevy", "markup", "text", "template", "styling"]
-categories = ["game-development", "gui", "value-formatting", "template-engine"]
+categories = ["game-development", "value-formatting", "template-engine"]
 repository = "https://github.com/nicopap/cuicui"
 version = "0.1.0"
 edition = "2021"
@@ -16,13 +16,14 @@ no_tracked_debug = []
 
 [dependencies]
 anyhow = "1"
-bevy = { version = "0.10", default-features = false, features = ["bevy_render", "bevy_core_pipeline", "bevy_text", "bevy_ui"] }
+bevy = { version = "0.10", default-features = false }
+# bevycheck = "0.5.2"
 enumset = { version = "1.1", features = ["std"] }
+log = "0.4"
 thiserror = "1"
 
-fab = { path = "../fab", package = "cuicui_fab" }
 fab_parse = { path = "../fab_parse", package = "cuicui_fab_parse" }
-bevy_fab = { path = "../bevy_fab", package = "cuicui_bevy_fab" }
+fab = { path = "../fab", package = "cuicui_fab" }
 
 [dev-dependencies]
 bevy = { version = "0.10", features = ["png", "x11", "bevy_asset", "bevy_render" ] }

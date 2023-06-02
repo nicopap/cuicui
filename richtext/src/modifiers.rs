@@ -1,13 +1,13 @@
 //! Provided implementations for the [`Modify<TextPrefab>`] trait for cuicui.
-use std::fmt::Write;
 use std::{any::Any, borrow::Cow, fmt};
 
 use bevy::prelude::{trace, Color, Handle};
 use bevy::text::{Font, TextSection};
 use enumset::EnumSet;
 use fab::{impl_modify, prefab::Modify};
+use fab_parse::{Deps, ParsablePrefab};
 
-use crate::richtext::GetFont;
+use crate::richtext::{GetFont, TextPrefab};
 
 /// A Boxed [`Modify<TextPrefab>`] trait object, with all necessary bounds to make it work
 /// with bevy's [`Resource`] and [`Component`] types.
@@ -91,42 +91,63 @@ impl fmt::Debug for Modifier {
         }
     }
 }
-impl Modifier {
+impl ParsablePrefab for TextPrefab {
+    type Err = anyhow::Error;
+
     /// Returns the (depends, changes) field set of modifier named `name`.
-    pub fn dependencies_of(name: &str) -> Option<(EnumSet<ModifierField>, EnumSet<ModifierField>)> {
-        match name {
-            "Font" => Some((EnumSet::EMPTY, Self::font_changes())),
-            "FontSize" => Some((EnumSet::EMPTY, Self::font_size_changes())),
-            "RelSize" => Some((Self::rel_size_depends(), Self::rel_size_changes())),
-            "Color" => Some((EnumSet::EMPTY, Self::color_changes())),
-            "HueOffset" => Some((Self::hue_offset_depends(), Self::hue_offset_changes())),
-            "Content" => Some((EnumSet::EMPTY, Self::content_changes())),
-            _ => None,
-        }
+    fn dependencies_of(name: &str) -> Deps<ModifierField> {
+        let mut depends = EnumSet::EMPTY;
+
+        let changes = match name {
+            "Font" => Modifier::font_changes(),
+            "Color" => Modifier::color_changes(),
+            "Content" => Modifier::content_changes(),
+            "FontSize" => Modifier::font_size_changes(),
+            "RelSize" => {
+                depends = Modifier::rel_size_depends();
+                Modifier::rel_size_changes()
+            }
+            "HueOffset" => {
+                depends = Modifier::hue_offset_depends();
+                Modifier::hue_offset_changes()
+            }
+            _ => return Deps::NoneWithName,
+        };
+        Deps::Some { changes, depends }
     }
-    /// Set this [`Modifier`] to [`Modifier::Content`].
-    ///
-    /// Note that this **doesn't allocate** if `self` is already [`Modifier::Content`].
-    pub fn overwrite_content(&mut self, new_content: &impl fmt::Display) {
-        if let Modifier::Content { statik } = self {
-            let statik = statik.to_mut();
-            statik.clear();
-            write!(statik, "{new_content}").unwrap();
-        } else {
-            *self = Modifier::content(new_content.to_string().into());
-        }
-    }
-    pub fn parse(name: &str, input: &str) -> anyhow::Result<Self> {
+
+    fn parse(name: &str, input: &str) -> Result<Self::Modify, Self::Err> {
         match name {
-            "Font" => Ok(Self::font(input.to_string().into())),
-            "FontSize" => Ok(Self::font_size(input.parse()?)),
-            "RelSize" => Ok(Self::rel_size(input.parse()?)),
-            "Color" => Ok(Self::color(crate::parse::color(input)?)),
-            "HueOffset" => Ok(Self::hue_offset(input.parse()?)),
-            "Content" => Ok(Self::content(input.to_string().into())),
+            "Font" => Ok(Modifier::font(input.to_string().into())),
+            "FontSize" => Ok(Modifier::font_size(input.parse()?)),
+            "RelSize" => Ok(Modifier::rel_size(input.parse()?)),
+            "Color" => Ok(Modifier::color(crate::color::parse(input)?)),
+            "HueOffset" => Ok(Modifier::hue_offset(input.parse()?)),
+            "Content" => Ok(Modifier::content(input.to_string().into())),
             // TODO(err): nice struct instead of anyhow
             n => Err(anyhow::anyhow!(format!("{n} is not a parseable modifier"))),
         }
+    }
+}
+
+impl fmt::Write for Modifier {
+    /// Set this [`Modifier`] to [`Modifier::Content`].
+    ///
+    /// Note that this **doesn't allocate** if `self` is already [`Modifier::Content`].
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        if let Modifier::Content { statik } = self {
+            let statik = statik.to_mut();
+            statik.clear();
+            statik.push_str(s);
+        } else {
+            *self = Modifier::content(s.to_string().into());
+        }
+        Ok(())
+    }
+}
+impl From<String> for Modifier {
+    fn from(value: String) -> Self {
+        Modifier::content(value.into())
     }
 }
 impl<T: TextModify + Send + Sync + 'static> From<T> for Modifier {

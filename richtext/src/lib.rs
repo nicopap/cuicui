@@ -87,14 +87,16 @@
 //! [the README]: https://github.com/nicopap/cuicui/tree/main/richtext
 //! [`Resource`]: bevy::prelude::Resource
 
-// mod hlist_madness;
+mod color;
 pub mod modifiers;
-mod parse;
-mod plugin;
 mod richtext;
-pub mod show;
-pub mod track;
+mod track_macro;
 
-pub use plugin::{mk_richtext, MakeRichText, MakeRichTextBundle, RichTextPlugin};
-pub use richtext::{RichText, RichTextData, WorldBindings};
-pub use track::{Hooks, Tracked};
+pub use modifiers::Modifier;
+pub use richtext::{
+    GetFont, MakeRichText, RichText, RichTextFetch, RichTextItem, RichTextPlugin, WorldBindings,
+    WorldBindingsMut,
+};
+pub mod __track_richtext_private {
+    pub use bevy_fab::TrackerBundle;
+}

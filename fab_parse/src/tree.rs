@@ -1,24 +1,20 @@
 //! Intermediate parsing representation.
 
-use crate::show::RuntimeFormat;
+use crate::rt_fmt::RuntimeFormat;
 
-use bevy::prelude::trace;
 use winnow::stream::Accumulate;
 
-pub(super) const CONTENT_NAME: &str = "Content";
-pub(super) fn is_content(m: &Modifier) -> bool {
+pub(crate) const CONTENT_NAME: &str = "Content";
+pub(crate) fn is_content(m: &Modifier) -> bool {
     m.name == CONTENT_NAME
 }
-pub(super) fn get_content<'a>(m: &Modifier<'a>) -> Option<&'a str> {
+pub(crate) fn get_content<'a>(m: &Modifier<'a>) -> Option<&'a str> {
     match m.value {
         Dyn::Static(value) if is_content(m) => Some(value),
-        _ => {
-            trace!("no content: {m:?}");
-            None
-        }
+        _ => None,
     }
 }
-pub(super) fn get_content_mut<'a, 'b>(m: &'b mut Modifier<'a>) -> Option<&'b mut &'a str> {
+pub(crate) fn get_content_mut<'a, 'b>(m: &'b mut Modifier<'a>) -> Option<&'b mut &'a str> {
     let is_content = is_content(m);
     match &mut m.value {
         Dyn::Static(value) if is_content => Some(value),
@@ -27,12 +23,12 @@ pub(super) fn get_content_mut<'a, 'b>(m: &'b mut Modifier<'a>) -> Option<&'b mut
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub(super) enum Path<'a> {
+pub enum Path<'a> {
     Binding(&'a str),
     Tracked(Source<'a>),
 }
 impl<'a> Path<'a> {
-    pub(super) fn binding(&self) -> &'a str {
+    pub(crate) fn binding(&self) -> &'a str {
         use Path::*;
 
         let (Binding(binding) | Tracked(Source { binding, .. })) = self;
@@ -40,21 +36,21 @@ impl<'a> Path<'a> {
     }
 }
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub(crate) struct Source<'a> {
-    pub(crate) query: Query<'a>,
-    pub(crate) reflect_path: &'a str,
+pub struct Source<'a> {
+    pub query: Query<'a>,
+    pub reflect_path: &'a str,
     /// Full name of the binding. This is query + reflect_path
-    pub(crate) binding: &'a str,
+    pub binding: &'a str,
 }
 impl<'a> Source<'a> {
-    pub(super) fn new(((query, reflect_path), binding): ((Query<'a>, &'a str), &'a str)) -> Self {
+    pub(crate) fn new(((query, reflect_path), binding): ((Query<'a>, &'a str), &'a str)) -> Self {
         Source { query, reflect_path, binding }
     }
 }
 
 /// Where to pull from the value.
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub(crate) enum Query<'a> {
+pub enum Query<'a> {
     /// A [`Resource`] implementing [`Reflect`].
     Res(&'a str),
     /// The first [`Entity`] found with provided component.
@@ -66,46 +62,46 @@ pub(crate) enum Query<'a> {
     Marked { marker: &'a str, access: &'a str },
 }
 impl<'a> Query<'a> {
-    pub(super) fn name((name, access): (&'a str, &'a str)) -> Self {
+    pub(crate) fn name((name, access): (&'a str, &'a str)) -> Self {
         Query::Name { name, access }
     }
-    pub(super) fn marked((marker, access): (&'a str, &'a str)) -> Self {
+    pub(crate) fn marked((marker, access): (&'a str, &'a str)) -> Self {
         Query::Marked { marker, access }
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub(super) struct Section<'a> {
-    pub(super) modifiers: Vec<Modifier<'a>>,
+pub(crate) struct Section<'a> {
+    pub(crate) modifiers: Vec<Modifier<'a>>,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub(super) struct Modifier<'a> {
-    pub(super) name: &'a str,
-    pub(super) value: Dyn<'a>,
-    pub(super) subsection_count: usize,
+pub(crate) struct Modifier<'a> {
+    pub(crate) name: &'a str,
+    pub(crate) value: Dyn<'a>,
+    pub(crate) subsection_count: usize,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub(super) enum Dyn<'a> {
+pub(crate) enum Dyn<'a> {
     Dynamic(Binding<'a>),
     Static(&'a str),
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct Hook<'a> {
-    pub(crate) source: Source<'a>,
-    pub(crate) format: Option<Format<'a>>,
+    pub source: Source<'a>,
+    pub format: Option<Format<'a>>,
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub(super) struct Binding<'a> {
-    pub(super) path: Path<'a>,
-    pub(super) format: Option<Format<'a>>,
+pub(crate) struct Binding<'a> {
+    pub(crate) path: Path<'a>,
+    pub(crate) format: Option<Format<'a>>,
 }
 impl<'a> Binding<'a> {
     #[cfg(test)]
-    pub(super) fn named(name: &'a str) -> Self {
+    pub(crate) fn named(name: &'a str) -> Self {
         Binding { path: Path::Binding(name), format: None }
     }
 
@@ -119,16 +115,16 @@ impl<'a> Binding<'a> {
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub(crate) enum Format<'a> {
+pub enum Format<'a> {
     UserDefined(&'a str),
     Fmt(RuntimeFormat),
 }
 
 /// Accumulate many sections.
 #[derive(Debug, PartialEq, Clone)]
-pub(super) struct Sections<'a>(pub(super) Vec<Section<'a>>);
+pub(crate) struct Sections<'a>(pub(crate) Vec<Section<'a>>);
 impl<'a> Sections<'a> {
-    pub(super) fn full_subsection((head, mut tail): (Option<Section<'a>>, Self)) -> Self {
+    pub(crate) fn full_subsection((head, mut tail): (Option<Section<'a>>, Self)) -> Self {
         if let Some(head) = head {
             tail.0.insert(0, head);
         }
@@ -154,7 +150,7 @@ impl<'a> Accumulate<(Vec<Section<'a>>, Option<Section<'a>>)> for Sections<'a> {
 }
 
 impl<'a> Section<'a> {
-    pub(super) fn free(input: &'a str) -> Option<Self> {
+    pub(crate) fn free(input: &'a str) -> Option<Self> {
         if input.is_empty() {
             return None;
         }
@@ -162,22 +158,26 @@ impl<'a> Section<'a> {
         Some(Section { modifiers: vec![modifier] })
     }
     /// A delimited section (ie between {}).
-    pub(super) fn format(input: Binding<'a>) -> Vec<Self> {
+    pub(crate) fn format(input: Binding<'a>) -> Vec<Self> {
         let modifier = Modifier::new((CONTENT_NAME, Dyn::Dynamic(input)));
         vec![Section { modifiers: vec![modifier] }]
     }
 }
 
 impl<'a> Modifier<'a> {
-    pub(super) fn new((name, value): (&'a str, Dyn<'a>)) -> Self {
+    pub(crate) fn new((name, value): (&'a str, Dyn<'a>)) -> Self {
         Self { name, value, subsection_count: 1 }
     }
 }
 
 impl<'a> Binding<'a> {
-    pub(super) fn format((path, format): (Path<'a>, Option<Format<'a>>)) -> Self {
+    pub(crate) fn format((path, format): (Path<'a>, Option<Format<'a>>)) -> Self {
         Binding { path, format }
     }
+}
+
+pub struct Tree<'a> {
+    pub(crate) sections: Vec<Section<'a>>,
 }
 
 /// Create a section with given `modifers`
@@ -216,7 +216,7 @@ impl<'a> Binding<'a> {
 /// ```
 ///
 /// This produces a `Vec<Section>` with a single element.
-pub(super) fn flatten_section<'a>(
+pub(crate) fn flatten_section<'a>(
     (mut modifiers, content): (Vec<Modifier<'a>>, Option<Sections<'a>>),
 ) -> Vec<Section<'a>> {
     // Either we have a `content` metadata or we re-use section

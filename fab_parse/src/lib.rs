@@ -10,10 +10,10 @@
 #[cfg(test)]
 mod tests;
 
-mod color;
 mod error;
 mod post_process;
-mod tree;
+pub mod rt_fmt;
+pub mod tree;
 
 use winnow::{
     ascii::{alpha1, alphanumeric1, digit1, escaped, multispace0},
@@ -28,12 +28,13 @@ use winnow::{
     Parser,
 };
 
-use crate::show::RuntimeFormat;
-use tree::{flatten_section, Binding, Dyn, Modifier, Path, Section, Sections};
+use tree::{
+    flatten_section, Binding, Dyn, Format, Modifier, Path, Query, Section, Sections, Source,
+};
 
-pub(crate) use color::parse as color;
-pub(crate) use post_process::{Repeat, Tree, TreeSplitter};
-pub(crate) use tree::{Format, Hook, Query, Source};
+pub use post_process::{Deps, ParsablePrefab, Split, StringPair, TransformedTree};
+pub use rt_fmt::RuntimeFormat;
+pub use tree::Tree;
 
 type IResult<'a, O> = winnow::IResult<&'a str, O>;
 
@@ -177,7 +178,7 @@ fn sections(input: &str) -> IResult<Sections> {
         .map(Sections::full_subsection)
         .parse_next(input)
 }
-pub(super) fn richtext(input: &str) -> anyhow::Result<Tree> {
+pub fn format_string(input: &str) -> anyhow::Result<Tree> {
     let sections = sections.parse(input).map_err(|e| e.into_owned())?;
-    Ok(Tree::new(sections.0))
+    Ok(Tree { sections: sections.0 })
 }

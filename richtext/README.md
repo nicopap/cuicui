@@ -455,10 +455,11 @@ impl IntoModify for UserColor {
 
 ## TODO
 
+- [ ] richtext fmt: Fix formatting doing weird things
 - [X] fab/datazoo cleanup: remove all u32::try_from(usize) and add a const () = assert!(sizeof);
 - [X] fab_derive: Write the doc strings of modify functions on the modify enum variants and constructor.
+- [ ] bevy_fab: Reduce the trait boilerplate.
 - [ ] fab_derive: Document which fields are accessed in modify enum variant and constructor.
-- [ ] fab_derive: Fix doc compilation with `fab_derive`
 - [ ] fab_derive: Document `impl_modify` macro fully. Specifically: settle on a naming convention
       and use it consistently.
 - [ ] fab_derive: Test `impl_modify` more thourougfully
@@ -474,21 +475,20 @@ impl IntoModify for UserColor {
 - [ ] richtext trackers: Cleanup error handling
 - [ ] richtext post_process: Cleanup error handling (major issue)
 - [ ] richtext trackers: Manage when cached entity changes/not accessible
-- [ ] richtext trackers: Cleanup module tree
+- [X] richtext trackers: Cleanup module tree
 - [ ] richtext trackers: Check is_changed of resources and components before updating binding
 - [ ] richtext trackers: Check that the target field changed before updating binding
 - [ ] richtext trackers: Test the component-based trackers
-- [ ] richtext builder: Let user specify `track::Write`s
 - [ ] richtext parser: test and improve error messages
 - [ ] richtext parser: review the informal_grammar.md file
 - [ ] richtext: Text2d support
 - [ ] richtext: Modify a Vec<&mut Text> over TextSections, to allow all kind of effects
 - [X] richtext: way to apply the same Modify in series, by splitting text word/character
-- [ ] richtext split: figure out why this isn't rendered nicely.
+- [X] richtext split: figure out why this isn't rendered nicely.
 - [X] richtext parse: Implement b2m (binding to modifier) probably with a smallvec of
       (BindingId, ModifierIndex)
-- [ ] richtext: Post-process content splitting as described in `post_process_content.md`
-- [ ] richtext split: Make the API public.
+- [X] richtext: Post-process content splitting as described in `post_process_content.md`
+- [X] richtext split: Make the API public.
 - [ ] everything: Document the hell out of everything
 - [ ] (unsure) optimization: take inspiration from https://github.com/Wallacoloo/jagged_array/blob/master/src/lib.rs#L68 for `VarMatrix`s impls
 - [ ] (unsure) richtext parser: Allow compile-time verification of rich text spec through a proc macro

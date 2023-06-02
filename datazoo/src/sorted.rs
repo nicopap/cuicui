@@ -35,7 +35,7 @@ pub type Slice<'a, T> = Sorted<&'a [T], T>;
 /// Slices where all elements are key-value pairs sorted in ascending ordeorder
 /// according to key's `K: Ord`.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct KeySorted<A: AsRef<[(K, V)]>, K: Ord, V>(A, PhantomData<(K, V)>);
+pub struct KeySorted<A: AsRef<[(K, V)]>, K: Ord, V>(A, PhantomData<fn(K, V)>);
 impl<K: Ord, V, A: AsRef<[(K, V)]> + Default> Default for KeySorted<A, K, V> {
     fn default() -> Self {
         KeySorted(A::default(), PhantomData)
@@ -171,7 +171,7 @@ impl<'a, 'b: 'a, A: AsRef<[(K, V)]> + 'b, K: Ord, V> IntoIterator for &'a KeySor
 /// Slices where all elements are sorted in ascending ordeorder according
 /// to `T: Ord`.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Sorted<A: AsRef<[T]>, T: Ord>(A, PhantomData<T>);
+pub struct Sorted<A: AsRef<[T]>, T: Ord>(A, PhantomData<fn(T)>);
 impl<A: AsRef<[T]>, T: Ord> Sorted<A, T> {
     pub fn slice(&self) -> Slice<T> {
         Sorted(self.0.as_ref(), PhantomData)

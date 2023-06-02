@@ -78,6 +78,9 @@ struct Modifier<P: Prefab> {
     range: Range<u32>,
 }
 
+// TODO(clean): Create a trait that wraps `Resolver`, so that we can erase
+// MOD_COUNT. We could then use it as an associated type of `Prefab` instead
+// of propagating it all the way.
 #[derive(Debug)]
 pub struct Resolver<P: Prefab, const MOD_COUNT: usize> {
     modifiers: Box<[Modifier<P>]>,
@@ -105,14 +108,12 @@ pub struct Resolver<P: Prefab, const MOD_COUNT: usize> {
     masks: JaggedBitset,
 }
 
+// TODO(clean): move this after the impl Resolver
 struct Evaluator<'a, P: Prefab, const MC: usize> {
     root: &'a P::Item,
     graph: &'a Resolver<P, MC>,
-    ctx: &'a PrefabContext<'a, P>,
-    to_update: &'a mut P::Items,
-    bindings: &'a View<'a, P>,
+    bindings: View<'a, P>,
 }
-
 impl<P: Prefab, const MC: usize> Resolver<P, MC>
 where
     P::Item: Clone + fmt::Debug,
@@ -177,37 +178,50 @@ where
     }
     pub fn update<'a>(
         &'a self,
-        to_update: &'a mut P::Items,
+        to_update: &mut P::Items,
         updates: &'a Changing<P::Item, P::Modify>,
-        bindings: &'a View<'a, P>,
-        ctx: &'a PrefabContext<'a, P>,
+        bindings: View<'a, P>,
+        ctx: &PrefabContext<P>,
     ) {
         let Changing { updated, value } = updates;
-        Evaluator { graph: self, ctx, to_update, root: value, bindings }.update_all(*updated);
+        Evaluator { graph: self, root: value, bindings }.update_all(*updated, to_update, ctx);
     }
 }
+
 impl<'a, P: Prefab, const MC: usize> Evaluator<'a, P, MC>
 where
     P::Item: Clone + fmt::Debug,
     PrefabField<P>: fmt::Debug,
 {
     // TODO(clean): flag arguments are icky
-    fn update(&mut self, index: ModifyIndex, field_depends: bool, overlay: Option<&P::Modify>) {
+    fn update(
+        &self,
+        index: ModifyIndex,
+        to_update: &mut P::Items,
+        ctx: &PrefabContext<P>,
+        field_depends: bool,
+        overlay: Option<&P::Modify>,
+    ) {
         let Some((modify, range)) = self.graph.modify_at(index, overlay) else { return; };
         for section in range {
-            let section = self.to_update.get_mut(section as usize).unwrap();
+            let section = to_update.get_mut(section as usize).unwrap();
             if field_depends {
                 *section = self.root.clone();
             }
-            if let Err(error) = modify.apply(self.ctx, section) {
+            if let Err(error) = modify.apply(ctx, section) {
                 warn!("Error when applying modifier {index:?} {modify:?}: {error}");
             };
         }
         for &dep_index in self.graph.m2m.get(&index) {
-            self.update(dep_index, false, None);
+            self.update(dep_index, to_update, ctx, false, None);
         }
     }
-    fn update_all(&mut self, updated_fields: FieldsOf<P>) {
+    fn update_all(
+        &self,
+        updated_fields: FieldsOf<P>,
+        to_update: &mut P::Items,
+        ctx: &PrefabContext<P>,
+    ) {
         let bindings = self.bindings.changed();
 
         let mut lookup_start = 0;
@@ -217,11 +231,11 @@ where
 
             lookup_start = index + 1;
 
-            self.update(mod_index, false, Some(bound_modify));
+            self.update(mod_index, to_update, ctx, false, Some(bound_modify));
             // TODO(feat): insert modify with dependencies if !modify.depends().is_empty()
         }
         for index in self.graph.depends_on(updated_fields) {
-            self.update(index, true, None);
+            self.update(index, to_update, ctx, true, None);
         }
     }
 }

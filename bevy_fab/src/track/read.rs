@@ -1,13 +1,12 @@
 use std::ptr::NonNull;
 
-use bevy::{
-    ecs::reflect::ReflectResourceFns,
-    ecs::{reflect::ReflectComponentFns, world::EntityRef},
-    prelude::*,
-    reflect::ParsedPath,
+use bevy::app::AppTypeRegistry;
+use bevy::core::Name;
+use bevy::ecs::{
+    prelude::*, reflect::ReflectComponentFns, reflect::ReflectResourceFns, world::EntityRef,
 };
-
-use crate::parse;
+use bevy::reflect::{ParsedPath, Reflect};
+use fab_parse::tree as parse;
 
 #[derive(Clone)]
 pub(crate) enum Query {

@@ -5,7 +5,7 @@ use bevy::{
     prelude::*,
 };
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use cuicui_richtext::{modifiers, MakeRichTextBundle, RichTextData, RichTextPlugin};
+use cuicui_richtext::{modifiers, MakeRichText, RichText, RichTextPlugin};
 
 fn main() {
     App::new()
@@ -18,7 +18,7 @@ fn main() {
             }),
         )
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
-        .add_plugin(RichTextPlugin)
+        .add_plugin(RichTextPlugin::new())
         .add_plugin(WorldInspectorPlugin::default())
         .init_resource::<Fps>()
         .insert_resource(ClearColor(Color::BLACK))
@@ -45,7 +45,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // UI camera
     commands.spawn(Camera2dBundle::default());
     commands.spawn((
-        MakeRichTextBundle::new(
+        MakeRichText::new(
             "{Color:{color}|{Rainbow:20.0|Bonjour} {greeted}!\n\
             {Color:Yellow, Sine:80|We are having fun here, woopy!}}",
         )
@@ -77,7 +77,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         // To use a specific font, you need to hold a handle on it.
         // This is why we added the `FiraMediumHolder` resource earlier,
         // otherwise, the font doesn't show up.
-        MakeRichTextBundle::new(
+        MakeRichText::new(
             "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold, Content:{Res.Fps.fps:.1}}",
         )
         .with_text_style(TextStyle {
@@ -90,7 +90,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 const GUESTS: &[&str] = &["bevy", "boovy", "noovy", "groovy", "bavy", "cuicui"];
-fn color_update(time: Res<Time>, mut query: Query<&mut RichTextData, With<ColorText>>) {
+fn color_update(time: Res<Time>, mut query: Query<RichText, With<ColorText>>) {
     for mut text in &mut query {
         let seconds = time.elapsed_seconds();
         let new_color = Color::Rgba {
@@ -99,13 +99,12 @@ fn color_update(time: Res<Time>, mut query: Query<&mut RichTextData, With<ColorT
             blue: (0.50 * seconds).sin() / 2.0 + 0.5,
             alpha: 1.0,
         };
-        text.bindings
-            .set("color", modifiers::Modifier::color(new_color));
+        text.set("color", modifiers::Modifier::color(new_color));
     }
 }
 fn greet_update(
     time: Res<Time>,
-    mut query: Query<&mut RichTextData, With<ColorText>>,
+    mut query: Query<RichText, With<ColorText>>,
     mut current_guest: Local<usize>,
 ) {
     let delta = time.delta_seconds_f64();

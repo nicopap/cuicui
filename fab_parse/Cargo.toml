@@ -1,0 +1,29 @@
+[package]
+name = "cuicui_fab_parse"
+authors = ["Nicola Papale"]
+description = "Parse a cuicui_fab resolver specification"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["markup", "template"]
+categories = ["game-development", "value-formatting", "template-engine"]
+repository = "https://github.com/nicopap/cuicui"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+no_tracked_debug = []
+
+[dependencies]
+anyhow = "1"
+bevy_math = "0.10"
+enumset = { version = "1.1", features = ["std"] }
+smallvec = { version = "1.10", features = ["union", "const_generics", "const_new"] }
+thiserror = "1"
+winnow = "0.4.4"
+
+datazoo = { path = "../datazoo", package = "cuicui_datazoo" }
+fab = { path = "../fab", package = "cuicui_fab" }
+
+[dev-dependencies]
+pretty_assertions = "1.3"

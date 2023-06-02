@@ -5,15 +5,15 @@ use crate::resolve::Resolver;
 
 use enumset::{EnumSet, EnumSetType};
 
-pub trait Indexed<T: ?Sized> {
-    fn get_mut(&mut self, index: usize) -> Option<&mut T>;
+pub trait Indexed<P: Prefab + ?Sized> {
+    fn get_mut(&mut self, index: usize) -> Option<&mut P::Item>;
 }
-impl<T> Indexed<T> for [T] {
+impl<T, P: Prefab<Item = T>> Indexed<P> for [T] {
     fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         <[T]>::get_mut(self, index)
     }
 }
-impl<T> Indexed<T> for Vec<T> {
+impl<T, P: Prefab<Item = T>> Indexed<P> for Vec<T> {
     fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         <[T]>::get_mut(self, index)
     }
@@ -46,11 +46,10 @@ type Ctx<'a, M, I> = <M as Modify<I>>::Context<'a>;
 /// [update]: Modify::changes
 pub trait Modify<I: ?Sized> {
     /// The [set](EnumSet) of fields that `Self` accesses on `I`.
-    type Field: EnumSetType;
+    type Field: EnumSetType + Send + Sync;
 
     // TODO(perf): Change detection on context as well.
-    /// An additional context **outside of `I`** that is relevant to operations
-    /// on `I`.
+    /// An additional context **outside of `I`** that is relevant to operations on `I`.
     type Context<'a>
     where
         Self: 'a;
@@ -78,13 +77,13 @@ pub trait Modify<I: ?Sized> {
 /// in a principled way through [`Resolver`]s.
 pub trait Prefab {
     /// The individual element of the `Prefab`.
-    type Item;
+    type Item: Send + Sync;
 
     /// Operations allowed on [`Self::Item`].
-    type Modify: Modify<Self::Item> + fmt::Debug;
+    type Modify: Modify<Self::Item> + fmt::Debug + Send + Sync;
 
     /// The underlying [`Self::Item`] storage.
-    type Items: Indexed<Self::Item>;
+    type Items: Indexed<Self> + Send + Sync;
 }
 
 /// Holds a [`Prefab::Item`] and keeps track of changes to it.

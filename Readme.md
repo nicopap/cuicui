@@ -19,6 +19,110 @@ A mad experiment in making a principled UI that integrates with bevy.
   nothing more than buttons (yikes!!)
 - Oh god I expected this list to only have two items
 
+## Crates
+
+Cuicui is a collection of crates.
+
+- `cuicui_widges`: The innexisting collection of widgets
+- `cuicui_layout`: A dumb layouting algorithm you can emulate in your head.
+  It provides clear error messages when you do something stupid (instead of
+  itself doing something stupid)
+- `cuicui_datazoo`: A collection of bit-tweedling datastructures for `cuicui_fab`.
+- `cuicui_fab_derive`: the `impl_modify` macro for `cuicui_fab`
+- `cuicui_fab`: A tree of modifiers that can act on a sequence of items.
+  Implementing static value culling and data dependency management.
+  (this is very abstract, but useful for `cuicui_richtext`)
+- `cuicui_fab_parse`: A parser to generate a modifier tree from a format string
+- `cuicui_bevy_fab`: An adapter to plug `cuicui_fab` into bevy. This defines
+  not only how `Resolver` fits in bevy's ECS, but also how to hooks into the ECS
+  to read values declared in the format string
+- `cuicui_richtext`: A rich text component for bevy
+
+### History
+
+It first started as an alternative UI library for bevy, I didn't vibe with
+flexbox, so I invented my own layouting algorithm. I got this far.
+Then I wanted to design a UI system based on hot reloading, inspired by the
+work I did on [Klod].
+
+I got stuck in endless design parallysis. Then I went and did other things
+(including implementing parallax mapping and morph targets in bevy).
+
+The 25th of April 2023, I started designing a rich text component for bevy.
+
+Little did I know I would spent the next 2 months working on this at full time.
+
+I had in mind a syntax to cleanly declare text styling and maybe eventually
+generalize it to more UI components, so I decided to make it live in this
+repository. "Maybe eventually generalize" is the number one cause of developper
+disapearance in the XXIst century. This was a prime example of overengineering.
+
+It quickly got out of hand. I initially "just wanted" an abstraction over the
+bevy `Text` and its section so that I could set a value by name rather than
+painstakingly declare each section independently then index the right one.
+
+But feature creep creeped into the feature list.
+
+* Now I wanted to nest sections into other ones.
+* Let's reimplement this using [`nom`], wait I can't understand the errors, let's use
+  [`winnow`] instead! Much better!
+* What about this cool effect in paper mario where the text is rainbow? How to
+  split the text in smaller sections?
+* Hmm, I'd like to access and format directly values from any field in the ECS
+  (yes, this is possible with `bevy_reflect`)
+* Dang I love the embossed effect of [`bevy_ui_bits`](bui_bits), I need a way to
+  manipulate whole text components rather than just sections.
+* Wait? This look like I'm reimplementing React. Does this mean I should step back?
+  Noooo, of course! Let's make it a UI library.
+
+Well, regardless of how we ended up here, we are definitively here, and as far
+as I know, there is no going back. Is it wishable? Maybe, I mean, I still don't
+have a useable rich text component, and in perspective I've still a couple months
+work in front of me before I do.
+
+### Dependency tree
+
+```mermaid
+flowchart LR
+  datazoo["`datazoo`"]
+  fab_derive["`fab_derive`"]
+  fab["`fab`"]
+  fab_parse["`fab_parse`"]
+  bevy_fab["`bevy_fab`"]
+  richtext["`richtext`"]
+  datazoo --> fab
+  fab_derive --> fab
+  fab --> fab_parse & bevy_fab
+  fab_parse --> bevy_fab & richtext
+  bevy_fab --> richtext
+```
+
+### Trait hierarchy
+
+`fab` has a lot of traits:
+
+- `cuicui_fab::Prefab`: Basically glue to make a collection of `Modify` work.
+- `cuicui_fab::Modify<I>`: A single operation on `I`
+- `cuicui_fab::Indexed<P>`: A collection of `P::Item` accessible by index.
+- `cuicui_fab_parse::ParsablePrefab`: `Prefab`, of which `Modify` can be
+  parsed from a `(name, input)` pair.
+- `cuicui_bevy_fab::BevyPrefab`: `ParsablePrefab` that can be stored and read
+  from the ECS.
+
+```mermaid
+classDiagram
+  class Prefab["`fab::Prefab`"]
+  class Modify["`fab::Modify<I>`"]
+  class Indexed["`fab::Indexed<P>`"]
+  class ParsablePrefab["`fab_parse::ParsablePrefab`"]
+  class BevyPrefab["`bevy_fab::BevyPrefab`"]
+
+  Modify ..> Prefab
+  Indexed ..> Prefab
+  Prefab --|> ParsablePrefab
+  ParsablePrefab --|> BevyPrefab
+```
+
 ## Widges
 
 cuicui defines a bunch of widges **NOT**.
@@ -83,3 +187,7 @@ Other plans:
 [`taffy`]: https://lib.rs/crates/taffy
 [`bevy-inspector-egui`]: https://lib.rs/crates/bevy-inspector-egui
 [`bevy-ui-navigation`]: https://lib.rs/crates/bevy-ui-navigation
+[Klod]: https://gibonus.itch.io/the-boneklod
+[bui_bits]: https://github.com/septum/bevy_ui_bits
+[`nom`]: https://lib.rs/crates/nom
+[`winnow`]: https://lib.rs/crates/winnow

@@ -1,18 +1,118 @@
-use std::fmt::{self, Write};
+use std::{
+    fmt::{self, Write},
+    marker::PhantomData,
+};
 
 use bevy::{
     asset::HandleId,
-    prelude::{Assets, CardinalSpline, Component, CubicGenerator, Handle, Resource},
+    ecs::{
+        query::WorldQuery,
+        system::{lifetimeless::SRes, SystemParam, SystemParamItem},
+    },
+    prelude::*,
     text::{BreakLineOn, Font, Text, TextAlignment, TextSection},
 };
+use bevy_fab::{BevyPrefab, FabPlugin, ParseFormatString, PrefabLocal, PrefabWorld};
 use enumset::__internal::EnumSetTypePrivate;
-use fab::{binding, prefab::Changing, prefab::Prefab, resolve::Resolver};
+use fab::{prefab::Indexed, prefab::Prefab, prefab::PrefabContext};
+use fab_parse::{Split, TransformedTree};
 
-use crate::{
-    modifiers::Modifier,
-    modifiers::ModifierField,
-    parse::{self, Repeat, TreeSplitter},
-};
+use crate::modifiers::{Modifier, ModifierField};
+
+#[derive(Clone, Copy)]
+pub struct TextGlobalStyle {
+    alignment: TextAlignment,
+    linebreak_behaviour: BreakLineOn,
+}
+impl Default for TextGlobalStyle {
+    fn default() -> Self {
+        TextGlobalStyle {
+            alignment: TextAlignment::Left,
+            linebreak_behaviour: BreakLineOn::WordBoundary,
+        }
+    }
+}
+
+#[derive(SystemParam)]
+pub struct WorldBindings<'w, 's> {
+    bindings: Res<'w, PrefabWorld<TextPrefab>>,
+    context: Res<'w, Assets<Font>>,
+    _p: PhantomData<&'s ()>,
+}
+#[derive(SystemParam)]
+pub struct WorldBindingsMut<'w, 's> {
+    bindings: ResMut<'w, PrefabWorld<TextPrefab>>,
+    _p: PhantomData<&'s ()>,
+}
+impl<'w, 's> WorldBindingsMut<'w, 's> {
+    pub fn set_content(&mut self, key: &str, value: &impl fmt::Display) {
+        let Some(modifier) = self.bindings.0.get_mut(key) else {
+            self.bindings.0.set(key, value.to_string().into());
+            return;
+        };
+        modifier.write_fmt(format_args!("{value}")).unwrap();
+    }
+}
+#[derive(WorldQuery)]
+#[world_query(mutable)]
+pub struct RichText {
+    inner: &'static mut PrefabLocal<TextPrefab, { (ModifierField::BIT_WIDTH - 1) as usize }>,
+    text: &'static mut Text,
+}
+impl RichTextItem<'_> {
+    /// Update `to_update` with updated values from `world` and `self`-local bindings.
+    ///
+    /// Only the relevant sections of `to_update` are updated. The change trackers
+    /// are then reset.
+    pub fn update(&mut self, world: &WorldBindings) {
+        let fonts = GetFont::new(&world.context);
+        self.inner.update(&mut self.text, &world.bindings, &fonts);
+    }
+    pub fn set(&mut self, key: &str, value: Modifier) {
+        self.inner.bindings.set(key, value);
+    }
+    /// Set a named content binding. This will mark it as changed.
+    pub fn set_content(&mut self, key: &str, value: &impl fmt::Display) {
+        let Some(modifier) = self.inner.bindings.get_mut(key) else {
+            self.inner.bindings.set(key, value.to_string().into());
+            return;
+        };
+        modifier.write_fmt(format_args!("{value}")).unwrap();
+    }
+}
+#[derive(Bundle)]
+pub struct MakeRichText {
+    inner: ParseFormatString<TextPrefab>,
+    pub text_bundle: TextBundle,
+}
+impl MakeRichText {
+    pub fn new(format_string: impl Into<String>) -> Self {
+        let inner = ParseFormatString::new(format_string.into(), default(), default());
+        MakeRichText { inner, text_bundle: default() }
+    }
+    pub fn with_text_style(mut self, style: TextStyle) -> Self {
+        self.inner.default_item.style = style;
+        self
+    }
+    /// Returns this [`MakeRichTextBundle`] with a new [`TextAlignment`] on [`Text`].
+    pub fn with_text_alignment(mut self, alignment: TextAlignment) -> Self {
+        let extras = self.inner.items_extra.as_mut().unwrap();
+        extras.alignment = alignment;
+        self
+    }
+
+    /// Returns this [`MakeRichTextBundle`] with a new [`Style`].
+    pub fn with_style(mut self, style: Style) -> Self {
+        self.text_bundle.style = style;
+        self
+    }
+
+    /// Returns this [`MakeRichTextBundle`] with a new [`BackgroundColor`].
+    pub const fn with_background_color(mut self, color: Color) -> Self {
+        self.text_bundle.background_color = BackgroundColor(color);
+        self
+    }
+}
 
 // TODO(clean): Make this private, only expose opaque wrappers
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -20,10 +120,46 @@ pub enum TextPrefab {}
 impl Prefab for TextPrefab {
     type Modify = Modifier;
     type Item = TextSection;
-    type Items = Vec<TextSection>;
+    type Items = Text;
+}
+impl Indexed<TextPrefab> for Text {
+    fn get_mut(&mut self, index: usize) -> Option<&mut TextSection> {
+        self.sections.as_mut_slice().get_mut(index)
+    }
+}
+impl BevyPrefab for TextPrefab {
+    type Param = SRes<Assets<Font>>;
+
+    type ItemsCtorData = TextGlobalStyle;
+
+    fn make_items(extra: &TextGlobalStyle, sections: Vec<TextSection>) -> Text {
+        Text {
+            sections,
+            alignment: extra.alignment,
+            linebreak_behaviour: extra.linebreak_behaviour,
+        }
+    }
+
+    fn context<'a>(fonts: &'a SystemParamItem<Self::Param>) -> PrefabContext<'a, Self> {
+        GetFont::new(fonts)
+    }
+
+    fn transform(tree: TransformedTree<'_, Self>) -> TransformedTree<'_, Self> {
+        use Split::{ByChar, ByWord};
+
+        let sin_curve = CardinalSpline::new_catmull_rom([1., 0., 1., 0., 1., 0.]);
+
+        tree.acc_chop(ByChar, "Rainbow", |hue_offset: &mut f32, i, _| {
+            Modifier::hue_offset(*hue_offset * i as f32)
+        })
+        .curve_chop(ByWord, "Sine", sin_curve.to_curve(), |ampl: &mut f32, t| {
+            let size_change = (20.0 + t * *ampl).floor();
+            Modifier::font_size(size_change)
+        })
+    }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 pub struct GetFont<'a>(Option<&'a Assets<Font>>);
 impl<'a> GetFont<'a> {
     pub fn new(assets: &'a Assets<Font>) -> Self {
@@ -34,120 +170,19 @@ impl<'a> GetFont<'a> {
     }
 }
 
-/// Bindings read by all [`RichText`]s.
-///
-/// Unlike [`RichTextData`], this doesn't support type binding, because they
-/// would necessarily be shared between all
-#[derive(Resource, Default)]
-pub struct WorldBindings(pub(crate) binding::World<TextPrefab>);
-impl WorldBindings {
-    /// Set a named modifier binding.
-    pub fn set(&mut self, key: &str, value: Modifier) {
-        self.0.set_neq(key, value);
-    }
-    /// Set a named modifier binding.
-    pub fn set_id(&mut self, id: binding::Id, value: Modifier) {
-        self.0.set_id_neq(id, value);
-    }
-    /// Set a named content binding. This will mark it as changed.
-    pub fn set_content(&mut self, key: &str, value: &impl fmt::Display) {
-        if let Some(Modifier::Content { statik }) = self.0.get_mut(key) {
-            let to_change = statik.to_mut();
-            to_change.clear();
-            write!(to_change, "{value}").unwrap();
-        } else {
-            let content = Modifier::content(value.to_string().into());
-            self.0.set_neq(key, content);
-        }
-    }
-    /// Get the `binding::Id` of `binding`
-    pub fn intern(&mut self, binding: &str) -> binding::Id {
-        self.0.get_or_add(binding)
+pub struct RichTextPlugin(FabPlugin<TextPrefab, { (ModifierField::BIT_WIDTH - 1) as usize }>);
+impl RichTextPlugin {
+    pub fn new() -> Self {
+        RichTextPlugin(FabPlugin::new())
     }
 }
-
-#[derive(Debug)]
-pub struct RichText(Resolver<TextPrefab, { (ModifierField::BIT_WIDTH - 1) as usize }>);
-
-pub struct TrackedText(Changing<TextSection, Modifier>);
-
-#[derive(Component)]
-pub struct RichTextData {
-    pub text: RichText,
-    pub inner: TrackedText,
-    pub bindings: binding::Local<TextPrefab>,
-}
-impl RichTextData {
-    /// Update `to_update` with updated values from `world` and `self`-local bindings.
-    ///
-    /// Only the relevant sections of `to_update` are updated. The change trackers
-    /// are then reset.
-    pub fn update(&mut self, to_update: &mut Text, world: &WorldBindings, ctx: GetFont) {
-        let Self { text, bindings, inner } = self;
-
-        // TODO(clean): this code should be in cuicui_fab
-        let view = world.0.view_with_local(bindings).unwrap();
-        text.0
-            .update(&mut to_update.sections, &inner.0, &view, &ctx);
-        inner.0.reset_updated();
-        bindings.reset_changes();
-    }
-    pub fn new(text: RichText, inner: TextSection) -> Self {
-        RichTextData {
-            inner: TrackedText(Changing::new(inner)),
-            bindings: Default::default(),
-            text,
-        }
-    }
-    /// Set a named content binding. This will mark it as changed.
-    pub fn set_content(&mut self, key: &str, value: &impl fmt::Display) {
-        if let Some(Modifier::Content { statik }) = self.bindings.get_mut(key) {
-            let to_change = statik.to_mut();
-            to_change.clear();
-            write!(to_change, "{value}").unwrap();
-        } else {
-            let content = Modifier::content(value.to_string().into());
-            self.bindings.set(key, content);
-        }
+impl Default for RichTextPlugin {
+    fn default() -> Self {
+        RichTextPlugin::new()
     }
 }
-
-/// Create a [`RichText`] by parsing `format_string`.
-///
-/// Also returns the initial [`Text`] value and the parsed, but not interpreted,
-/// [`Hook`]s defined in the format string.
-///
-/// This also registers in `bindings` the binding names used in the format string.
-///
-/// [`Hook`]: crate::track::Hook
-pub(crate) fn mk<'fstr>(
-    bindings: &mut WorldBindings,
-    base_section: &TextSection,
-    get_font: GetFont,
-    alignment: TextAlignment,
-    linebreak_behaviour: BreakLineOn,
-    format_string: &'fstr str,
-) -> anyhow::Result<(Text, RichText, Vec<parse::Hook<'fstr>>)> {
-    use Repeat::{ByChar, ByWord};
-
-    let mut new_hooks = Vec::new();
-
-    let sin_curve = CardinalSpline::new_catmull_rom([1., 0., 1., 0., 1., 0.]);
-
-    let tree = parse::richtext(format_string)?;
-    let builder = TreeSplitter::new()
-        .repeat_acc(ByChar, "Rainbow", |hue_offset: &mut f32, i, _| {
-            Modifier::hue_offset(*hue_offset * i as f32)
-        })
-        .repeat_on_curve(ByWord, "Sine", sin_curve.to_curve(), |ampl: &mut f32, t| {
-            let size_change = (20.0 + t * *ampl).floor();
-            Modifier::font_size(size_change)
-        });
-    let parsed = tree.split(builder).parse(bindings, &mut new_hooks);
-    let parsed: Vec<_> = parsed.into_iter().collect::<anyhow::Result<_>>()?;
-
-    let (rich_text, sections) = Resolver::new(parsed, base_section, &get_font);
-    let text = Text { sections, alignment, linebreak_behaviour };
-
-    Ok((text, RichText(rich_text), new_hooks))
+impl Plugin for RichTextPlugin {
+    fn build(&self, app: &mut bevy::prelude::App) {
+        self.0.build(app)
+    }
 }

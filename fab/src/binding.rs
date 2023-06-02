@@ -59,11 +59,16 @@ impl<P: Prefab> Default for World<P> {
         }
     }
 }
-#[derive(Clone, Copy)]
 pub struct View<'a, P: Prefab> {
     root: &'a sorted::ByKeyVec<Id, (bool, P::Modify)>,
     overlay: Option<&'a sorted::ByKeyVec<Id, (bool, P::Modify)>>,
 }
+impl<'a, P: Prefab> Clone for View<'a, P> {
+    fn clone(&self) -> Self {
+        View { root: self.root, overlay: self.overlay }
+    }
+}
+impl<'a, P: Prefab> Copy for View<'a, P> {}
 
 impl<P: Prefab> Local<P> {
     pub fn entry(&mut self, id: Id) -> Entry<P::Modify> {
@@ -176,11 +181,11 @@ impl<P: Prefab> World<P> {
 }
 impl<'a, P: Prefab> View<'a, P> {
     pub(crate) fn changed(
-        &self,
-    ) -> impl SortedPairIterator<&Id, &P::Modify, Item = (&Id, &P::Modify)> + '_ {
+        self,
+    ) -> impl SortedPairIterator<&'a Id, &'a P::Modify, Item = (&'a Id, &'a P::Modify)> {
         // Due to Rust's poor type inference on closures, I must write this inline:
         // let changed = |(changed, modify): &(bool, _)| changed.then_some(modify);
-        let overlay = self.overlay.iter().flat_map(|b| *b);
+        let overlay = self.overlay.into_iter().flatten();
         let overlay = overlay.filter_map_values(|(c, m)| c.then(|| m));
         let root = self.root.iter().filter_map_values(|(c, m)| c.then(|| m));
 
