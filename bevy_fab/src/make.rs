@@ -1,7 +1,7 @@
 use std::{fmt, marker::PhantomData, mem};
 
 use bevy::ecs::{prelude::*, system::SystemState};
-use fab::prefab::{FieldsOf, PrefabContext, PrefabField};
+use fab::prefab::{FieldsOf, PrefabContext};
 use fab::resolve::Resolver;
 use fab_parse::tree as parse;
 use log::error;
@@ -29,10 +29,7 @@ impl<P: BevyPrefab> ParseFormatString<P> {
         Self { format_string, default_item, items_extra, _p }
     }
     /// Drain all fields from a `&mut Self` to get an owned value.
-    fn take(&mut self) -> (P::ItemsCtorData, P::Item, String)
-    where
-        P::Item: Clone,
-    {
+    fn take(&mut self) -> (P::ItemsCtorData, P::Item, String) {
         (
             self.items_extra.take().unwrap(),
             self.default_item.clone(),
@@ -58,8 +55,6 @@ fn mk<'fstr, BP: BevyPrefab, const R: usize>(
 ) -> anyhow::Result<(Vec<BP::Item>, Resolver<BP, R>, Vec<parse::Hook<'fstr>>)>
 where
     BP::Items: Component,
-    BP::Item: Clone + fmt::Debug,
-    PrefabField<BP>: fmt::Debug,
 {
     let mut new_hooks = Vec::new();
 
@@ -84,8 +79,6 @@ pub fn parse_into_resolver_system<BP: BevyPrefab + 'static, const R: usize>(
     mut cache: Local<SystemState<(Commands, ResMut<PrefabWorld<BP>>, BP::Param)>>,
 ) where
     BP::Items: Component,
-    BP::Item: Clone + fmt::Debug,
-    PrefabField<BP>: fmt::Debug,
     BP::Modify: fmt::Write + From<String>,
     FieldsOf<BP>: Sync + Send,
 {

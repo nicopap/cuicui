@@ -1,7 +1,7 @@
 mod impl_fmt;
 mod make;
 
-use std::{fmt, mem::size_of, ops::Range};
+use std::{mem::size_of, ops::Range};
 
 use datazoo::{
     sorted, AssumeSortedByItemExt, BitMultimap, EnumMultimap, JaggedBitset, SortedByItem,
@@ -114,11 +114,7 @@ struct Evaluator<'a, P: Prefab, const MC: usize> {
     graph: &'a Resolver<P, MC>,
     bindings: View<'a, P>,
 }
-impl<P: Prefab, const MC: usize> Resolver<P, MC>
-where
-    P::Item: Clone + fmt::Debug,
-    PrefabField<P>: fmt::Debug,
-{
+impl<P: Prefab, const MC: usize> Resolver<P, MC> {
     pub fn new(
         modifiers: Vec<MakeModify<P>>,
         default_section: &P::Item,
@@ -179,7 +175,7 @@ where
     pub fn update<'a>(
         &'a self,
         to_update: &mut P::Items,
-        updates: &'a Changing<P::Item, P::Modify>,
+        updates: &'a Changing<P::Modify>,
         bindings: View<'a, P>,
         ctx: &PrefabContext<P>,
     ) {
@@ -188,11 +184,7 @@ where
     }
 }
 
-impl<'a, P: Prefab, const MC: usize> Evaluator<'a, P, MC>
-where
-    P::Item: Clone + fmt::Debug,
-    PrefabField<P>: fmt::Debug,
-{
+impl<'a, P: Prefab, const MC: usize> Evaluator<'a, P, MC> {
     // TODO(clean): flag arguments are icky
     fn update(
         &self,

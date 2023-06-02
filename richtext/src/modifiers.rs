@@ -27,10 +27,11 @@ pub type ModifyBox = Box<dyn TextModify + Send + Sync + 'static>;
 ///
 /// [`RichText`]: crate::RichText
 /// [format string]: https://github.com/nicopap/cuicui/blob/main/design_doc/richtext/informal_grammar.md
-#[impl_modify(cuicui_fab_path = fab)]
+#[impl_modify(cuicui_fab_path = fab, no_derive(Debug))]
 #[derive(PartialEq)]
-impl Modify<TextSection> for Modifier {
+impl Modify for Modifier {
     type Context<'a> = GetFont<'a>;
+    type Item = TextSection;
 
     /// Set the font to provided `path`.
     #[modify(context(get_font), write(.style.font))]

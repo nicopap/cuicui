@@ -6,19 +6,18 @@ mod make;
 mod track;
 mod world;
 
-use std::fmt;
-use std::marker::PhantomData;
+use std::{fmt, marker::PhantomData};
 
 use bevy::app::{App, CoreSet, Plugin};
-use bevy::ecs::system::{StaticSystemParam, SystemParamItem};
-use bevy::ecs::{prelude::*, system::SystemParam};
-use fab::prefab::PrefabContext;
-use fab::prefab::{FieldsOf, PrefabField};
+use bevy::ecs::prelude::*;
+use bevy::ecs::system::{StaticSystemParam, SystemParam, SystemParamItem};
+use fab::prefab::{FieldsOf, PrefabContext};
 use fab_parse::{ParsablePrefab, TransformedTree};
+
+use track::Hooks;
 
 pub use local::PrefabLocal;
 pub use make::{parse_into_resolver_system, ParseFormatString};
-use track::Hooks;
 pub use track::{update_component_trackers_system, update_hooked, TrackerBundle};
 pub use world::PrefabWorld;
 
@@ -41,10 +40,8 @@ pub fn update_items_system<BP: BevyPrefab + 'static, const R: usize>(
     params: StaticSystemParam<BP::Param>,
 ) where
     BP::Items: Component,
-    BP::Item: Clone + fmt::Debug,
     BP::Modify: fmt::Write + From<String>,
     FieldsOf<BP>: Sync + Send,
-    PrefabField<BP>: fmt::Debug,
 {
     let context = BP::context(&params);
     for (mut local_data, mut items) in &mut query {
@@ -59,10 +56,8 @@ pub struct FabPlugin<BP: BevyPrefab + 'static, const R: usize>(PhantomData<fn(BP
 impl<BP: BevyPrefab, const R: usize> FabPlugin<BP, R>
 where
     BP::Items: Component,
-    BP::Item: Clone + fmt::Debug,
     BP::Modify: fmt::Write + From<String>,
     FieldsOf<BP>: Sync + Send,
-    PrefabField<BP>: fmt::Debug,
 {
     pub fn new() -> Self {
         FabPlugin(PhantomData)
@@ -71,10 +66,8 @@ where
 impl<BP: BevyPrefab + 'static, const R: usize> Plugin for FabPlugin<BP, R>
 where
     BP::Items: Component,
-    BP::Item: Clone + fmt::Debug,
     BP::Modify: fmt::Write + From<String>,
     FieldsOf<BP>: Sync + Send,
-    PrefabField<BP>: fmt::Debug,
 {
     fn build(&self, app: &mut App) {
         use CoreSet::PostUpdate;

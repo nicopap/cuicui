@@ -9,17 +9,20 @@ pub struct Person {
     surname: &'static str,
     age: usize,
 }
+#[derive(Debug, Clone)]
 struct Street {
     no: usize,
     name: &'static str,
     people: usize,
 }
+#[derive(Debug, Clone)]
 struct Administration {
     chief: Person,
     secretary: Person,
     lawyer: Person,
 }
-struct City {
+#[derive(Debug, Clone)]
+pub struct City {
     streets: Vec<Street>,
     name: &'static str,
     admin: Administration,
@@ -34,9 +37,9 @@ impl Prefab for CityPrefab {
 
 /// Modify a [`City`].
 #[impl_modify]
-#[derive(Debug)]
-impl Modify<City> for ModifyCity {
+impl Modify for ModifyCity {
     type Context<'a> = ();
+    type Item = City;
 
     /// This adds to the chief's age to that of `additional_year` plus the city's name
     #[modify(read(admin_name = .admin.chief.surname), read(.name), write(.admin.chief.age))]

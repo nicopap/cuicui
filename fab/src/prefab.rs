@@ -20,15 +20,15 @@ impl<T, P: Prefab<Item = T>> Indexed<P> for Vec<T> {
 }
 
 /// The [`Modify::Field`] of the [`Prefab::Modify`] of `P`.
-pub type PrefabField<P> = Key<<P as Prefab>::Modify, <P as Prefab>::Item>;
-type Key<M, I> = <M as Modify<I>>::Field;
+pub type PrefabField<P> = Key<<P as Prefab>::Modify>;
+type Key<M> = <M as Modify>::Field;
 
 /// Several [`Modify::Field`] of the [`Prefab::Modify`] of `P`.
 pub type FieldsOf<P> = EnumSet<PrefabField<P>>;
 
 /// The [`Modify::Context`] of the [`Prefab::Modify`] of `P`.
-pub type PrefabContext<'a, P> = Ctx<'a, <P as Prefab>::Modify, <P as Prefab>::Item>;
-type Ctx<'a, M, I> = <M as Modify<I>>::Context<'a>;
+pub type PrefabContext<'a, P> = Ctx<'a, <P as Prefab>::Modify>;
+type Ctx<'a, M> = <M as Modify>::Context<'a>;
 
 /// A set of operations on `I`.
 ///
@@ -44,9 +44,10 @@ type Ctx<'a, M, I> = <M as Modify<I>>::Context<'a>;
 ///
 /// [read]: Modify::depends
 /// [update]: Modify::changes
-pub trait Modify<I: ?Sized> {
+pub trait Modify {
     /// The [set](EnumSet) of fields that `Self` accesses on `I`.
-    type Field: EnumSetType + Send + Sync;
+    type Field: EnumSetType + fmt::Debug + Send + Sync;
+    type Item;
 
     // TODO(perf): Change detection on context as well.
     /// An additional context **outside of `I`** that is relevant to operations on `I`.
@@ -54,7 +55,7 @@ pub trait Modify<I: ?Sized> {
     where
         Self: 'a;
 
-    /// Apply this modifier to the `item`.
+    /// Apply this modifier to the [`Self::Item`].
     ///
     /// It is important that `apply`:
     ///
@@ -62,12 +63,12 @@ pub trait Modify<I: ?Sized> {
     /// - only updates [`Self::Field`]s returned by [`Self::changes`].
     ///
     /// Otherwise, [`Resolver`] will fail to work properly.
-    fn apply(&self, ctx: &Self::Context<'_>, item: &mut I) -> anyhow::Result<()>;
+    fn apply(&self, ctx: &Self::Context<'_>, item: &mut Self::Item) -> anyhow::Result<()>;
 
-    /// On what data in `item` does this modifier depends?
+    /// On what data in [`Self::Item`] does this modifier depends?
     fn depends(&self) -> EnumSet<Self::Field>;
 
-    /// What data does this `Modify` changes?
+    /// What data in [`Self::Item`] does this `Modify` changes?
     fn changes(&self) -> EnumSet<Self::Field>;
 }
 
@@ -77,10 +78,10 @@ pub trait Modify<I: ?Sized> {
 /// in a principled way through [`Resolver`]s.
 pub trait Prefab {
     /// The individual element of the `Prefab`.
-    type Item: Send + Sync;
+    type Item: Clone + fmt::Debug + Send + Sync;
 
     /// Operations allowed on [`Self::Item`].
-    type Modify: Modify<Self::Item> + fmt::Debug + Send + Sync;
+    type Modify: Modify<Item = Self::Item> + fmt::Debug + Send + Sync;
 
     /// The underlying [`Self::Item`] storage.
     type Items: Indexed<Self> + Send + Sync;
@@ -92,13 +93,13 @@ pub trait Prefab {
 /// track of the updated fields.
 ///
 /// To reset the field update tracking, use [`Changing::reset_updated`].
-pub struct Changing<I, M: Modify<I>> {
+pub struct Changing<M: Modify> {
     pub(crate) updated: EnumSet<M::Field>,
-    pub(crate) value: I,
+    pub(crate) value: M::Item,
 }
-impl<I, M: Modify<I>> Changing<I, M> {
+impl<M: Modify> Changing<M> {
     /// Store this `value` in a `Changing`, with no updated field.
-    pub fn new(value: I) -> Self {
+    pub fn new(value: M::Item) -> Self {
         Self { updated: EnumSet::EMPTY, value }
     }
     /// Update `self` with `f`, declaring that `update` is changed.
@@ -106,7 +107,7 @@ impl<I, M: Modify<I>> Changing<I, M> {
     /// If you change fields other than the ones in `updated`, they won't be
     /// tracked as changed. So make sure to properly declare which fields
     /// you are changing.
-    pub fn update(&mut self, updated: M::Field, f: impl FnOnce(&mut I)) {
+    pub fn update(&mut self, updated: M::Field, f: impl FnOnce(&mut M::Item)) {
         self.updated |= updated;
         f(&mut self.value);
     }

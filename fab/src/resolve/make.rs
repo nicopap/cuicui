@@ -5,8 +5,7 @@ mod mask_range;
 
 use std::{fmt, mem::size_of};
 
-use datazoo::JaggedBitset;
-use datazoo::{enum_multimap, sorted::KeySorted, AssumeSortedByKeyExt, BitMultimap};
+use datazoo::{enum_multimap, sorted::KeySorted, AssumeSortedByKeyExt, BitMultimap, JaggedBitset};
 use enumset::EnumSet;
 use log::{error, trace};
 
@@ -24,11 +23,7 @@ pub(super) struct Make<'a, P: Prefab> {
 }
 // Manual `impl` because we don't want `Make: Debug where P: Debug`, only
 // `Make: Debug where P::Item: Debug, PrefabField<P>: Debug`
-impl<P: Prefab> fmt::Debug for Make<'_, P>
-where
-    PrefabField<P>: fmt::Debug,
-    P::Item: fmt::Debug,
-{
+impl<P: Prefab> fmt::Debug for Make<'_, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Make")
             .field("default_section", &self.default_section)
@@ -38,11 +33,7 @@ where
     }
 }
 
-impl<'a, P: Prefab> Make<'a, P>
-where
-    P::Item: Clone + fmt::Debug,
-    PrefabField<P>: fmt::Debug,
-{
+impl<'a, P: Prefab> Make<'a, P> {
     /// Initialize a [`Make`] to create a [`Resolver`] using [`Make::build`].
     ///
     /// # Limitations
