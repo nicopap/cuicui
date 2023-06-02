@@ -1,4 +1,4 @@
-#![allow(clippy::new_without_default)] // I mean, you see those trait bounds?
+#![allow(clippy::new_without_default)]
 //! Integrate the [`fab`] crate with bevy.
 
 mod local;
@@ -53,8 +53,8 @@ pub fn update_items_system<BP: BevyPrefab + 'static, const R: usize>(
     world_bindings.0.reset_changes();
 }
 
-/// Plugin to update bevy [`Text`] component based on [`WorldBindings`]
-/// and [`RichTextData`] content.
+/// Manage a `Prefab` and [`Hooks`] to update the prefab's item as a component
+/// in the bevy ECS.
 pub struct FabPlugin<BP: BevyPrefab + 'static, const R: usize>(PhantomData<fn(BP)>);
 impl<BP: BevyPrefab, const R: usize> FabPlugin<BP, R>
 where

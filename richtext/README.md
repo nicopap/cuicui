@@ -455,7 +455,8 @@ impl IntoModify for UserColor {
 
 ## TODO
 
-- [ ] richtext fmt: Fix formatting doing weird things
+- [ ] richtext: put the public types such as RichText & MakeRichText & WorldBindings into their own mod
+- [ ] rt_fmt: Fix formatting doing weird things
 - [X] fab/datazoo cleanup: remove all u32::try_from(usize) and add a const () = assert!(sizeof);
 - [X] fab_derive: Write the doc strings of modify functions on the modify enum variants and constructor.
 - [ ] bevy_fab: Reduce the trait boilerplate.
