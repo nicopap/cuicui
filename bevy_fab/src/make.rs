@@ -43,12 +43,12 @@ impl<P: BevyModify> ParseFormatString<P> {
 /// - Returns `Vec<parse::Hook<'fstr>>`: The parsed but not created [`Hook`]s used in
 ///   the format string. It has the lifetime of `format_string`.
 /// - Interns in [`WorldBindings<BM>`] bindings found in `format_string`.
-fn mk<'fstr, BM: BevyModify, const R: usize>(
+fn mk<'fstr, BM: BevyModify>(
     bindings: &mut WorldBindings<BM>,
     default_item: &BM::Item,
     context: &BM::Context<'_>,
     format_string: &'fstr str,
-) -> anyhow::Result<(Vec<BM::Item>, Resolver<BM, R>, Vec<parse::Hook<'fstr>>)>
+) -> anyhow::Result<(Vec<BM::Item>, BM::Resolver, Vec<parse::Hook<'fstr>>)>
 where
     BM::Items: Component,
 {
@@ -59,7 +59,7 @@ where
     let parsed = tree.finish(&mut bindings.bindings, &mut new_hooks);
     let parsed: Vec<_> = parsed.into_iter().collect::<anyhow::Result<_>>()?;
 
-    let (resolver, items) = Resolver::new(parsed, default_item, context);
+    let (resolver, items) = BM::Resolver::new(parsed, default_item, context);
 
     Ok((items, resolver, new_hooks))
 }
@@ -69,7 +69,7 @@ where
 ///
 /// This is an exclusive system, as it requires access to the [`World`] to generate
 /// the [`Hook`]s specified in the format string.
-pub fn parse_into_resolver_system<BM: BevyModify + 'static, const R: usize>(
+pub fn parse_into_resolver_system<BM: BevyModify + 'static>(
     world: &mut World,
     mut to_make: Local<QueryState<(Entity, &mut ParseFormatString<BM>)>>,
     mut cache: Local<SystemState<(Commands, ResMut<WorldBindings<BM>>, BM::Param)>>,
@@ -105,11 +105,11 @@ pub fn parse_into_resolver_system<BM: BevyModify + 'static, const R: usize>(
 
         // TODO(perf): batch commands update.
         for (entity, (ctor_data, default_item, format_string)) in to_make.iter() {
-            match mk::<_, R>(&mut world_bindings, default_item, &context, format_string) {
+            match mk(&mut world_bindings, default_item, &context, format_string) {
                 Ok((items, resolver, mut hooks)) => {
                     new_hooks.append(&mut hooks);
 
-                    let local = LocalBindings::new(resolver, default_item.clone());
+                    let local = LocalBindings::<BM>::new(resolver, default_item.clone());
                     let items = BM::make_items(ctor_data, items);
 
                     cmds.entity(*entity)

@@ -1,6 +1,7 @@
 use std::fmt;
 
 #[cfg(doc)]
+use crate::resolve::DepsResolver;
 use crate::resolve::Resolver;
 
 use enumset::{EnumSet, EnumSetType};
@@ -48,6 +49,8 @@ pub trait Modify: Clone + fmt::Debug {
     type Context<'a>
     where
         Self: 'a;
+
+    type Resolver: Resolver<Self> + fmt::Debug + Send + Sync;
 
     /// Apply this modifier to the [`Self::Item`].
     ///

@@ -15,6 +15,22 @@ use crate::modify::{Changing, FieldsOf, Indexed, Modify};
 
 type SmallKeySorted<K, V, const C: usize> = sorted::KeySorted<SmallVec<[(K, V); C]>, K, V>;
 
+pub trait Resolver<M: Modify>: Sized {
+    fn new(
+        modifiers: Vec<MakeModify<M>>,
+        default_section: &M::Item,
+        ctx: &M::Context<'_>,
+    ) -> (Self, Vec<M::Item>);
+
+    fn update<'a>(
+        &'a self,
+        to_update: &mut M::Items,
+        updates: &'a Changing<M>,
+        bindings: View<'a, M>,
+        ctx: &M::Context<'_>,
+    );
+}
+
 /// Index in `modifies`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct ModifyIndex(u32);
@@ -83,7 +99,7 @@ struct Modifier<M> {
 // MOD_COUNT. We could then use it as an associated type of `Modify` instead
 // of propagating it all the way.
 #[derive(Debug)]
-pub struct Resolver<M: Modify, const MOD_COUNT: usize> {
+pub struct DepsResolver<M: Modify, const MOD_COUNT: usize> {
     modifiers: Box<[Modifier<M>]>,
 
     /// `Modify` that can be triggered by a `Modify::Field` change.
@@ -109,14 +125,8 @@ pub struct Resolver<M: Modify, const MOD_COUNT: usize> {
     masks: JaggedBitset,
 }
 
-// TODO(clean): move this after the impl Resolver
-struct Evaluator<'a, M: Modify, const MC: usize> {
-    root: &'a M::Item,
-    graph: &'a Resolver<M, MC>,
-    bindings: View<'a, M>,
-}
-impl<M: Modify, const MC: usize> Resolver<M, MC> {
-    pub fn new(
+impl<M: Modify, const MC: usize> Resolver<M> for DepsResolver<M, MC> {
+    fn new(
         modifiers: Vec<MakeModify<M>>,
         default_section: &M::Item,
         ctx: &M::Context<'_>,
@@ -125,6 +135,18 @@ impl<M: Modify, const MC: usize> Resolver<M, MC> {
 
         make::Make::new(modifiers, default_section).build(ctx)
     }
+    fn update<'a>(
+        &'a self,
+        to_update: &mut M::Items,
+        updates: &'a Changing<M>,
+        bindings: View<'a, M>,
+        ctx: &M::Context<'_>,
+    ) {
+        let Changing { updated, value } = updates;
+        Evaluator { graph: self, root: value, bindings }.update_all(*updated, to_update, ctx);
+    }
+}
+impl<M: Modify, const MC: usize> DepsResolver<M, MC> {
     fn index_of(&self, binding: Id, start_at: usize) -> Option<(usize, ModifyIndex)> {
         let subset = &self.b2m[start_at..];
         let index = start_at + subset.binary_search_by_key(&binding, |d| d.0).ok()?;
@@ -173,18 +195,13 @@ impl<M: Modify, const MC: usize> Resolver<M, MC> {
             .assume_sorted_by_item();
         Some((modify, range.difference(mask)))
     }
-    pub fn update<'a>(
-        &'a self,
-        to_update: &mut M::Items,
-        updates: &'a Changing<M>,
-        bindings: View<'a, M>,
-        ctx: &M::Context<'_>,
-    ) {
-        let Changing { updated, value } = updates;
-        Evaluator { graph: self, root: value, bindings }.update_all(*updated, to_update, ctx);
-    }
 }
 
+struct Evaluator<'a, M: Modify, const MC: usize> {
+    root: &'a M::Item,
+    graph: &'a DepsResolver<M, MC>,
+    bindings: View<'a, M>,
+}
 impl<'a, M: Modify, const MC: usize> Evaluator<'a, M, MC> {
     // TODO(clean): flag arguments are icky
     fn update(

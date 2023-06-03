@@ -9,10 +9,9 @@ use bevy::{
     text::{BreakLineOn, Font, Text, TextAlignment, TextSection},
 };
 use bevy_fab::{BevyModify, FabPlugin, LocalBindings, ParseFormatString};
-use enumset::__internal::EnumSetTypePrivate;
 use fab_parse::{Split, TransformedTree};
 
-use crate::modifiers::{GetFont, Modifier, ModifierField};
+use crate::modifiers::{GetFont, Modifier};
 
 #[derive(Clone, Copy)]
 pub struct TextGlobalStyle {
@@ -51,7 +50,7 @@ impl<'w, 's> WorldBindingsMut<'w, 's> {
 #[derive(WorldQuery)]
 #[world_query(mutable)]
 pub struct RichText {
-    inner: &'static mut LocalBindings<Modifier, { (ModifierField::BIT_WIDTH - 1) as usize }>,
+    inner: &'static mut LocalBindings<Modifier>,
     text: &'static mut Text,
 }
 impl RichTextItem<'_> {
@@ -141,7 +140,7 @@ impl BevyModify for Modifier {
     }
 }
 
-pub struct RichTextPlugin(FabPlugin<Modifier, { (ModifierField::BIT_WIDTH - 1) as usize }>);
+pub struct RichTextPlugin(FabPlugin<Modifier>);
 impl RichTextPlugin {
     pub fn new() -> Self {
         RichTextPlugin(FabPlugin::new())

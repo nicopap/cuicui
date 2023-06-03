@@ -5,12 +5,12 @@ use fab::{binding, modify::Changing, modify::Modify, resolve::Resolver};
 use crate::WorldBindings;
 
 #[derive(Component)]
-pub struct LocalBindings<M: Modify, const R: usize> {
-    resolver: Resolver<M, R>,
+pub struct LocalBindings<M: Modify> {
+    resolver: M::Resolver,
     pub root_data: Changing<M>,
     pub bindings: binding::Local<M>,
 }
-impl<M: Modify, const R: usize> LocalBindings<M, R> {
+impl<M: Modify> LocalBindings<M> {
     /// Update `to_update` with updated values from `world` and `self`-local bindings.
     ///
     /// Only the relevant sections of `to_update` are updated. The change trackers
@@ -29,7 +29,7 @@ impl<M: Modify, const R: usize> LocalBindings<M, R> {
         root_data.reset_updated();
         bindings.reset_changes();
     }
-    pub(crate) fn new(resolver: Resolver<M, R>, root_data: M::Item) -> Self {
+    pub(crate) fn new(resolver: M::Resolver, root_data: M::Item) -> Self {
         LocalBindings {
             resolver,
             root_data: Changing::new(root_data),

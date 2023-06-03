@@ -32,8 +32,8 @@ pub trait BevyModify: Parsable + fmt::Write + From<String> + Send + Sync + 'stat
     }
 }
 
-pub fn update_items_system<BM: BevyModify, const R: usize>(
-    mut query: Query<(&mut LocalBindings<BM, R>, &mut BM::Items)>,
+pub fn update_items_system<BM: BevyModify>(
+    mut query: Query<(&mut LocalBindings<BM>, &mut BM::Items)>,
     mut world_bindings: ResMut<WorldBindings<BM>>,
     params: StaticSystemParam<BM::Param>,
 ) where
@@ -50,8 +50,8 @@ pub fn update_items_system<BM: BevyModify, const R: usize>(
 /// Manages [`BevyModify`] living in the ECS as [`LocalBindings`] and a global
 /// [`WorldBindings`]. Also [`Hooks`] to automatically update reflection-based
 /// bindings.
-pub struct FabPlugin<BM: BevyModify, const R: usize>(PhantomData<fn(BM)>);
-impl<BM: BevyModify, const R: usize> FabPlugin<BM, R>
+pub struct FabPlugin<BM: BevyModify>(PhantomData<fn(BM)>);
+impl<BM: BevyModify> FabPlugin<BM>
 where
     BM::Items: Component,
     FieldsOf<BM>: Sync + Send,
@@ -60,7 +60,7 @@ where
         FabPlugin(PhantomData)
     }
 }
-impl<BM: BevyModify, const R: usize> Plugin for FabPlugin<BM, R>
+impl<BM: BevyModify> Plugin for FabPlugin<BM>
 where
     BM::Items: Component,
     FieldsOf<BM>: Sync + Send,
@@ -69,8 +69,8 @@ where
         use CoreSet::PostUpdate;
         app.init_resource::<WorldBindings<BM>>()
             .add_system(update_hooked::<BM>.in_base_set(PostUpdate))
-            .add_system(update_items_system::<BM, R>.in_base_set(PostUpdate))
+            .add_system(update_items_system::<BM>.in_base_set(PostUpdate))
             .add_system(update_component_trackers_system::<BM>.in_base_set(PostUpdate))
-            .add_system(parse_into_resolver_system::<BM, R>);
+            .add_system(parse_into_resolver_system::<BM>);
     }
 }

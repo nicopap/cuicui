@@ -15,7 +15,13 @@ const BAD_ASSOC_TYPE: &str = "Modify as a trait requires the following \
       to the modify through the `#[modify(ctx)]` attribute\n\
     - `type Item`: The item on which Modify operates.\n\
     - `type Items`: The collection of items passed to `Resolve` to run the \
-      modifiers specifed in this macro on.";
+      modifiers specifed in this macro on.\n\
+    \n\
+    It also optionally supports:\n\
+    - `type Resolver`: The resolver to use for this Modify. By default, it is \
+    the `DepsResolver` with modify change dependency detection. You may chose \
+    `MinimalResolver` instead. It doesn't have change dependency detection, but \
+    it is much faster to build and run.";
 
 /// Store encountered associated types used in the `Modify` definition.
 #[derive(Default)]
@@ -29,6 +35,9 @@ struct AssociatedTypes {
 
     /// `Modify::Items`.
     items: Option<syn::Type>,
+
+    /// the resolver to use for this `Modify`
+    resolver: Option<syn::Type>,
 }
 fn read_item(item: syn::ImplItem, assoc: &mut AssociatedTypes) -> syn::Result<Option<ModifyFn>> {
     use syn::ImplItem::{Fn, Type};
@@ -43,6 +52,10 @@ fn read_item(item: syn::ImplItem, assoc: &mut AssociatedTypes) -> syn::Result<Op
         }
         Type(assoc_type) if assoc_type.ident == "Items" => {
             assoc.items = Some(assoc_type.ty);
+            Ok(None)
+        }
+        Type(assoc_type) if assoc_type.ident == "Resolver" => {
+            assoc.resolver = Some(assoc_type.ty);
             Ok(None)
         }
         Fn(fn_item) => {
@@ -124,6 +137,7 @@ pub(crate) struct Block {
     items: syn::Type,
     context: syn::Type,
     context_generics: syn::Generics,
+    resolver: Option<syn::Type>,
     functions: Vec<ModifyFn>,
     fields: BTreeSet<Ident>,
     // TODO(feat): allow generics
@@ -131,8 +145,8 @@ pub(crate) struct Block {
     fab_path: syn::Path,
     enumset_ident: Ident,
     visibility: Visibility,
-    no_debug_derive: bool,
-    no_clone_derive: bool,
+    debug_derive: bool,
+    clone_derive: bool,
 }
 impl Block {
     pub fn parse(config: Config, mut input: syn::ItemImpl) -> syn::Result<Self> {
@@ -174,54 +188,62 @@ impl Block {
             items,
             context,
             context_generics,
+            resolver: assocs.resolver,
             functions,
             fields,
             modify_ty,
             fab_path: config.fab_path,
             enumset_ident: config.enumset_crate,
             visibility: config.visibility,
-            no_debug_derive: config.no_debug_derive,
-            no_clone_derive: config.no_clone_derive,
+            debug_derive: !config.no_debug_derive,
+            clone_derive: !config.no_clone_derive,
         })
     }
     pub fn generate_impl(self) -> TokenStream {
-        let enset = &self.enumset_ident;
-        let enset_string = syn::LitStr::new(&enset.to_string(), enset.span());
-        let fab = &self.fab_path;
-        let vis = &self.visibility;
+        let Self {
+            attributes,
+            item,
+            items,
+            context,
+            context_generics,
+            resolver,
+            fields,
+            modify_ty,
+            fab_path,
+            enumset_ident,
+            visibility,
+            debug_derive,
+            clone_derive,
+            ..
+        } = &self;
 
-        let context = &self.context;
-        let context_generics = &self.context_generics;
+        let enset_string = syn::LitStr::new(&enumset_ident.to_string(), enumset_ident.span());
+
         let ctx = Ident::new("ctx", Span::call_site());
         let item_param = Ident::new("item", Span::call_site());
 
-        let modify_ty = &self.modify_ty;
         let field_ty = format_ident!("{modify_ty}Field");
-        let field_variants = &self.fields;
-        let item = &self.item;
-        let items = &self.items;
 
         let fns = || self.functions.iter();
-        let ty_variants = fns().map(|f| f.ty_variant(enset, &field_ty));
+        let ty_variants = fns().map(|f| f.ty_variant(enumset_ident, &field_ty));
         let ty_matcher = fns().map(ModifyFn::ty_matcher);
-        let changes_arms = fns().map(|f| f.changes_arm(enset, &field_ty));
-        let depends_arms = fns().map(|f| f.depends_arm(enset, &field_ty));
-        let field_assoc_fns = fns().map(|f| f.fields_assoc_fns(enset, &field_ty));
+        let changes_arms = fns().map(|f| f.changes_arm(enumset_ident, &field_ty));
+        let depends_arms = fns().map(|f| f.depends_arm(enumset_ident, &field_ty));
+        let field_assoc_fns = fns().map(|f| f.fields_assoc_fns(enumset_ident, &field_ty));
         let ty_constructors = fns().map(|m| &m.constructor);
         let ty_function_defs = fns().map(|m| &m.declaration);
         let ty_function_calls = fns().map(|m| m.call(&ctx, &item_param));
-        let debug_derive = if self.no_debug_derive {
-            quote!()
-        } else {
-            quote!(#[derive( ::std::fmt::Debug )])
-        };
-        let clone_derive = if self.no_clone_derive {
-            quote!()
-        } else {
-            quote!(#[derive( ::std::clone::Clone )])
-        };
+        let debug_derive = debug_derive.then(|| quote!(#[derive( ::std::fmt::Debug )]));
+        let clone_derive = clone_derive.then(|| quote!(#[derive( ::std::clone::Clone )]));
+        let resolver = resolver.as_ref().map_or_else(
+            || {
+                let enumset_private = quote!(::#enumset_ident::__internal::EnumSetTypePrivate);
+                let bit_width = quote!((<Self::Field as #enumset_private>::BIT_WIDTH - 1) as usize);
+                quote!(#fab_path::resolve::DepsResolver::<Self, {#bit_width} >)
+            },
+            |ty| quote!(#ty),
+        );
 
-        let ty_attributes = &self.attributes;
         quote! {
             #[doc = concat!("Fields accessed by [`", stringify!(#modify_ty), "`].")]
             #[doc = "\n\n"]
@@ -234,15 +256,15 @@ impl Block {
                 stringify!(#modify_ty),
                 "::Context`].\n",
             )]
-            #[derive( ::#enset::EnumSetType, ::std::fmt::Debug )]
+            #[derive( ::#enumset_ident::EnumSetType, ::std::fmt::Debug )]
             #[enumset(crate_name = #enset_string)]
-            #vis enum #field_ty {
-                #( #field_variants ),*
+            #visibility enum #field_ty {
+                #( #fields ),*
             }
-            #( #ty_attributes )*
+            #( #attributes )*
             #debug_derive
             #clone_derive
-            #vis enum #modify_ty {
+            #visibility enum #modify_ty {
                 #( #ty_variants ),*
             }
             /// Functions returning which field each modify function changes
@@ -267,12 +289,13 @@ impl Block {
                 type Context #context_generics = #context;
                 type Item = #item;
                 type Items = #items;
+                type Resolver = #resolver;
 
                 fn apply(
                     &self,
                     #ctx: &Self::Context<'_>,
                     #item_param: &mut #item,
-                ) -> #fab::__private::anyhow::Result<()> {
+                ) -> #fab_path::__private::anyhow::Result<()> {
                     match self {
                         #(
                             Self::#ty_matcher => {
@@ -285,14 +308,14 @@ impl Block {
                 }
 
                 #[inline]
-                fn depends(&self) -> ::#enset::EnumSet<Self::Field> {
+                fn depends(&self) -> ::#enumset_ident::EnumSet<Self::Field> {
                     match self {
                         #( #depends_arms ),*
                     }
                 }
 
                 #[inline]
-                fn changes(&self) -> ::#enset::EnumSet<Self::Field> {
+                fn changes(&self) -> ::#enumset_ident::EnumSet<Self::Field> {
                     match self {
                         #( #changes_arms ),*
                     }

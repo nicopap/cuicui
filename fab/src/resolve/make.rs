@@ -12,7 +12,7 @@ use log::{error, trace};
 use crate::binding::Id;
 use crate::modify::{FieldsOf, Modify};
 
-use super::{MakeModify, ModifyIndex as Idx, ModifyKind, Resolver};
+use super::{DepsResolver, MakeModify, ModifyIndex as Idx, ModifyKind};
 use is_static::CheckStatic;
 use mask_range::MaskRange;
 
@@ -145,7 +145,7 @@ impl<'a, M: Modify> Make<'a, M> {
     pub(super) fn build<const MC: usize>(
         mut self,
         ctx: &M::Context<'_>,
-    ) -> (Resolver<M, MC>, Vec<M::Item>) {
+    ) -> (DepsResolver<M, MC>, Vec<M::Item>) {
         trace!("Building a RichText from modifiers:");
         for modi in &self.modifiers {
             trace!("\t{modi:?}");
@@ -194,7 +194,7 @@ impl<'a, M: Modify> Make<'a, M> {
                 error!("\t{err}");
             }
         }
-        let with_deps = Resolver { m2m, f2m, b2m, modifiers, masks };
+        let with_deps = DepsResolver { m2m, f2m, b2m, modifiers, masks };
         (with_deps, sections)
     }
 }
