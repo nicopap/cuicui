@@ -23,7 +23,7 @@
 //! ```rust
 //! # use std::fmt;
 //! use bevy::prelude::*;
-//! use cuicui_richtext::{track, MakeRichTextBundle, modifiers};
+//! use cuicui_richtext::{track, MakeRichText, modifiers};
 //! # #[derive(Component, Default)]
 //! # struct MaxValue(f32);
 //! #
@@ -71,7 +71,7 @@
 //!
 //!     // Rich text will automatically be updated.
 //!     commands.spawn(
-//!         MakeRichTextBundle::new(
+//!         MakeRichText::new(
 //!             "{Color:{Res.DeathLineColor.0}|Death count: {Res.DeathCount.0}}\n\
 //!          slider1 value: {slider1}\n\
 //!          slider2 debug text: {slider2}",
@@ -92,11 +92,9 @@ pub mod modifiers;
 mod richtext;
 mod track_macro;
 
+pub use bevy_fab::TrackerBundle;
 pub use modifiers::{GetFont, Modifier};
 pub use richtext::{
     MakeRichText, RichText, RichTextFetch, RichTextItem, RichTextPlugin, WorldBindings,
     WorldBindingsMut,
 };
-pub mod __track_richtext_private {
-    pub use bevy_fab::TrackerBundle;
-}

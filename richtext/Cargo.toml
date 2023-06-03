@@ -11,8 +11,10 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = []
+default = ["min_richtext"]
 no_tracked_debug = []
+min_richtext = []
+richtext = []
 
 [dependencies]
 anyhow = "1"

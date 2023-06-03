@@ -99,9 +99,9 @@
 /// we chose a lifetime (I would have rather used a string literal).
 #[macro_export]
 macro_rules! track {
-    (@ctor 'd) => { $crate::__track_richtext_private::TrackerBundle::<_, $crate::Modifier>::debug };
-    (@ctor 'm) => { $crate::__track_richtext_private::TrackerBundle::<_, $crate::Modifier>::modifier };
-    (@ctor 'c) => { $crate::__track_richtext_private::TrackerBundle::<_, $crate::Modifier>::content };
+    (@ctor 'd) => { $crate::TrackerBundle::<_, $crate::Modifier>::debug };
+    (@ctor 'm) => { $crate::TrackerBundle::<_, $crate::Modifier>::modifier };
+    (@ctor 'c) => { $crate::TrackerBundle::<_, $crate::Modifier>::content };
     (@ctor ) => { $crate::TrackerBundle::<_, $crate::Modifier>::content };
     (@build($ctor:expr, $binding_name:expr, $component:expr)) => {
         ($ctor)($binding_name, $component)

@@ -2,446 +2,458 @@
 
 https://github.com/nicopap/cuicui/assets/26321040/e81b2dae-1dda-4188-ace1-6c2a8316c90c
 
-<details>
-  <summary>Click to see code</summary>
-  
-```rust
-fn setup_system(mut commands: Commands) {
-    commands.spawn((
-        MakeRichTextBundle::new(
-            "{Color:{color}|{Rainbow:20.0|Bonjour} {greeted}!}\n\
-            {Color:Yellow, Sine:80|We are having fun here, woopy!}",
-        )
-    ));    // ...
-    commands.spawn((
-        MakeRichTextBundle::new(
-            "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold, Content:{Res.Fps.fps:.1}}",
-        )
-    ));    // ...
-}
-fn color_update_system(time: Res<Time>, mut query: Query<&mut RichTextData, With<ColorText>>) {
-    for mut text in &mut query {
-        let seconds = time.elapsed_seconds();
-        let new_color = ;// ...;
-        text.bindings
-            .set("color", modifiers::Modifier::color(new_color));
-    }
-}
-fn greet_update_system(
-    mut query: Query<&mut RichTextData, With<ColorText>>,
-    mut current_guest: Local<usize>,
-) {
-    let at_interval = |t: f64| current_time % t < delta;
-    for mut text in &mut query {
-        if at_interval(1.3) {
-            *current_guest = (*current_guest + 1) % GUESTS.len();
-            text.set_content("greeted", &GUESTS[*current_guest]);
-        }
-    }
-}
-
-```
-
-</details>
-
 A rich text component for bevy.
 
 The current bevy `Text` component is [a misery to use][misery-bui].
 
 `RichText` "manages" `Text` sections,
 it associates section contents and styles to a "binding" (a name).
-As a user, you set the value of bindings through `richtext_data.set(&str, value)`.
+As a user, you set the value of bindings through `richtext.set(&str, value)`,
+or use one of the reflection-based hook declaration, avoiding you any further
+code to update text content.
 
-It's already much better than `Text`. It has some issues though:
+## Showing your character stats
 
-- It's still verbose to update text: add marker component,
-  query for it in a system, call the `set` method.
-- you can make typos.
+Rich text, as the name implies, it is a library to write text on screen.
 
-I don't have a solution for typos,
-but I can work around it by solving the other issue.
-
-Consider a game options menu.
-What an options menu does **in a bevy game**
-is usually set (and read) the values of some component or resource fields.
-
-| 📝 [Read a shorter intro][docsrs-root] | 
-|----------------------------------------|
-
-
-### With cuicui_richtext
+Consider your classic RPG character:
 
 ```rust
-let instructions =
-  "Controls:\n\
-  WSAD  - forward/back/strafe left/right\n\
-  E / Q - up / down\n\
-  L     - switch between directional and point lights [{light_type}]\n\
-  1/2   - change point light depth bias [{point_depth_bias}]\n\
-  3/4   - change point light normal bias [{point_normal_bias}]\n\
-  5/6   - change direction light depth bias [{directional_depth_bias}]\n\
-  7/8   - change direction light normal bias [{directional_normal_bias}]\n";
+#[derive(Component)]
+struct Player;
 
-let style =  TextStyle {
-    font_size: 20.,
-    ..default()
-};
-commands.spawn(RichText::parse(instructions, style).unwrap());
-
-// ...
-
-let light_type =  if point_light { "PointLight" } else { "DirectionalLight" };
-// without macro:
-example_text.set_content("light_type", light_type);
+#[derive(Component)]
+struct Stats {
+    mana: i32,
+    health: i32,
+    defense: i32,
+}
 ```
 
-## Rich text
+Using the primitive bevy UI system, you would have to construct a stat menu,
+give each variables its own section (manually) and then set those values
+appropriately:
 
-```
-This line {color: blue |contains} multiple {size: 3.0, font: bold.ttf |sections}
-```
-
-| 📝 [Read the format string grammar][fs-grammar] | 
-|-------------------------------------------------|
-
-Rich text is a bevy plugin to simplify text management in bevy. It can be thought
-as 3 modules:
-
-1. A parser that reads a format string and translates it into
-2. A `RichText` specification, a series of sections of text with modifiers 
-3. A bevy plugin that reads that specification, and with additional context information
-   manipulates a bevy `Text`.
-
-### Jargon
-
-A `RichText` is a series of `Section`s. Sections are specified between
-curly brackets, and contain:
-
-- _format string_: The string we parse to create a `RichText`
-- _specified_: Stuff that is defined within the _format string_.
-- Rust types are `MonospacedCamelCase`.
-- Element of texts found in the format string, or specifying text found
-  in the format string are _`monospaced_italic`_.
-- _modifiers_: See section [#modifiers].
-- _dynamic modifiers_: See section [#dynamic-modifiers].
-- _Bindings_: the names by which _dynamic modifiers_ are referred to.
-- _Type bindings_: are _dynamic modifiers_ without an explicit name, they can
-  only be referred to by the type of the modifier.
-
-### Section
-
-A `RichText` is split in multiple _sections_, each section contains text and
-additional information relative to this text.
-
-1. Multiple _`key`_ : _`value`_ pairs, specifying _modifiers_.
-2. A single text segment, specified after a _`|`_.
-
-### Modifiers
-
-Modifiers affect the style of the text for a given section.
-
-The default modifiers are:
-
-- _`Color`_: The color of text for this section, supports multiple formats:
-    - html-style hex: _`#acabac`_
-    - css-style function, with 3 arguments or 4 for alpha:
-        - _`rgb(u8,u8,u8[,u8]?)`_ (range 0-256)
-        - _`rgb(f32,f32,f32[,f32]?)`_ (range 0-1)
-        - _`hsl(f32,f32,f23[,f32]?)`_ (ranges [0-360], [0-1], [0-1])
-    - named constants, see the bevy [`Color`] for a list of available names
-- _`Font`_: A file path in the `assets` directory. You must first load that file
-  and store a `Handle<Font>` to it, otherwise it won't load automatically.
-- _`RelSize`_: Size relative to the root style
-
-```
-Some text {Font:bold.ttf|that is bold} and not anymore
-{RelSize:0.5|The next line spells "rainbow" in all the colors of the rainbow}
-{Color:red|r}{Color:orange|a}{Color:yellow|i}{Color:green|n}{Color:blue|b}{Color:indigo|o}{Color:violet|w}
-{Color: rgb(10,75, 10) | Colors can be} {Color: #ab12fa|specified in many} {Color: hsl(98.0, 0.9, 0.3)|different ways}
-```
-
-Should give (github cuts out the color, so use your imagination):
-
-<blockquote>
-<p>Some text <b>that is bold</b> and not anymore</p>
-<p style="font-size:50%">The next line spells "rainbow" in all the colors of the rainbow</p>
-<p><a style="color:red">r</a><a style="color:orange">a</a><a style="color:yellow">i</a><a style="color:green">n</a><a style="color:blue">b</a><a style="color:indigo">o</a><a style="color:violet">w</a></p>
-<p><a style="color:rgb(10,75,10)">Colors can be</a> <a style="color:#ab12fa">specified in many</a> <a style="color:hsl(98deg,90%,30%)">different ways</a></p>
-</blockquote>
-
-### Dynamic modifiers
-
-The previous section describes how to specify final modifier values in the format string.
-
-To update modifier values **at runtime**, you would use a *dynamic modifier*.
-
-Instead of specifying a value in _`value`_ position, you use _`{}`_,
-you can then refer to it from your bevy app.
-
-```
-Illustration: "{Color:{}|This color is runtime-updated}"
-```
+<details><summary>See how you would define the stats menu in bevy</summary>
 
 ```rust
-let new_color: Color;
-rich_text.set_typed(new_color);
+use bevy::prelude::*;
+
+#[derive(Component)]
+struct MenuText;
+
+fn spawn_menu(
+    mut commads: Commands,
+    player: Query<&Stats, With<Player>>,
+    assets: Res<AsssetServer>,
+) {
+    let stats = player.single();
+    
+    let base_style = TextStyle { font: assets.load("stats_menu_font.ttf"), .. default() };
+    let mana_style = TextStyle { color: Color::PURPLE, .. default() };
+    let health_style = TextStyle { color: Color::RED, .. default() };
+    let defense_style = TextStyle { color: Color::BLUE,  .. default() };
+    commands.spawn(TextBundle::from_sections([
+        TextSection::new("Player stats:\n------------", base_style),
+        TextSection::new("\nHealth:", health_style.clone()),
+        TextSection::new(stats.health.to_string(), health_style),
+
+        TextSection::new("\nDefense:", defense_style.clone()),
+        TextSection::new(stats.defense.to_string(), defense_style),
+
+        TextSection::new("\nMana:", mana_style.clone()),
+        TextSection::new(stats.mana.to_string(), mana_style),
+    ])).insert(MenuText);
+}
 ```
 
-You can also use _`{identifier}`_ to give a name to your modifier,
-so you can refer to it later.
-
-```
-Illustration: "{Color:{color1}|This color}{Color:{color2}|is runtime-updated}"
-```
+Supposing you want to update the menu in real time, you would need an additional
+system:
 
 ```rust
-rich_text.set("color1", new_color);
-rich_text.set("color2", other_color);
+fn update_stat_menu(
+    mut menu: Query<&mut Text, With<MenuText>>,
+    player: Query<&Stats, With<Player>>,
+) {
+    let mut text = menu.single_mut();
+    let stats = player.single();
+
+    text.sections[2].value.clear();
+    text.sections[4].value.clear();
+    text.sections[6].value.clear();
+
+    write!(&mut text.sections[2].value, "{}", &stats.health);
+    write!(&mut text.sections[4].value, "{}", &stats.defense);
+    write!(&mut text.sections[6].value, "{}", &stats.mana);
+}
 ```
 
-This isn't as type-safe, but with this, you can use multiple dynamic modifiers of the same type.
+Here we use `clear` followed by `write!` to avoid extra allocations.
 
-### Text segment
+We index `sections` of the `Text` component to access the bit of text we want
+to edit. We could replace the magic values `2`, `4` and `6` by constants such
+as `const HEALTH_TEXT_SECTION: usize = 2` etc. But you still have to keep track
+of the index when _spawning_ the text component. And also, this is far more
+code.
 
-Modifiers _always_ apply to some bit of text, therefore the text segment is
-mandatory in a `Section`.
+TODO: screenshot
 
-TODO: previous paragraph is patently false.
+</details>
 
-```
-Some text {Color: GREEN|of the green color}.
-```
+You'll notice it's a bit verbose, and error-prone.
 
-The text segment of a section does actually specify the _`Content`_ modifier.
-The next format string is equivalent to the previous one:
+### With `cuicui_richtext`
 
-```
-Some text {Color: GREEN, Content:of the green color}.
-```
+Now let's rewrite it using cuicui_richtext.
 
-### Dynamic content
-
-Similarly to other `Modify`s, you can set text content dynamically:
-
-```
-Some text {Color: GREEN, Content:{my_content}}.
-```
+First, we need add the `MinRichTextPlugin`:
 
 ```rust
-let ammo_left = 255;
-rich_text.set("my_content", modifiers::Content(format!("{ammo_left}").into()));
-rich_text.set_content("my_content", ammo_left);
+fn main() {
+    app
+        // ... default plugins whatever man ...
+        .add_plugin(MinRichTextPlugin)
+        // ... your systems and stuff ...
+}
 ```
 
-Format strings have a special syntax for content binding:
+Then, time to rewrite how we spawn our menu text:
+
+```rust
+const MENU_FORMAT_STRING: &str = "Player stats\n\
+    ------------\n\
+    Health: {health}\n\
+    Defense: {defense}\n\
+    Mana: {mana}";
+
+#[derive(Resource)]
+struct Fonts {
+    stats_menu: Handle<Font>,
+}
+
+fn spawn_menu(mut commads: Commands, assets: Res<AssetServer>) {
+    commands.insert_resource(Fonts {
+        stats_menu: assets.load("stats_menu_font.ttf"),
+    });
+    commands.spawn(MakeRichText::new(MENU_FORMAT_STRING));
+}
+fn update_stat_menu(mut bindings: WorldBindingsMut, player: Query<&Stats, With<Player>>) {
+    let stats = player.single();
+
+    bindings.set_content("health", &stats.health);
+    bindings.set_content("defense", &stats.defense);
+    bindings.set_content("mana", &stats.mana);
+}
+```
+
+TODO: screenshot
+
+<details><summary>Click here for a detailed explanation on how MENU_FORMAT_STRING becomes Text</summary>
+
+Let's take a closer to `MENU_FORMAT_STRING`, without the rust syntax:
 
 ```
-Some text {my_content}.
+Player stats
+------------
+Health: {health}
+Defense: {defense}
+Mana: {mana}
 ```
 
-Finally, content can be bound by type, same as other modifiers:
+`cuicui_richtext` splits this string in the following `TextSection`s:
 
-```
-Some text {} et voilà.
-Some text {Color: GREEN, Content:{}} et voilà.
-```
-
-### Nested text segments
-
-`RichText` is a _series_ of `Section`s. 
-However, the text segment can contain itself "sub sections".
-
-```
-Some text {Color: GREEN|that is green {Font:bold.ttf|and bold {RelSize:3.0|and big}} at the same time}.
+```c
+"Player stats\n------------\nHealth: "
+"{health}"
+"\nDefense: "
+"{defense}"
+"\nMana: "
+"{mana}"
 ```
 
-Subsections are flattened into a single flat list.
-As expected, subsections inherit `Modify`s from their parent.
+The sections within braces `{}` are special. Those are *bindings*.
+
+Those sections can then be referenced by the name within braces.
+
+`WorldBindings` is a collection of `binding_name: value` pairs.
+You use it to set the value of a binding.
+
+Alternatively, you can set the `RichText` binding directly. This will limit
+the *binding* to the `RichText` of the same entity.
+
+```rust
+fn bind_stuff(mut bindings: WorldBindingsMut, mut rich_texts: Query<RichText>) {
+    world_bindings.set_content("health", &41);
+
+    for mut rich_text in rich_texts.iter_mut() {
+        rich_text.set_content("mana", &32);
+    }
+}
+```
+
+> *🖠 Info*
+>
+> Notice how we use the `set_content` method, see more in the
+> section about *modifiers*.
+
+Then a system will read the `WorldBindings` and `RichText` components,
+and update all the `Text` spawned with `MakeRichText` according to the *bindings*.
+
+Note that the `TextSection` is only updated whend the *binding* value is updated.
+
+</details>
+
+### Using reflection to let `cuicui_richtext` care about reading the components
+
+Well… Actually, while we removed the need to query for the specific entity with
+the `Text` component and manually set each section, we still need to manually
+set the value of the `health`, `defense` and `mana` *bindings*.
+
+We now run the risk of making spelling mistakes, forgetting to update new stats
+when we add them, and it's still some code to write.
+`cuicui_richtext` can do better, far better.
+
+`cuicui_richtext` can use reflection to automatically update *bindings* without
+having to write any more code.
+
+First, let's derive `Reflect` on the components we read:
+
+```rust
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+struct Player;
+
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+struct Stats {
+    // ...
+}
+fn main() {
+    app
+        .add_plugins(DefaultPlugings)
+        // ... we also need to register them!
+        .register_type::<Player>()
+        .register_type::<Stats>()
+        // ...
+}
+```
+
+Now we can use the *binding source* syntax in the `MENU_FORMAT_STRING`:
+
+```rust
+const MENU_FORMAT_STRING: &str = "Player stats\n\
+    ------------\n\
+    Health: {Marked(Player).Stats.health:}\n\
+    Defense: {Marked(Player).Stats.defense:}\n\
+    Mana: {Marked(Player).Stats.mana:}";
+```
+
+That's all we need to do, now we can **delete the `update_stat_menu` system and everything
+is taken care of**.
+
+<details><summary>Click here to learn how the binding source syntax works</summary>
+
+With the *source binding* syntax, the format string looks as follow:
+
+```
+Player stats
+------------
+Health: {Marked(Player).Stats.health:}
+Defense: {Marked(Player).Stats.defense:}
+Mana: {Marked(Player).Stats.mana:}
+```
+
+The bindings are now: `{Marked(Player).Stats.field:}`, let's split this into its
+fundamental components:
+
+- *source*: `Marked(Player).Stats.field`, let's split this even more:
+    - *query*: `Marked(Player)`: Select an entity based on a marker component
+    - *type*: `.Stats`: the type of the component we want to read
+    - *field*: `.field`: a [reflection path] used to access the field we care about
+- *format parameters*: (`:`, the colon) the rust [formatting parameters] used to turn
+  the value in `field` into text.
+
+Visually:
+
+```
+  source
+  ----------------------------
+  query          type   field  format parameter
+  -------------- ------ ------ --
+{ Marked(Player) .Stats .field : }
+```
+
+`MinRichTextPlugin` takes the *source bindings* and creates a `Hook` per *source binding*.
+The `Hook` is a bit of code that tells `MinRichTextPlugin` the following:
+
+- What to read from the ECS. For example, in this case, it is "the field `field`
+  of component `Stats` of entity marked with `Player`
+- How to translate this into a *modifier* (more on this later). In this case,
+  we tell it to use `fmt::Display` and set the text value of the section to
+  the format result.
+- What *binding* to set that result to. This is the text between braces:
+  "Marked(Player).Stats.field:" 
+
+The code only runs if the component in question has been updated since last time.
+
+#### Kind of query
+
+`cuicui_richtext` has several *queries* you can chose from:
+
+| query         | example                          | description |
+|---------------|----------------------------------|------------ |
+| `Res`         | `Res.SomeResource.path.to.field` | Read `.path.to.field` from `Resource` with type `SomeResource` |
+| `One(<type>)` | `One(PlayerStats).path.to.field` | Read `.path.to.field` from `PlayerStats` on first entity found with the `PlayerStats` component |
+| `Name(value)` | `Name(Player).Stats.path.to.field` | Read `.path.to.field` from `Stats` on first entity found with a [`Name`] component equal to "Player" |
+| `Marked(<type>)` | `Marked(Player).Stats.path.to.field` | Read `.path.to.field` from `Stats`  on first entity found with the `Player` component |
+
+
+[reflection path]: https://docs.rs/bevy/latest/bevy/reflect/trait.GetPath.html#syntax
+[formatting parameters]: https://doc.rust-lang.org/stable/std/fmt/index.html#formatting-parameters
+[`Name`]: https://docs.rs/bevy/latest/bevy/core/struct.Name.html
+
+</details>
+
+
+### Styling
+
+Well… we don't handle styling. It is imperative that our UI has
+nice and appealing colors! We aren't making a TIS-100 clone!
+
+Turns out, styling is the strong suit of `cuicui_richtext`.
+
+A section in `cuicui_richtext` is not just text, it's also each individual
+style parameters a `TextStyle` has (ie: color and size, yeah not that much).
+
+To set the color of a section to red in `cuicui_richtext`, you would do as follow:
+
+```
+{ Color: Red |Bloody Text!}
+```
+
+TODO: screenshot
+
+The bit between the `|` and the closing `}` is just some text, it works exactly
+like the rest of a format string. The only difference is that the text will be
+red.
+
+You can have several of them:
+
+```
+{Color: grey|Lucy Westenra}: {Color:blue |You look pale, mister}
+{Color: grey|Dracula}: {Color: red|I will drink your blood!}
+```
+
+TODO: screenshot
+
+And you can nest them, including *bindings*:
+
+```
+{Color: grey|Lucy Westenra}: {Color:blue|
+    {Color:grey|Dracula} said to me: "{Color: red|I will drink your {fluid}!}"
+}
+```
+
+`cuicui_richtext` will intelligently split the string in one `TextSection` per
+individual section of text, and assign them the correct style values.
+
+Let's rewrite our `MENU_FORMAT_STRING` to replicate the styling we used in
+the initial bevy example:
+
+```rust
+const MENU_FORMAT_STRING: &str = "{ Font: stats_menu_font.ttf |\
+    Player stats\n\
+    ------------\n\
+    {Color:Red    |Health: {Marked(Player).Stats.health:}}\n\
+    {Color:Blue   |Defense: {Marked(Player).Stats.defense:}}\n\
+    {Color:Purple |Mana: {Marked(Player).Stats.mana:}}\
+}";
+```
+
+TODO: screenshot
+
+<details><summary>Click here to learn more about modifiers</summary>
+
+In `{ Color: Red |Bloody Text!}`, `Color` is a *modifier*.
+
+*Modifiers*, as the name implies, *modifies* a set of fields.
+
+In fact, in `cuicui_richtext`, *everything is a modifier*. Including text!
+
+| Modifier | value | what it does |
+|----------|-------|--------------|
+| `Color`  | css color string | Sets the color of all text within to provided value|
+|`ShiftHue`| float | Sets the color of all text within to the parent's text color plus given shift in hue (over 360º)|
+| `RelSize`| float | Multiplies the font size of all text within by provided value|
+| `Content`| text  | Set the text of all sections within to provided value|
+| `Font`   | file path | Set the font of all text within to provided value. `file path` must be loaded first through `AssetServer`|
+
+Notice `Content`. Sound familiar? Yeah, that's because text by default is just
+the `Content` *modifier*:
+
+```
+Those two lines are actually identical
+{Content: Those two lines are actually identical}
+```
+
+The text is converted to a `Content` *modifier* that only applies to the first
+section of the section between `{}`.
+
+#### Nesting
+
+Let's take another format string example:
+
+```
+Some text {Color: green|that is green {Font:bold.ttf|and bold {RelSize:3.0|and big}} at the same time}.
+```
+
+Sections within other sections are flattened into a single flat list.
+Each section inherits the *modifiers* from their parent and apply their own
+afterward.
 
 The previous format string would be split in **six** segments as follow:
 
 ```
-Some text █that is green █and bold █and big█ at the same time█.
-^          ^              ^         ^       ^                 ^
-|          |              |         |       |                 root formatting
-|          |              |         |       root + green
-|          |              |         root + green + bold.ttf font + size×3
-|          |              root + green + bold.ttf font
-|          root + green
+Some text ┆that is green ┆and bold ┆and big┆ at the same time┆.
+↑         ┆↑             ┆↑        ┆↑      ┆↑                ┆↑
+│          │              │         │       │                 root formatting
+│          │              │         │       root + green
+│          │              │         root + green + bold.ttf font + size×3
+│          │              root + green + bold.ttf font
+│          root + green
 root formatting
 ```
 
-This also works with dynamic modifiers.
+</details>
 
-It is an error to specify a `Modify` in a section and re-set it in a child section.
 
-This doesn't work when _`Content`_ is specified as a modifier value:
+### Dynamic styling
 
-```
-// I've no idea what this results in, but it's definitively broken
-Some text {Color: GREEN,content:that is green {Font:bold.ttf|and bold}}.
-```
+This is a bore, all this text is static. Sure, we have a nice markup,
+but we want moving rainbow, dancing letters, singing words!
 
-You can escape curly brackets with a backslash.
+I've yet to see how you made that first video.
 
-## Context
+Sure let me tell you.
 
-`cuicui_richtext`'s `RichText` component doesn't render to screen. It only is
-a set of rules telling how to modify bevy's native `Text` component given a
-provided context.
+Not only can text be set through *binding*, but actually any *modifier* can.
 
-What is this context you are talking me about?
 
-Bear with me. `RichText` is a list of sections, sections — as mentioned —
-are a list of *modifiers* aka `Box<dyn Modify>` objects.
+## TODO: aliases and chops
 
-`Modify` is a trait:
+## A dialog system in bevy
 
-```rust
-pub trait Modify {
-    fn apply(&self, ctx: &Context, text: &mut TextSection) -> Result<(), AnyError>;
-}
-```
+> **warning**
+> TODO: complete this section when context fields land.
+>
+> TODO: This is false until we do Entity as section.
 
-cuicui_richtext will run `apply` for each `Box<dyn Modify>` in a section.
-But what are all those arguments? Let's see:
+`cuicui_richtext` can also make your dialog's text more dynamic.
+Very much like the [febucci Unity plugin], `cucui_richtext` has a set of primitives to give
+spice to text. This includes changing the transform, color, oppacity, visibility
+of individual characters or words, in sync or other.
 
-- `TextSection`: it's the bevy fundamental unit of text, you know it.
-- `Context`: some additional info.
-
-More precisely:
-
-```rust
-pub struct Context<'a, 'b> {
-    pub registry: Option<&'b TypeRegistry>,
-    pub bindings: Option<&'b Bindings>,
-    pub world_bindings: Option<&'b Bindings>,
-    pub type_bindings: Option<&'b TypeBindings>,
-    pub parent_style: &'b TextStyle,
-    pub fonts: &'a dyn Fn(&str) -> Option<Handle<Font>>,
-}
-```
-
-- `parent_styles`: The base style we will dervie the style of each section
-- `fonts`: Just a way to read fonts.
-- `registry`: The bevy app type registry.
-- `bindings`, `world_bindigns`, `type_bindings`: The interesting bit
-
-### Bindings
-
-Remember *dynamic modifiers*. Since they are not getting their value from the
-definition of the `RichText`, they must be taking it from somewhere else. Where,
-you ask? The bindings! Let's take a look at their definition:
-
-```rust
-pub type Bindings = HashMap<String, Box<dyn Modify>>;
-```
-
-It's just a map from names to `Modify`. `RichText`, instead of using a
-pre-defined `Modify`, will pick it from the `Bindings` and use it.
-
-#### Adding bindings
-
-Currently bevy integration goes through the `RichTextData` component
-and `WorldBindings` resource.
-
-Add some rich text with the `RichTextBundle` and modify it by querying for
-`RichTextData` and calling:
-
-- `rich_text_data.set(binding_name, value)` To set a non-content binding
-- `rich_text_data.set_content(binding_name, content)` to set a content binding
-
-You can also use the similarly named methods on the `WorldBindings` resource.
-`WorldBindings`, unlike `RichTextData` applies to **all** `RichText`s, not just
-the one on the `RichTextData`'s entity.
-
-With this the `RichTextPlugin` will be able to update the text sections based
-on your run-time values.
-
-### Fetchers
-
-Fetchers let you delegate the work of reading from `World` and updating `RichText`
-data to the `RichText` plugin.
-
-They update the `GlobalRichTextBindings` based on the value of resources or components.
-`cuicui_richtext` provides bundles to make this as little intrusive as possible.
-
-```rust
-
-fn setup(mut commands: Commands) {
-    let value = 3.41;
-
-    // If your component implements `fmt::Display`, you can use the `Tracked` bundle,
-    // This will update content bound to provided name based on the value of component.
-    // `track!` is a thin wrapper around `Tracked` to make it a bit less honerous to use.
-    commands.spawn((
-        SomeBundle { foo: 34.0, ..default() },
-        track!(tracked_slider_value, Slider(value)),
-    ));
-    // You can use the 'd flag if you want to derive `Debug` and not have to
-    // manually implement Display
-    commands
-        // If a bundle has the component you want to track, you should insert
-        // it separately as shown here.
-        .spawn(BundleWithRelevantComponent { foo: 34.0, ..default() })
-        .insert(track!('d, debug_tracked_slider_value, Relevant(value)));
-
-    // The 'm flag let you tie a value to an arbitrary modifier.
-    // Your component needs to implement `IntoModify`.
-    commands.spawn((
-        SomeBundle { foo: 34.0, ..default() },
-        track!('m, snd_line_color, UserColor(Color::PINK)),
-    ));
-    // You can also do this with resources. Import the `ResourceTrackerExt` trait.
-    // This binds to the name of the type.
-    // You can use `commands.init_tracked_resource` for default resources.
-    commands.insert_tracked_resource(PlayerCount(10));
-
-    // Works with `Modify` resources as well.
-    // Those methods also exist on `App`.
-    commands.insert_modify_resource(LineColor(Color::RED));
-
-    // Rich text will automatically be updated.
-    commands.spawn(RichTextBundle::parse(
-        "Player count: {PlayerCount}\n\
-        {Color:{snd_line_color}|slider value for name: {named_slider_value}}\n\
-        slider value for entity: {entity_slider_value}\n\
-        {Color:{LineColor}|slider value for from DebugTracked: {debug_tracked_slider_value}}\n\
-        slider from tracked: {tracked_slider_value}",
-        TextStyle {
-            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-            font_size: 34.0,
-            color: Color::WHITE,
-        },
-    ));
-
-    
-}
-
-#[derive(Component, Debug, Clone, Copy)]
-struct Slider(f32);
-impl fmt::Display for Slider {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:.3}", self.0)
-    }
-}
-
-#[derive(Component, Clone, Copy)]
-struct UserColor(Color);
-impl IntoModify for UserColor {
-    fn into_modify(self) -> richtext::ModifyBox {
-        Box::new(modifiers::Color(self.0))
-    }
-}
-```
-
-## Future work
-
-- [`bevy_ui_bits`][bui_bits] has cool *embossed* text and preset size constants.
-- It should be possible to write a macro for parsing the specification string
-  at compile time
-- Better API: something similar to bevy's label for the binding context, so
-  that typos are caught at compile time.
+[febucci Unity plugin]: https://www.febucci.com/text-animator-unity/docs/installing-and-quick-start/
 
 ## Previous work
 
@@ -455,6 +467,7 @@ impl IntoModify for UserColor {
 
 ## TODO
 
+- [ ] all: design feature gates to avoid compiling stuff not used.
 - [ ] fab parse: performance: use jagged array for `tree::Sections` to avoid insane amount of alloc
 - [ ] richtext: put the public types such as RichText & MakeRichText & WorldBindings into their own mod
 - [X] all crates: Rename all occurences of "prefab"
@@ -477,7 +490,7 @@ impl IntoModify for UserColor {
 - [ ] fab resolve + fab_derive: Context field access tracking
 - [ ] fab resolve + fab_derive: Nested fields handling, modifying (.foo → .foo.x + .foo.y)
 - [X] fab resolve: Lightweight dumb resolver
-- [ ] fab resolve: Test MinResolver
+- [X] fab resolve: Test MinResolver
 - [ ] richtext trackers: Cleanup error handling
 - [ ] fab_parse post_process: Cleanup error handling (major issue)
 - [ ] bevy_fab trackers: Manage when cached entity changes/not accessible
