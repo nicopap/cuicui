@@ -1,48 +1,49 @@
-//! A variable length matrix optimized for read-only
-//! rows and statically known row count.
+//! An extensible (ie: can add more rows) [jagged array].
+//!
+//! [jagged array]: https://en.wikipedia.org/wiki/Jagged_array
 
 use std::mem::size_of;
 
-use enumset::{EnumSet, EnumSetType, __internal::EnumSetTypePrivate};
-
 use thiserror::Error;
 
-/// [`JaggedConstRowArray::new`] construction error.
+/// [`JaggedVec::new`] construction error.
 #[derive(Debug, Error)]
 pub enum Error {
     /// An `end` in `ends` was lower than a previous one.
     #[error(
-        "Cannot build JaggedConstRowArray: `ends` represents the end of each row in `data`, \
+        "Cannot build JaggedVec: `ends` represents the end of each row in `data`, \
         it should be monotonically increasing. \
         Found `end` at position {i} lower than `end` at position {}", .i - 1
     )]
     BadEnd { i: usize },
     /// An `end` in `ends` was too large.
     #[error(
-        "Cannot build JaggedConstRowArray: `ends` represents the end of each row in `data`, \
+        "Cannot build JaggedVec: `ends` represents the end of each row in `data`, \
         Yet, `end` at position {i} ({end}) is larger than the length of data ({len})"
     )]
     TooLongEnd { i: usize, len: u32, end: u32 },
 }
 
-/// A variable length matrix optimized for read-only rows and statically known row count.
-#[derive(Debug)]
-pub struct JaggedConstRowArray<V, const R: usize> {
-    // TODO(perf): store the row indices inline, preventing cache misses when looking up several rows.
-    ends: Box<[u32; R]>,
-    data: Box<[V]>,
+/// An extensible (ie: can add more rows) [jagged array].
+#[derive(Debug, PartialEq, Clone)]
+pub struct JaggedVec<T> {
+    ends: Vec<u32>,
+    data: Vec<T>,
 }
-
-impl<V, const R: usize> JaggedConstRowArray<V, R> {
-    /// How many cells are contained in this `JaggedConstRowArray`.
-    pub const fn len(&self) -> usize {
+impl<T> JaggedVec<T> {
+    pub fn push_row(&mut self, row: impl IntoIterator<Item = T>) {
+        self.ends.push(self.data.len() as u32);
+        self.data.extend(row);
+    }
+    /// How many cells are contained in this `JaggedVec`.
+    pub fn len(&self) -> usize {
         self.data.len()
     }
-    /// How many rows this `JaggedConstRowArray` has.
-    pub const fn height(&self) -> usize {
+    /// How many rows this `JaggedVec` has.
+    pub fn height(&self) -> usize {
         self.ends.len() + 1
     }
-    /// Create a [`JaggedConstRowArray`] of `R + 1` rows, values of `ends` are the
+    /// Create a [`JaggedVec`] of `ends.len() + 1` rows, values of `ends` are the
     /// end indicies (exclusive) of each row in `data`.
     ///
     /// Note that the _last index_ should be elided.
@@ -57,11 +58,11 @@ impl<V, const R: usize> JaggedConstRowArray<V, R> {
     /// # Example
     ///
     /// ```rust
-    /// use cuicui_datazoo::JaggedConstRowArray;
+    /// use cuicui_datazoo::JaggedVec;
     ///
     /// let ends = [0, 0, 3, 4, 7, 9, 10, 10];
-    /// let data = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 32];
-    /// let jagged = JaggedConstRowArray::new(Box::new(ends), Box::new(data)).unwrap();
+    /// let data = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 23];
+    /// let jagged = JaggedVec::new(ends.to_vec(), data.to_vec()).unwrap();
     /// let iliffe = jagged.into_vecs();
     /// assert_eq!(
     ///     iliffe,
@@ -74,11 +75,11 @@ impl<V, const R: usize> JaggedConstRowArray<V, R> {
     ///         vec![7, 8],
     ///         vec![9],
     ///         vec![],
-    ///         vec![11, 32],
+    ///         vec![11, 23],
     ///     ],
     /// );
     /// ```
-    pub fn new(ends: Box<[u32; R]>, data: Box<[V]>) -> Result<Self, Error> {
+    pub fn new(ends: Vec<u32>, data: Vec<T>) -> Result<Self, Error> {
         assert!(size_of::<usize>() >= size_of::<u32>());
 
         let mut previous_end = 0;
@@ -94,31 +95,26 @@ impl<V, const R: usize> JaggedConstRowArray<V, R> {
         }
         Ok(Self { ends, data })
     }
-    pub(super) fn all_rows<T: EnumSetType>(&self, set: EnumSet<T>) -> impl Iterator<Item = &V> {
-        set.iter()
-            .map(EnumSetTypePrivate::enum_into_u32)
-            .flat_map(|elem| self.row(elem as usize).iter())
-    }
     /// Get slice to row at given `index`.
     ///
     /// # Panics
     ///
-    /// When `index > R`
+    /// When `index > self.height()`
     ///
     /// # Example
     ///
     /// ```rust
-    /// use cuicui_datazoo::JaggedConstRowArray;
+    /// use cuicui_datazoo::JaggedVec;
     ///
     /// let ends = [0, 0, 3, 4, 7, 9, 10, 10];
     /// let data = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    /// let jagged = JaggedConstRowArray::new(Box::new(ends), Box::new(data)).unwrap();
+    /// let jagged = JaggedVec::new(ends.to_vec(), data.to_vec()).unwrap();
     ///
     /// assert_eq!(jagged.row(4), &[4, 5, 6]);
     /// ```
     #[inline]
-    pub fn row(&self, index: usize) -> &[V] {
-        assert!(index <= R);
+    pub fn row(&self, index: usize) -> &[T] {
+        assert!(index <= self.ends.len());
         // TODO(perf): verify generated code elides bound checks.
         let get_end = |end: &u32| *end as usize;
 
@@ -134,30 +130,29 @@ impl<V, const R: usize> JaggedConstRowArray<V, R> {
     /// # Example
     ///
     /// ```rust
-    /// use cuicui_datazoo::JaggedConstRowArray;
+    /// use cuicui_datazoo::JaggedVec;
     ///
     /// let ends = [0, 0, 3, 4, 7, 9, 10, 10];
     /// let data = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    /// let jagged = JaggedConstRowArray::new(Box::new(ends), Box::new(data)).unwrap();
+    /// let jagged = JaggedVec::new(ends.to_vec(), data.to_vec()).unwrap();
     ///
     /// assert_eq!(jagged.get(4), Some(&4));
     /// ```
     #[inline]
-    pub fn get(&self, direct_index: usize) -> Option<&V> {
+    pub fn get(&self, direct_index: usize) -> Option<&T> {
         self.data.get(direct_index)
     }
     /// Turn this compact jagged array into a sparse representation.
     ///
     /// The returned `Vec<Vec<V>>` is an [Iliffe vector]. Iterating over it will
-    /// be much slower than iterating over `JaggedConstRowArray`, but extending individual
+    /// be much slower than iterating over `JaggedVec`, but extending individual
     /// rows is much less costly.
     ///
     /// [Iliffe vector]: https://en.wikipedia.org/wiki/Iliffe_vector
-    pub fn into_vecs(self) -> Vec<Vec<V>> {
-        let Self { ends, data } = self;
-        let mut data = data.into_vec();
+    pub fn into_vecs(self) -> Vec<Vec<T>> {
+        let Self { ends, mut data } = self;
 
-        let mut iliffe = Vec::with_capacity(ends.len());
+        let mut iliffe = Vec::with_capacity(ends.len() + 1);
         let mut last_end = 0;
 
         // TODO(perf): this is slow as heck because each drain needs to move
@@ -168,6 +163,7 @@ impl<V, const R: usize> JaggedConstRowArray<V, R> {
             iliffe.push(data.drain(..size).collect());
             last_end = end;
         }
+        // the last row.
         iliffe.push(data);
         iliffe
     }

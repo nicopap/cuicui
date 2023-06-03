@@ -1,6 +1,5 @@
 //! Intermediate parsing representation.
 
-use datazoo::JaggedArray;
 use winnow::stream::Accumulate;
 
 use crate::rt_fmt::RuntimeFormat;
