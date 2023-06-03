@@ -1,3 +1,4 @@
+//! Local entity-scopped data relevant to [`Modify`]s located in the bevy ECS.
 use bevy::ecs::prelude::Component;
 
 use fab::{binding, modify::Changing, modify::Modify, resolve::Resolver};

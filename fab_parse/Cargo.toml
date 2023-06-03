@@ -22,6 +22,7 @@ thiserror = "1"
 winnow = "0.4.4"
 
 fab = { path = "../fab", package = "cuicui_fab" }
+datazoo = { path = "../datazoo", package = "cuicui_datazoo" }
 
 [dev-dependencies]
 pretty_assertions = "1.3"

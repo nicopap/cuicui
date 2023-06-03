@@ -6,7 +6,7 @@ use std::{fmt, marker::PhantomData, mem::size_of};
 
 use enumset::{EnumSet, EnumSetType};
 
-use crate::{jagged_array, JaggedArray};
+use crate::{jagged_const_row_array, JaggedConstRowArray};
 
 /// A [multimap] stored in a [`JaggedArray`].
 ///
@@ -18,7 +18,7 @@ use crate::{jagged_array, JaggedArray};
 ///
 /// [multimap]: https://en.wikipedia.org/wiki/Multimap
 pub struct EnumMultimap<K: EnumSetType, V, const CLM: usize> {
-    inner: JaggedArray<V, CLM>,
+    inner: JaggedConstRowArray<V, CLM>,
     _key: PhantomData<K>,
 }
 impl<K: EnumSetType, V: fmt::Debug, const CLM: usize> fmt::Debug for EnumMultimap<K, V, CLM> {
@@ -64,7 +64,7 @@ impl<K: EnumSetType, V, const CLM: usize> Builder<K, V, CLM> {
         let row = key.enum_into_u32() as usize;
         self.rows.insert(row, values.collect());
     }
-    pub fn build(self) -> Result<EnumMultimap<K, V, CLM>, jagged_array::Error> {
+    pub fn build(self) -> Result<EnumMultimap<K, V, CLM>, jagged_const_row_array::Error> {
         // Compile time error when `CLM` is not the correct value.
         // This works around a limitation of rust' type system,
         // where it is impossible to use associated constants in generic const position.
@@ -82,7 +82,7 @@ impl<K: EnumSetType, V, const CLM: usize> Builder<K, V, CLM> {
             }
         }
         Ok(EnumMultimap {
-            inner: JaggedArray::new(ends, data.into_boxed_slice())?,
+            inner: JaggedConstRowArray::new(ends, data.into_boxed_slice())?,
             _key: PhantomData,
         })
     }

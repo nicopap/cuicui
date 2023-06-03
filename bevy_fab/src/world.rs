@@ -1,3 +1,4 @@
+//! Global world-scopped data relevant to [`Modify`]s located in the bevy ECS.
 use bevy::prelude::{error, Mut, Resource, World};
 
 use fab::binding;
@@ -57,6 +58,7 @@ impl<M: BevyModify> Hook<M> {
 /// [`update_hooked`] to update [`WorldBindings`] with the content of hooked values.
 ///
 /// [`parse_into_resolver_system`]: crate::make::parse_into_resolver_system
+/// [`M: BevyModify`]: BevyModify
 #[derive(Resource)]
 pub struct WorldBindings<M> {
     pub bindings: binding::World<M>,
@@ -81,6 +83,12 @@ impl<M: BevyModify> WorldBindings<M> {
     }
 }
 
+/// Update [`M::Items`] components co-located with [`LocalBindings`] that declare
+/// a reflection-based dependency (`Res.foo.bar`, `One(MarkerComp).path`, etc)
+/// when that dependency is updated.
+///
+/// [`M::Items`]: fab::modify::Modify::Items
+/// [`LocalBindings`]: crate::LocalBindings
 pub fn update_hooked<M: BevyModify>(world: &mut World) {
     world.resource_scope(|world, mut bindings: Mut<WorldBindings<M>>| {
         let WorldBindings { bindings, hooks } = &mut *bindings;

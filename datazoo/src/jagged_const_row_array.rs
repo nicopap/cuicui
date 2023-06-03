@@ -28,13 +28,13 @@ pub enum Error {
 
 /// A variable length matrix optimized for read-only rows and statically known row count.
 #[derive(Debug)]
-pub struct JaggedArray<V, const R: usize> {
+pub struct JaggedConstRowArray<V, const R: usize> {
     // TODO(perf): store the row indices inline, preventing cache misses when looking up several rows.
     ends: Box<[u32; R]>,
     data: Box<[V]>,
 }
 
-impl<V, const R: usize> JaggedArray<V, R> {
+impl<V, const R: usize> JaggedConstRowArray<V, R> {
     /// Create a [`JaggedArray`] of `R + 1` rows, values of `ends` are the
     /// end indicies (exclusive) of each row in `data`.
     ///

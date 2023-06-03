@@ -17,7 +17,7 @@ use fab_parse::{Parsable, TransformedTree};
 pub use local::LocalBindings;
 pub use make::{parse_into_resolver_system, ParseFormatString};
 pub use track::{update_component_trackers_system, TrackerBundle};
-pub use world::{update_hooked, WorldBindings};
+pub use world::{update_hooked, Hook, WorldBindings};
 
 pub trait BevyModify: Parsable + fmt::Write + From<String> + Send + Sync + 'static {
     type Param: SystemParam;
@@ -48,7 +48,7 @@ pub fn update_items_system<BM: BevyModify>(
 }
 
 /// Manages [`BevyModify`] living in the ECS as [`LocalBindings`] and a global
-/// [`WorldBindings`]. Also [`Hooks`] to automatically update reflection-based
+/// [`WorldBindings`]. Also [`Hook`]s to automatically update reflection-based
 /// bindings.
 pub struct FabPlugin<BM: BevyModify>(PhantomData<fn(BM)>);
 impl<BM: BevyModify> FabPlugin<BM>

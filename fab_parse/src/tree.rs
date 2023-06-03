@@ -1,8 +1,9 @@
 //! Intermediate parsing representation.
 
-use crate::rt_fmt::RuntimeFormat;
-
+use datazoo::JaggedArray;
 use winnow::stream::Accumulate;
+
+use crate::rt_fmt::RuntimeFormat;
 
 pub(crate) const CONTENT_NAME: &str = "Content";
 pub(crate) fn is_content(m: &Modifier) -> bool {

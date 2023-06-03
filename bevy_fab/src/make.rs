@@ -65,7 +65,7 @@ where
 }
 
 /// Replaces [`ParseFormatString`] with [`LocalBindings`],
-/// updating [`WorldBindings<BM>`] and [`Hooks`].
+/// updating [`WorldBindings<BM>`].
 ///
 /// This is an exclusive system, as it requires access to the [`World`] to generate
 /// the [`Hook`]s specified in the format string.
