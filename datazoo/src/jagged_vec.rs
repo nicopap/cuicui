@@ -25,7 +25,7 @@ pub enum Error {
 }
 
 /// An extensible (ie: can add more rows) [jagged array].
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct JaggedVec<T> {
     ends: Vec<u32>,
     data: Vec<T>,
@@ -38,6 +38,10 @@ impl<T> JaggedVec<T> {
     /// How many cells are contained in this `JaggedVec`.
     pub fn len(&self) -> usize {
         self.data.len()
+    }
+    /// Is this vector empty (no cells, may have several empty rows).
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
     }
     /// How many rows this `JaggedVec` has.
     pub fn height(&self) -> usize {
@@ -60,7 +64,7 @@ impl<T> JaggedVec<T> {
     /// ```rust
     /// use cuicui_datazoo::JaggedVec;
     ///
-    /// let ends = [0, 0, 3, 4, 7, 9, 10, 10];
+    /// let ends = [0, 0, 3, 4, 7, 9, 10, 10]; // len = 8
     /// let data = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 23];
     /// let jagged = JaggedVec::new(ends.to_vec(), data.to_vec()).unwrap();
     /// let iliffe = jagged.into_vecs();
@@ -76,7 +80,7 @@ impl<T> JaggedVec<T> {
     ///         vec![9],
     ///         vec![],
     ///         vec![11, 23],
-    ///     ],
+    ///     ], // len = 9
     /// );
     /// ```
     pub fn new(ends: Vec<u32>, data: Vec<T>) -> Result<Self, Error> {

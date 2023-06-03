@@ -26,7 +26,7 @@ pub enum Error {
 }
 
 /// A variable length matrix optimized for read-only rows and statically known row count.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct JaggedConstRowArray<V, const R: usize> {
     // TODO(perf): store the row indices inline, preventing cache misses when looking up several rows.
     ends: Box<[u32; R]>,
@@ -37,6 +37,10 @@ impl<V, const R: usize> JaggedConstRowArray<V, R> {
     /// How many cells are contained in this `JaggedConstRowArray`.
     pub const fn len(&self) -> usize {
         self.data.len()
+    }
+    /// Is this array empty (no cells, may have several empty rows).
+    pub const fn is_empty(&self) -> bool {
+        self.data.is_empty()
     }
     /// How many rows this `JaggedConstRowArray` has.
     pub const fn height(&self) -> usize {
