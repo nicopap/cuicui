@@ -24,7 +24,7 @@ impl<M: Modify, const R: usize> LocalBindings<M, R> {
         let Self { root_data, bindings, resolver } = self;
 
         // TODO(clean): this code should be in cuicui_fab
-        let view = world.0.view_with_local(bindings).unwrap();
+        let view = world.bindings.view_with_local(bindings).unwrap();
         resolver.update(to_update, root_data, view, ctx);
         root_data.reset_updated();
         bindings.reset_changes();

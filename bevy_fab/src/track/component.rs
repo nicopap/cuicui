@@ -118,12 +118,12 @@ pub fn update_component_trackers_system<M: BevyModify>(
             let id = match binding {
                 Some(binding) => binding.0,
                 None => {
-                    let id = world_bindings.0.get_or_add(tracker.binding_name);
+                    let id = world_bindings.bindings.get_or_add(tracker.binding_name);
                     cache_binding_id.push((entity, id));
                     id
                 }
             };
-            let entry = world_bindings.0.entry(id);
+            let entry = world_bindings.bindings.entry(id);
             (tracker.proto_fetch)(entity_ref, entry);
         }
     });

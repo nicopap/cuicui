@@ -41,8 +41,8 @@ pub struct WorldBindingsMut<'w, 's> {
 }
 impl<'w, 's> WorldBindingsMut<'w, 's> {
     pub fn set_content(&mut self, key: &str, value: &impl fmt::Display) {
-        let Some(modifier) = self.bindings.0.get_mut(key) else {
-            self.bindings.0.set(key, value.to_string().into());
+        let Some(modifier) = self.bindings.bindings.get_mut(key) else {
+            self.bindings.bindings.set(key, value.to_string().into());
             return;
         };
         write!(modifier, "{value}").unwrap();

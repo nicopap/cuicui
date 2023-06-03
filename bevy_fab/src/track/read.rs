@@ -23,7 +23,7 @@ pub struct Read {
 
 impl Read {
     // TODO(err)
-    pub(super) fn from_parsed(parsed: parse::Source, world: &mut World) -> Option<Self> {
+    pub(crate) fn from_parsed(parsed: parse::Source, world: &mut World) -> Option<Self> {
         let path: Box<str> = parsed.reflect_path.into();
         let query = match parsed.query {
             parse::Query::Res(res) => Query::Res(ResAccess::new(res, &path, world)?),

@@ -14,12 +14,10 @@ use bevy::ecs::system::{StaticSystemParam, SystemParam, SystemParamItem};
 use fab::modify::FieldsOf;
 use fab_parse::{Parsable, TransformedTree};
 
-use track::Hooks;
-
 pub use local::LocalBindings;
 pub use make::{parse_into_resolver_system, ParseFormatString};
-pub use track::{update_component_trackers_system, update_hooked, TrackerBundle};
-pub use world::WorldBindings;
+pub use track::{update_component_trackers_system, TrackerBundle};
+pub use world::{update_hooked, WorldBindings};
 
 pub trait BevyModify: Parsable + fmt::Write + From<String> + Send + Sync + 'static {
     type Param: SystemParam;
@@ -46,7 +44,7 @@ pub fn update_items_system<BM: BevyModify, const R: usize>(
     for (mut local_data, mut items) in &mut query {
         local_data.update(&mut items, &world_bindings, &context);
     }
-    world_bindings.0.reset_changes();
+    world_bindings.bindings.reset_changes();
 }
 
 /// Manages [`BevyModify`] living in the ECS as [`LocalBindings`] and a global
@@ -70,7 +68,6 @@ where
     fn build(&self, app: &mut App) {
         use CoreSet::PostUpdate;
         app.init_resource::<WorldBindings<BM>>()
-            .init_resource::<Hooks<BM>>()
             .add_system(update_hooked::<BM>.in_base_set(PostUpdate))
             .add_system(update_items_system::<BM, R>.in_base_set(PostUpdate))
             .add_system(update_component_trackers_system::<BM>.in_base_set(PostUpdate))

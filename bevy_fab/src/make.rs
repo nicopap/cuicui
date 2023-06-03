@@ -5,10 +5,7 @@ use fab::{modify::FieldsOf, resolve::Resolver};
 use fab_parse::tree as parse;
 use log::error;
 
-use crate::{
-    track::{Hook, Hooks},
-    BevyModify, LocalBindings, WorldBindings,
-};
+use crate::{BevyModify, LocalBindings, WorldBindings};
 
 #[derive(Component)]
 pub struct ParseFormatString<BM: BevyModify> {
@@ -59,7 +56,7 @@ where
 
     let tree = fab_parse::format_string(format_string)?;
     let tree = BM::transform(tree.transform());
-    let parsed = tree.finish(&mut bindings.0, &mut new_hooks);
+    let parsed = tree.finish(&mut bindings.bindings, &mut new_hooks);
     let parsed: Vec<_> = parsed.into_iter().collect::<anyhow::Result<_>>()?;
 
     let (resolver, items) = Resolver::new(parsed, default_item, context);
@@ -129,15 +126,8 @@ pub fn parse_into_resolver_system<BM: BevyModify + 'static, const R: usize>(
 
     // To convert the parse::Hook into an actual track::Hook that goes into track::Hooks,
     // we need excluisve world access.
-    world.resource_scope(|world, mut hooks: Mut<Hooks<BM>>| {
-        world.resource_scope(|world, mut bindings: Mut<WorldBindings<BM>>| {
-            new_hooks.iter().for_each(|hook| {
-                if let Some(hook) = Hook::from_parsed(*hook, world, |n| bindings.0.get_or_add(n)) {
-                    hooks.extend(Some(hook));
-                } else {
-                    error!("A tracker failed to be loaded");
-                }
-            });
-        });
+    world.resource_scope(|world, mut bindings: Mut<WorldBindings<BM>>| {
+        let parse_hook = |&hook| bindings.parse_hook(hook, world);
+        new_hooks.iter().for_each(parse_hook);
     });
 }

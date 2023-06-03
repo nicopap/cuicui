@@ -29,7 +29,7 @@ impl<M: BevyModify> Write<M> {
         }
     }
 
-    pub(super) fn from_parsed(format: Option<parse::Format>) -> Self {
+    pub(crate) fn from_parsed(format: Option<parse::Format>) -> Self {
         match format {
             Some(parse::Format::Fmt(format)) => Write::Format(format),
             Some(parse::Format::UserDefined(_)) => todo!(),
