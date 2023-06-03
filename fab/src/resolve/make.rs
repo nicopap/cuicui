@@ -33,6 +33,7 @@ impl<'a, M: Modify> Make<'a, M> {
     pub(super) fn new(modifiers: Vec<MakeModify<M>>, default_section: &'a M::Item) -> Self {
         Self { modifiers, default_section, errors: Vec::new() }
     }
+
     /// Apply all static `Modify` and remove them from `modifiers`.
     ///
     /// A `Modify` is static when:

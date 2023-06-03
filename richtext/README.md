@@ -455,11 +455,12 @@ impl IntoModify for UserColor {
 
 ## TODO
 
+- [ ] fab parse: performance: use jagged array for `tree::Sections` to avoid insane amount of alloc
 - [ ] richtext: put the public types such as RichText & MakeRichText & WorldBindings into their own mod
 - [X] all crates: Rename all occurences of "prefab"
 - [ ] all crates: Do a pass on references to "text" in fab crates.
 - [ ] rt_fmt: Fix formatting doing weird things
-- [ ] richtext split: Make the API public.
+- [ ] fab_parse split: Make the API public.
 - [X] fab/datazoo cleanup: remove all u32::try_from(usize) and add a const () = assert!(sizeof);
 - [X] fab_derive: Write the doc strings of modify functions on the modify enum variants and constructor.
 - [X] bevy_fab: Reduce the trait boilerplate.
@@ -475,16 +476,16 @@ impl IntoModify for UserColor {
 - [X] fab resolve: Fix modifiers overwritting static children
 - [ ] fab resolve + fab_derive: Context field access tracking
 - [ ] fab resolve + fab_derive: Nested fields handling, modifying (.foo → .foo.x + .foo.y)
-- [ ] fab resolve: Lightweight dumb resolver
+- [X] fab resolve: Lightweight dumb resolver
+- [ ] fab resolve: Test MinResolver
 - [ ] richtext trackers: Cleanup error handling
-- [ ] richtext post_process: Cleanup error handling (major issue)
-- [ ] richtext trackers: Manage when cached entity changes/not accessible
-- [X] richtext trackers: Cleanup module tree
-- [ ] richtext trackers: Check is_changed of resources and components before updating binding
-- [ ] richtext trackers: Check that the target field changed before updating binding
-- [ ] richtext trackers: Test the component-based trackers
-- [ ] richtext parser: test and improve error messages
-- [ ] richtext parser: review the informal_grammar.md file
+- [ ] fab_parse post_process: Cleanup error handling (major issue)
+- [ ] bevy_fab trackers: Manage when cached entity changes/not accessible
+- [X] bevy_fab trackers: Cleanup module tree
+- [ ] bevy_fab trackers: Check is_changed of resources and components before updating binding
+- [ ] bevy_fab trackers: Check that the target field changed before updating binding
+- [ ] bevy_fab trackers: Test the reflection-component-based trackers
+- [ ] fab parse: review the informal_grammar.md file
 - [ ] richtext: Text2d support
 - [ ] richtext: Modify a Vec<&mut Text> over TextSections, to allow all kind of effects
 - [X] richtext: way to apply the same Modify in series, by splitting text word/character
@@ -493,6 +494,10 @@ impl IntoModify for UserColor {
       (BindingId, ModifierIndex)
 - [X] richtext: Post-process content splitting as described in `post_process_content.md`
 - [ ] everything: Document the hell out of everything
+- [ ] bevy_fab: context-specific Resolvers. Could use a different resolver depending on the text
+      being created, still sharing the same interner and Modify (though this conflicts with Resolver
+      as a Modify associated type).
+- [ ] fab parse: test and improve error messages
 - [ ] (unsure) optimization: take inspiration from https://github.com/Wallacoloo/jagged_array/blob/master/src/lib.rs#L68 for `VarMatrix`s impls
 - [ ] (unsure) richtext parser: Allow compile-time verification of rich text spec through a proc macro
 - [ ] (unsure) fab resolve: Handle binding that depends on fields (Option<Modifier> in binding view)

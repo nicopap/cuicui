@@ -1,5 +1,6 @@
 mod impl_fmt;
 mod make;
+mod minimal;
 
 use std::{mem::size_of, ops::Range};
 
@@ -12,6 +13,8 @@ use smallvec::SmallVec;
 
 use crate::binding::{Id, View};
 use crate::modify::{Changing, FieldsOf, Indexed, Modify};
+
+pub use minimal::MinResolver;
 
 type SmallKeySorted<K, V, const C: usize> = sorted::KeySorted<SmallVec<[(K, V); C]>, K, V>;
 
