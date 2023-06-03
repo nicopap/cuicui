@@ -458,7 +458,7 @@ impl IntoModify for UserColor {
 - [ ] fab parse: performance: use jagged array for `tree::Sections` to avoid insane amount of alloc
 - [ ] richtext: put the public types such as RichText & MakeRichText & WorldBindings into their own mod
 - [X] all crates: Rename all occurences of "prefab"
-- [ ] all crates: Do a pass on references to "text" in fab crates.
+- [X] all crates: Do a pass on references to "text" in fab crates.
 - [ ] rt_fmt: Fix formatting doing weird things
 - [ ] fab_parse split: Make the API public.
 - [X] fab/datazoo cleanup: remove all u32::try_from(usize) and add a const () = assert!(sizeof);

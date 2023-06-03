@@ -1,5 +1,5 @@
 //! Tracker structs to easily insert into ECS components you want to read
-//! into rich text modifiers.
+//! into modifiers.
 
 mod component;
 mod read;

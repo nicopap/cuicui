@@ -88,7 +88,10 @@ impl<M: Modify> MakeModify<M> {
     }
 }
 
-/// A [`ModifyBox`] that apply to a given [`Range`] of [`TextSection`]s on a [`Text`].
+/// A [`Modify`] that apply to a given [`Range`] of [`M::Item`]s in [`M::Items`].
+///
+/// [`M::Item`]: Modify::Item
+/// [`M::Items`]: Modify::Items
 #[derive(Debug)]
 struct Modifier<M> {
     /// The modifier to apply in the given `range`.
@@ -109,8 +112,6 @@ pub struct DepsResolver<M: Modify, const MOD_COUNT: usize> {
     /// `f2m` stands for "field to modifier dependencies".
     f2m: EnumMultimap<M::Field, ModifyIndex, MOD_COUNT>,
 
-    // TODO(feat): RichText without m2m dependency. This is fairly costly to
-    // build and uses several kilobytes of memory.
     /// `Modify` that depends on other `Modify`.
     ///
     /// When a `Modify` changes, sometimes, other `Modify` need to run.
