@@ -8,7 +8,7 @@ use bevy::{
     prelude::*,
     text::{BreakLineOn, Font, Text, TextAlignment, TextSection},
 };
-use bevy_fab::{BevyModify, FabPlugin, ParseFormatString, PrefabLocal, PrefabWorld};
+use bevy_fab::{BevyModify, FabPlugin, LocalBindings, ParseFormatString};
 use enumset::__internal::EnumSetTypePrivate;
 use fab_parse::{Split, TransformedTree};
 
@@ -30,13 +30,13 @@ impl Default for TextGlobalStyle {
 
 #[derive(SystemParam)]
 pub struct WorldBindings<'w, 's> {
-    bindings: Res<'w, PrefabWorld<Modifier>>,
+    bindings: Res<'w, bevy_fab::WorldBindings<Modifier>>,
     context: Res<'w, Assets<Font>>,
     _p: PhantomData<&'s ()>,
 }
 #[derive(SystemParam)]
 pub struct WorldBindingsMut<'w, 's> {
-    bindings: ResMut<'w, PrefabWorld<Modifier>>,
+    bindings: ResMut<'w, bevy_fab::WorldBindings<Modifier>>,
     _p: PhantomData<&'s ()>,
 }
 impl<'w, 's> WorldBindingsMut<'w, 's> {
@@ -51,7 +51,7 @@ impl<'w, 's> WorldBindingsMut<'w, 's> {
 #[derive(WorldQuery)]
 #[world_query(mutable)]
 pub struct RichText {
-    inner: &'static mut PrefabLocal<Modifier, { (ModifierField::BIT_WIDTH - 1) as usize }>,
+    inner: &'static mut LocalBindings<Modifier, { (ModifierField::BIT_WIDTH - 1) as usize }>,
     text: &'static mut Text,
 }
 impl RichTextItem<'_> {

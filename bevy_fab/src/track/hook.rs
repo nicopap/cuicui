@@ -2,7 +2,7 @@ use bevy::ecs::prelude::{Mut, Resource, World};
 use fab::binding;
 
 use super::{Read, Write};
-use crate::{BevyModify, PrefabWorld};
+use crate::{BevyModify, WorldBindings};
 
 /// A hook from a value in the ECS to a [`M: Modify`] associated with
 /// a binding.
@@ -15,7 +15,7 @@ use crate::{BevyModify, PrefabWorld};
 /// All hooks are added the the [`Hooks`] resource, see [`Hooks`] for more
 /// details.
 ///
-/// [`M: Modify`]: fab::prefab::Modify
+/// [`M: Modify`]: fab::modify::Modify
 pub struct Hook<M> {
     binding: binding::Id,
     read: Read,
@@ -35,7 +35,7 @@ impl<M: BevyModify> Hook<M> {
     }
 
     /// Read value describe in `self.read` from [`World`],
-    /// then write it into binding `self.binding` in [`PrefabWorld`]
+    /// then write it into binding `self.binding` in [`WorldBindings`]
     /// according to `self.write`.
     ///
     /// Note: `self` is mutable here, this is because [`Read`] caches world
@@ -43,7 +43,7 @@ impl<M: BevyModify> Hook<M> {
     fn read_into_binding(
         &mut self,
         world: &World,
-        bindings: &mut Mut<PrefabWorld<M>>,
+        bindings: &mut Mut<WorldBindings<M>>,
     ) -> Option<()> {
         let value = self.read.world(world)?;
         self.write.modify(value, bindings.0.entry(self.binding));
@@ -57,11 +57,11 @@ impl<M: BevyModify> Hook<M> {
 /// to read from the ECS and how to interpret it.
 ///
 /// Hooks are added to this resource by [`parse_into_resolver_system`] and read by
-/// [`update_hooked`] to update [`PrefabWorld`] with the content of hooked values.
+/// [`update_hooked`] to update [`WorldBindings`] with the content of hooked values.
 ///
 /// [`parse_into_resolver_system`]: crate::make::parse_into_resolver_system
 #[derive(Resource)]
-pub struct Hooks<M>(Vec<Hook<M>>); // TODO(clean): merge this with PrefabWorld
+pub struct Hooks<M>(Vec<Hook<M>>); // TODO(clean): merge this with WorldBindings
 impl<M> Default for Hooks<M> {
     fn default() -> Self {
         Hooks(Vec::new())
@@ -73,7 +73,7 @@ impl<M> Hooks<M> {
     }
 }
 pub fn update_hooked<M: BevyModify>(world: &mut World) {
-    world.resource_scope(|world, mut bindings: Mut<PrefabWorld<M>>| {
+    world.resource_scope(|world, mut bindings: Mut<WorldBindings<M>>| {
         world.resource_scope(|world, mut trackers: Mut<Hooks<M>>| {
             for tracker in trackers.0.iter_mut() {
                 tracker.read_into_binding(world, &mut bindings);

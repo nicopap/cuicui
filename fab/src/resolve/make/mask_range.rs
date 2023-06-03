@@ -3,7 +3,7 @@ use std::{mem::size_of, ops::Range};
 use datazoo::{jagged_bitset, Bitset, JaggedBitset};
 use enumset::EnumSet;
 
-use crate::{prefab::Modify, resolve::MakeModify};
+use crate::{modify::Modify, resolve::MakeModify};
 
 type Mask = Bitset<Vec<u32>>;
 

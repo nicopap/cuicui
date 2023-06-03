@@ -4,7 +4,7 @@ use std::{borrow::Cow, iter, marker::PhantomData, ops::Range, str::FromStr};
 
 use bevy_math::cubic_splines::CubicCurve;
 use enumset::{EnumSet, EnumSetType};
-use fab::{binding, prefab::Modify, resolve::MakeModify, resolve::ModifyKind};
+use fab::{binding, modify::Modify, resolve::MakeModify, resolve::ModifyKind};
 
 use crate::tree::{self, get_content, get_content_mut, is_content, Dyn, Hook};
 

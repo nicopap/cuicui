@@ -1,12 +1,12 @@
-//! Provided implementations for the [`Modify<TextPrefab>`] trait for cuicui.
+//! [`Modify`] for richtext.
 use std::{any::Any, borrow::Cow, fmt};
 
 use bevy::asset::HandleId;
 use bevy::prelude::{trace, Assets, Color, Handle};
 use bevy::text::{Font, Text, TextSection};
 use enumset::EnumSet;
-use fab::prefab::Indexed;
-use fab::{impl_modify, prefab::Modify};
+use fab::modify::Indexed;
+use fab::{impl_modify, modify::Modify};
 use fab_parse::{Deps, Parsable};
 
 /// A Boxed [`TextModifier`]. This allows you to extend [`Modifier`] with your
@@ -174,7 +174,7 @@ impl<T: TextModify + Send + Sync + 'static> From<T> for Modifier {
 }
 
 pub trait TextModify {
-    fn apply(&self, ctx: &GetFont, prefab: &mut TextSection);
+    fn apply(&self, ctx: &GetFont, section: &mut TextSection);
     fn depends(&self) -> EnumSet<ModifierField>;
     fn changes(&self) -> EnumSet<ModifierField>;
 

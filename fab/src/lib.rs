@@ -1,5 +1,5 @@
 pub mod binding;
-pub mod prefab;
+pub mod modify;
 pub mod resolve;
 
 pub use fab_derive::impl_modify;

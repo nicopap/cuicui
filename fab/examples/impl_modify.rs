@@ -1,4 +1,4 @@
-use cuicui_fab::{impl_modify, prefab::Modify};
+use cuicui_fab::{impl_modify, modify::Modify};
 
 #[derive(Clone, Debug)]
 pub struct Person {

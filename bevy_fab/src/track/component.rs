@@ -3,7 +3,7 @@ use std::{fmt, marker::PhantomData};
 use bevy::{ecs::world::EntityRef, prelude::*};
 use fab::binding;
 
-use crate::{BevyModify, PrefabWorld};
+use crate::{BevyModify, WorldBindings};
 
 /// Track a component of this entity and keep the binding `binding_name`
 /// in [`WorldBindings`] up to date with its value.
@@ -101,7 +101,7 @@ pub fn update_component_trackers_system<M: BevyModify>(
     mut entities: Local<Vec<(Entity, Option<TrackerBinding<M>>)>>,
     mut cache_binding_id: Local<Vec<(Entity, binding::Id)>>,
 ) {
-    world.resource_scope(|world, mut world_bindings: Mut<PrefabWorld<M>>| {
+    world.resource_scope(|world, mut world_bindings: Mut<WorldBindings<M>>| {
         // We do this weird dance because we need to pass a EntityRef to proto_fetch
         entities.extend(
             world

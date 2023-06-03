@@ -3,34 +3,24 @@
 mod is_static;
 mod mask_range;
 
-use std::{fmt, mem::size_of};
+use std::mem::size_of;
 
 use datazoo::{enum_multimap, sorted::KeySorted, AssumeSortedByKeyExt, BitMultimap, JaggedBitset};
 use enumset::EnumSet;
 use log::{error, trace};
 
 use crate::binding::Id;
-use crate::prefab::{FieldsOf, Modify};
+use crate::modify::{FieldsOf, Modify};
 
 use super::{MakeModify, ModifyIndex as Idx, ModifyKind, Resolver};
 use is_static::CheckStatic;
 use mask_range::MaskRange;
 
+#[derive(Debug)]
 pub(super) struct Make<'a, M: Modify> {
     default_section: &'a M::Item,
     modifiers: Vec<super::MakeModify<M>>,
     errors: Vec<anyhow::Error>,
-}
-// Manual `impl` because we don't want `Make: Debug where M: Debug`, only
-// `Make: Debug where M::Item: Debug, PrefabField<M>: Debug`
-impl<M: Modify> fmt::Debug for Make<'_, M> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Make")
-            .field("default_section", &self.default_section)
-            .field("modifiers", &self.modifiers)
-            .field("errors", &self.errors)
-            .finish()
-    }
 }
 
 impl<'a, M: Modify> Make<'a, M> {

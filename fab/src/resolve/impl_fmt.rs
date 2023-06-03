@@ -1,9 +1,9 @@
+//! Custom `Debug` impl for `resolver` structs, so that debug print output
+//! is more dense and easier to parse as a human.
 use std::fmt;
 
 use super::{MakeModify, Modify, ModifyIndex, ModifyKind};
 
-// Manual `impl` because we don't want `MakeModify: Debug where M: Debug`, only
-// `MakeModify: Debug where M::Item: Debug, PrefabField<M>: Debug`
 impl<M: Modify> fmt::Debug for MakeModify<M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Mk")
@@ -12,8 +12,6 @@ impl<M: Modify> fmt::Debug for MakeModify<M> {
             .finish()
     }
 }
-// Manual `impl` because we don't want `ModifyKind: Debug where M: Debug`, only
-// `ModifyKind: Debug where M::Item: Debug, PrefabField<M>: Debug`
 impl<M: Modify> fmt::Debug for ModifyKind<M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

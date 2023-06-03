@@ -11,15 +11,15 @@ use std::{fmt, marker::PhantomData};
 use bevy::app::{App, CoreSet, Plugin};
 use bevy::ecs::prelude::*;
 use bevy::ecs::system::{StaticSystemParam, SystemParam, SystemParamItem};
-use fab::prefab::FieldsOf;
+use fab::modify::FieldsOf;
 use fab_parse::{Parsable, TransformedTree};
 
 use track::Hooks;
 
-pub use local::PrefabLocal;
+pub use local::LocalBindings;
 pub use make::{parse_into_resolver_system, ParseFormatString};
 pub use track::{update_component_trackers_system, update_hooked, TrackerBundle};
-pub use world::PrefabWorld;
+pub use world::WorldBindings;
 
 pub trait BevyModify: Parsable + fmt::Write + From<String> + Send + Sync + 'static {
     type Param: SystemParam;
@@ -35,8 +35,8 @@ pub trait BevyModify: Parsable + fmt::Write + From<String> + Send + Sync + 'stat
 }
 
 pub fn update_items_system<BM: BevyModify, const R: usize>(
-    mut query: Query<(&mut PrefabLocal<BM, R>, &mut BM::Items)>,
-    mut world_bindings: ResMut<PrefabWorld<BM>>,
+    mut query: Query<(&mut LocalBindings<BM, R>, &mut BM::Items)>,
+    mut world_bindings: ResMut<WorldBindings<BM>>,
     params: StaticSystemParam<BM::Param>,
 ) where
     BM::Items: Component,
@@ -49,8 +49,9 @@ pub fn update_items_system<BM: BevyModify, const R: usize>(
     world_bindings.0.reset_changes();
 }
 
-/// Manage a `Prefab` and [`Hooks`] to update the prefab's item as a component
-/// in the bevy ECS.
+/// Manages [`BevyModify`] living in the ECS as [`LocalBindings`] and a global
+/// [`WorldBindings`]. Also [`Hooks`] to automatically update reflection-based
+/// bindings.
 pub struct FabPlugin<BM: BevyModify, const R: usize>(PhantomData<fn(BM)>);
 impl<BM: BevyModify, const R: usize> FabPlugin<BM, R>
 where
@@ -68,7 +69,7 @@ where
 {
     fn build(&self, app: &mut App) {
         use CoreSet::PostUpdate;
-        app.init_resource::<PrefabWorld<BM>>()
+        app.init_resource::<WorldBindings<BM>>()
             .init_resource::<Hooks<BM>>()
             .add_system(update_hooked::<BM>.in_base_set(PostUpdate))
             .add_system(update_items_system::<BM, R>.in_base_set(PostUpdate))

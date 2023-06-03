@@ -19,7 +19,7 @@ impl<T, M: Modify<Item = T>> Indexed<M> for Vec<T> {
     }
 }
 
-/// Several [`Modify::Field`] of the [`Prefab::Modify`] of `P`.
+/// Several [`Modify::Field`]s.
 pub type FieldsOf<M> = EnumSet<<M as Modify>::Field>;
 
 /// A set of operations on `Item`.
@@ -66,7 +66,7 @@ pub trait Modify: Clone + fmt::Debug {
     fn changes(&self) -> EnumSet<Self::Field>;
 }
 
-/// Holds a [`Prefab::Item`] and keeps track of changes to it.
+/// Holds a [`Modify::Item`] and keeps track of changes to it.
 ///
 /// You need to use [`Changing::update`] to access the `Item`, this will keep
 /// track of the updated fields.

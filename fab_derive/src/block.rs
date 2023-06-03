@@ -228,7 +228,7 @@ impl Block {
             #[doc = concat!(
                 "Fields may be members of [`",
                 stringify!(#item),
-                "`], the prefab items of sections modified by [`",
+                "`], the Item of sections modified by [`",
                 stringify!(#modify_ty),
                 "`], or fields of the context [`",
                 stringify!(#modify_ty),

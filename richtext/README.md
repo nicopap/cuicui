@@ -456,7 +456,10 @@ impl IntoModify for UserColor {
 ## TODO
 
 - [ ] richtext: put the public types such as RichText & MakeRichText & WorldBindings into their own mod
+- [X] all crates: Rename all occurences of "prefab"
+- [ ] all crates: Do a pass on references to "text" in fab crates.
 - [ ] rt_fmt: Fix formatting doing weird things
+- [ ] richtext split: Make the API public.
 - [X] fab/datazoo cleanup: remove all u32::try_from(usize) and add a const () = assert!(sizeof);
 - [X] fab_derive: Write the doc strings of modify functions on the modify enum variants and constructor.
 - [X] bevy_fab: Reduce the trait boilerplate.
@@ -489,7 +492,6 @@ impl IntoModify for UserColor {
 - [X] richtext parse: Implement b2m (binding to modifier) probably with a smallvec of
       (BindingId, ModifierIndex)
 - [X] richtext: Post-process content splitting as described in `post_process_content.md`
-- [X] richtext split: Make the API public.
 - [ ] everything: Document the hell out of everything
 - [ ] (unsure) optimization: take inspiration from https://github.com/Wallacoloo/jagged_array/blob/master/src/lib.rs#L68 for `VarMatrix`s impls
 - [ ] (unsure) richtext parser: Allow compile-time verification of rich text spec through a proc macro

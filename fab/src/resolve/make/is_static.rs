@@ -2,7 +2,7 @@ use enumset::EnumSet;
 use smallvec::SmallVec;
 
 use super::{MakeModify, ModifyKind};
-use crate::prefab::{FieldsOf, Modify};
+use crate::modify::{FieldsOf, Modify};
 
 pub(super) struct CheckStatic<M: Modify> {
     parents_range_end: SmallVec<[u32; 4]>,

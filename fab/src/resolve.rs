@@ -11,7 +11,7 @@ use log::warn;
 use smallvec::SmallVec;
 
 use crate::binding::{Id, View};
-use crate::prefab::{Changing, FieldsOf, Indexed, Modify};
+use crate::modify::{Changing, FieldsOf, Indexed, Modify};
 
 type SmallKeySorted<K, V, const C: usize> = sorted::KeySorted<SmallVec<[(K, V); C]>, K, V>;
 
@@ -24,7 +24,7 @@ impl ModifyIndex {
     }
 }
 
-/// A [`Modify`] either described as a [`Prefab::Modify`] or a binding [`Id`].
+/// A [`Modify`] either described as `M` or a binding [`Id`].
 pub enum ModifyKind<M: Modify> {
     Bound {
         binding: Id,
@@ -34,7 +34,7 @@ pub enum ModifyKind<M: Modify> {
     Modify(M),
 }
 
-/// Describes a [`Modify`] affecting a range of items in the [`Prefab`]
+/// Describes a [`Modify`] affecting a range of items in the [`Modify::Items`]
 /// and dependency described as [`ModifyKind`].
 ///
 /// Used in [`Resolver::new`] to create a [`Resolver`].
@@ -80,13 +80,13 @@ struct Modifier<M> {
 }
 
 // TODO(clean): Create a trait that wraps `Resolver`, so that we can erase
-// MOD_COUNT. We could then use it as an associated type of `Prefab` instead
+// MOD_COUNT. We could then use it as an associated type of `Modify` instead
 // of propagating it all the way.
 #[derive(Debug)]
 pub struct Resolver<M: Modify, const MOD_COUNT: usize> {
     modifiers: Box<[Modifier<M>]>,
 
-    /// `Modify` that can be triggered by a `PrefabField` change.
+    /// `Modify` that can be triggered by a `Modify::Field` change.
     /// `f2m` stands for "field to modifier dependencies".
     f2m: EnumMultimap<M::Field, ModifyIndex, MOD_COUNT>,
 
