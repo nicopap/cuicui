@@ -15,14 +15,19 @@
 // It provides methods to generate the fields and modify enums
 // and argument lists for the modify functions.
 //
-// `path` (`Path`) is a modifier path into the item. Provides method to create
+// `modifiers::path` (`Path`) is a modifier path into the item. Provides method to create
 // the fields enum.
+//
+// `modifiers::deps` A `Modifiers` is not enough to decide what dependencies
+// a modify function touches. Consider `modify1` and `modify2`, two modify functions.
+// `modify1` depends on `item.field` and `modify2` changes `item.field.inner`.
+// `modify1` is affected by changes made by `modify2`, yet, `Modifiers` doesn't know that.
+// `deps` provides way to split to the most precise dependency a set of `Modifiers`.
 
 mod block;
 mod extensions;
 mod modifiers;
 mod modify_fn;
-mod path;
 
 use block::Config;
 use proc_macro::TokenStream as TokenStream1;

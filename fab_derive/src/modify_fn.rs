@@ -1,11 +1,11 @@
-use std::{mem, ops::Not};
+use std::mem;
 
 use heck::{AsSnakeCase, AsUpperCamelCase};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::{punctuated::Punctuated, spanned::Spanned, ItemFn, Token};
 
-use crate::modifiers::{Mode, Modifiers};
+use crate::modifiers::{AtomicAccessors, FnAtomicAccessors, Mode, Modifiers};
 
 type Tokens = TokenStream;
 
@@ -30,15 +30,16 @@ fn mk_variant_type(ty: Box<syn::Type>) -> Box<syn::Type> {
 /// - Remove prefix `&` that do not have a lifetime from the input type.
 /// - Add the `dynamic_field` `read` and `write` fields with type `dynamic_ty`
 /// - Add `#[doc(hidden)]` to private variants
+/// - Add a paragraph detailing what fields the variant reads from and writes to.
 fn mk_variant(
     private: bool,
     attrs: &[syn::Attribute],
     mods: &Modifiers,
     name: &Ident,
     inputs: &[syn::FnArg],
+    accessors: &FnAtomicAccessors,
     dynamic_ty: Tokens,
 ) -> Tokens {
-    // TODO: document variant with path & modify target.
     let fields = inputs
         .iter()
         .filter(|i| mods.is_constructor_input(i))
@@ -51,10 +52,15 @@ fn mk_variant(
             modified.ty = mk_variant_type(modified.ty);
             modified
         });
+    let access_docs = accessors.access_doc_string().to_string();
+    let access_docs = syn::LitStr::new(&access_docs, name.span());
+    let attr_paragraph = if attrs.is_empty() { quote!() } else { quote!(#[doc = "\n\n"]) };
     let dynamic_fields = mods.dynamic_fields().map(|f| quote!( #f : #dynamic_ty ));
     let hide = if private { quote!(#[doc(hidden)]) } else { quote!() };
     quote! {
         #(#attrs)*
+        #attr_paragraph
+        #[doc = #access_docs]
         #hide
         #name { #( #fields, )* #( #dynamic_fields ),* }
     }
@@ -126,13 +132,13 @@ fn mk_declaration(function: &mut ItemFn) {
     function.vis = syn::Visibility::Inherited;
 }
 
-#[derive(Debug)]
-pub(crate) struct ModifyFn {
+pub struct ModifyFn {
     name: Ident,
     inputs: Vec<syn::FnArg>,
     pub declaration: ItemFn,
     pub constructor: Option<ItemFn>,
-    modifiers: Modifiers,
+    pub modifiers: Modifiers,
+    accessors: Option<FnAtomicAccessors>,
 }
 impl ModifyFn {
     pub fn new(mut input: ItemFn) -> syn::Result<Self> {
@@ -157,7 +163,17 @@ impl ModifyFn {
         let mut declaration = input;
         mk_declaration(&mut declaration);
 
-        Ok(ModifyFn { name, inputs, declaration, constructor, modifiers })
+        Ok(ModifyFn {
+            name,
+            inputs,
+            declaration,
+            constructor,
+            modifiers,
+            accessors: None,
+        })
+    }
+    pub fn atomize_accessors(&mut self, atomic: &AtomicAccessors) {
+        self.accessors = Some(FnAtomicAccessors::new(&self.modifiers, atomic));
     }
     pub fn call(&self, ctx: &Ident, item: &Ident) -> Tokens {
         let name = &self.name;
@@ -177,7 +193,7 @@ impl ModifyFn {
         mk_tyname(&self.name)
     }
     pub fn ty_variant(&self, root: &Ident, field_ty_name: &Ident) -> Tokens {
-        let field_ty = quote!(::#root::EnumSet<#field_ty_name>);
+        let set_ty = quote!(::#root::EnumSet<#field_ty_name>);
         let ctor = self.constructor.as_ref();
         mk_variant(
             ctor.map_or(false, |c| c.vis == syn::Visibility::Inherited),
@@ -185,13 +201,16 @@ impl ModifyFn {
             &self.modifiers,
             &self.ty_name(),
             &self.inputs,
-            field_ty,
+            self.accessors.as_ref().unwrap(),
+            set_ty,
         )
     }
     pub fn ty_matcher(&self) -> Tokens {
         mk_matcher(&self.modifiers, &self.ty_name(), &self.inputs, Site::Arm)
     }
     pub fn fields_assoc_fns(&self, root: &Ident, field_ty_name: &Ident) -> Tokens {
+        use Mode::{Read, Write};
+
         let enums = quote!(::#root::EnumSet);
         let ident = AsSnakeCase(self.name.to_string());
         let vis = &self.declaration.vis;
@@ -199,19 +218,21 @@ impl ModifyFn {
         let changes_name = Ident::new(&format!("{ident}_changes"), self.name.span());
         let depends_name = Ident::new(&format!("{ident}_depends"), self.name.span());
 
-        let changes_fields: Vec<_> = self.modifiers.used_fields(Mode::Write).collect();
-        let depends_fields: Vec<_> = self.modifiers.used_fields(Mode::Read).collect();
+        let changes_fields = self.accessors.as_ref().unwrap().variant_idents(Write);
+        let depends_fields = self.accessors.as_ref().unwrap().variant_idents(Read);
         match self.modifiers.dynamic_field(Mode::Read) {
             Some(_) => quote!(),
             None => {
-                let changes_fn = changes_fields.is_empty().not().then(|| {
+                let has_changes = changes_fields.len() != 0;
+                let changes_fn = has_changes.then(|| {
                     quote! {
                         #vis fn #changes_name () -> #enums<#field_ty_name> {
                             #enums::EMPTY #(| #field_ty_name::#changes_fields)*
                         }
                     }
                 });
-                let depends_fn = depends_fields.is_empty().not().then(|| {
+                let has_depends = depends_fields.len() != 0;
+                let depends_fn = has_depends.then(|| {
                     quote! {
                         #vis fn #depends_name () -> #enums<#field_ty_name> {
                             #enums::EMPTY #(| #field_ty_name::#depends_fields)*
@@ -225,7 +246,7 @@ impl ModifyFn {
     fn arm(&self, root: &Ident, field_ty_name: &Ident, mode: Mode) -> Tokens {
         let ty_name = self.ty_name();
         let ty = quote!(Self::#ty_name);
-        let fields = self.modifiers.used_fields(mode);
+        let fields = self.accessors.as_ref().unwrap().variant_idents(mode);
         match self.modifiers.dynamic_field(mode) {
             Some(dynamic) => quote! { #ty { #dynamic , .. } => *#dynamic },
             None => quote! { #ty { .. } => ::#root::EnumSet::EMPTY #(| #field_ty_name::#fields)* },
@@ -236,8 +257,5 @@ impl ModifyFn {
     }
     pub fn changes_arm(&self, root: &Ident, field_ty_name: &Ident) -> Tokens {
         self.arm(root, field_ty_name, Mode::Write)
-    }
-    pub fn access_idents(&self) -> impl Iterator<Item = Ident> + '_ {
-        self.modifiers.access_idents().cloned()
     }
 }

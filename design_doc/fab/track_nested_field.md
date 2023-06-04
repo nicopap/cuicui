@@ -1,4 +1,4 @@
-# `impl_modify` atomicisation of nested fields
+# `impl_modify` atomization of nested fields
 
 **Problem:** we can declare a modify function as reading `.foo`, another as
 reading `.foo.bar`, another `.foo.baz` etc.
@@ -56,8 +56,8 @@ functions that depends on `bungle.gee.zaboo`.
 
 ## Algorithm
 
-So at one point in our macro, we have the list _A_ of all modify functions, which
-themselves have a list of fields they access "accessors".
+So at one point in our macro, we have the list _A_ of all modify functions,
+which themselves have a list of fields they access "accessors".
 
 In this list we need to find the accessors that are non-atomic
 
@@ -79,3 +79,8 @@ Naive implementation:
     * then, ∀ _maybe_suffix_ in _A*_:
       * if _maybe_suffix_ atom of _accessor_:
         * insert _maybe_suffix_ in _M_
+
+## Integration
+
+We can't just add the atomized paths to the modifier list, as this list is read
+to generate the argument list, not just the dependencies and chages.

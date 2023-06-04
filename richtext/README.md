@@ -34,7 +34,7 @@ Using the primitive bevy UI system, you would have to construct a stat menu,
 give each variables its own section (manually) and then set those values
 appropriately:
 
-<details><summary>See how you would define the stats menu in bevy</summary>
+<details><summary><b>See how you would define the stats menu in bevy</b></summary>
 
 ```rust
 use bevy::prelude::*;
@@ -120,11 +120,12 @@ fn main() {
 Then, time to rewrite how we spawn our menu text:
 
 ```rust
-const MENU_FORMAT_STRING: &str = "Player stats\n\
-    ------------\n\
-    Health: {health}\n\
-    Defense: {defense}\n\
-    Mana: {mana}";
+const MENU_FORMAT_STRING: &str = "\
+Player stats
+------------
+Health: {health}
+Defense: {defense}
+Mana: {mana}";
 
 #[derive(Resource)]
 struct Fonts {
@@ -148,7 +149,7 @@ fn update_stat_menu(mut bindings: WorldBindingsMut, player: Query<&Stats, With<P
 
 TODO: screenshot
 
-<details><summary>Click here for a detailed explanation on how MENU_FORMAT_STRING becomes Text</summary>
+<details><summary><b>Click here for a detailed explanation on how `MENU_FORMAT_STRING` becomes Text</b></summary>
 
 Let's take a closer to `MENU_FORMAT_STRING`, without the rust syntax:
 
@@ -241,17 +242,18 @@ fn main() {
 Now we can use the *binding source* syntax in the `MENU_FORMAT_STRING`:
 
 ```rust
-const MENU_FORMAT_STRING: &str = "Player stats\n\
-    ------------\n\
-    Health: {Marked(Player).Stats.health:}\n\
-    Defense: {Marked(Player).Stats.defense:}\n\
-    Mana: {Marked(Player).Stats.mana:}";
+const MENU_FORMAT_STRING: &str = "\
+Player stats
+------------
+Health: {Marked(Player).Stats.health:}
+Defense: {Marked(Player).Stats.defense:}
+Mana: {Marked(Player).Stats.mana:}";
 ```
 
 That's all we need to do, now we can **delete the `update_stat_menu` system and everything
 is taken care of**.
 
-<details><summary>Click here to learn how the binding source syntax works</summary>
+<details><summary><b>Click here to learn how the binding source syntax works</b></summary>
 
 With the *source binding* syntax, the format string looks as follow:
 
@@ -361,18 +363,19 @@ Let's rewrite our `MENU_FORMAT_STRING` to replicate the styling we used in
 the initial bevy example:
 
 ```rust
-const MENU_FORMAT_STRING: &str = "{ Font: stats_menu_font.ttf |\
-    Player stats\n\
-    ------------\n\
-    {Color:Red    |Health: {Marked(Player).Stats.health:}}\n\
-    {Color:Blue   |Defense: {Marked(Player).Stats.defense:}}\n\
-    {Color:Purple |Mana: {Marked(Player).Stats.mana:}}\
+const MENU_FORMAT_STRING: &str = "\
+{ Font: stats_menu_font.ttf |\
+Player stats
+------------
+{Color:Red    |Health: {Marked(Player).Stats.health:}}
+{Color:Blue   |Defense: {Marked(Player).Stats.defense:}}
+{Color:Purple |Mana: {Marked(Player).Stats.mana:}}\
 }";
 ```
 
 TODO: screenshot
 
-<details><summary>Click here to learn more about modifiers</summary>
+<details><summary><b>Click here to learn more about modifiers</b></summary>
 
 In `{ Color: Red |Bloody Text!}`, `Color` is a *modifier*.
 
@@ -415,12 +418,10 @@ The previous format string would be split in **six** segments as follow:
 
 ```
 Some text ┆that is green ┆and bold ┆and big┆ at the same time┆.
-↑         ┆↑             ┆↑        ┆↑      ┆↑                ┆↑
-│          │              │         │       │                 root formatting
-│          │              │         │       root + green
-│          │              │         root + green + bold.ttf font + size×3
-│          │              root + green + bold.ttf font
-│          root + green
+     ↑    ┆     ↑        ┆    ↑    ┆   ↑   ┆     ↑           ┆↑
+     │          │             │        │    root + green      root formatting
+     │          │             │     root + green + bold.ttf font + size×3
+     │     root + green   root + green + bold.ttf font
 root formatting
 ```
 
@@ -438,12 +439,54 @@ Sure let me tell you.
 
 Not only can text be set through *binding*, but actually any *modifier* can.
 
+Let's go back to our character stats screen. Say our character is actually
+**an unicorn**. This means, of course, that we need to cycle through the whole
+color wheel for all the menu text (appart from the stats name and values).
+
+Remember we have been using all this time the `MinRichTextPlugin`.
+We need to upgrade to `RichTextPlugin` to set dynamically *modifiers* that
+span more than a single section.
+
+Concerning our *format string*, we need to introduce a binding for the `Color`
+modifier on the whole text:
+
+```diff
+fn main() {
+    app
+-        .add_plugin(MinRichTextPlugin)
++        .add_plugin(RichTextPlugin)
+}
+
+// ...
+
+const MENU_FORMAT_STRING: &str = "\
+- { Font: stats_menu_font.ttf |\
++ { Font: stats_menu_font.ttf, Color: {color} |\
+Player stats
+------------
+{Color:Red    |Health: {Marked(Player).Stats.health:}}
+{Color:Blue   |Defense: {Marked(Player).Stats.defense:}}
+{Color:Purple |Mana: {Marked(Player).Stats.mana:}}\
+}";
+```
+
+Now, we have a `color` binding. We can update it by accessing the `WorldBindingsMut`
+resource:
+
+```rust
+fn update_color_system(mut bindings: WorldBindingsMut, time: Res<Time>) {
+    let hue = time.seconds_since_startup() % 360.0;
+    let color = Color::hsl(hue, 0.9, 0.9);
+    bindings.set("color", color.into());
+}
+```
 
 ## TODO: aliases and chops
 
 ## A dialog system in bevy
 
 > **warning**
+>
 > TODO: complete this section when context fields land.
 >
 > TODO: This is false until we do Entity as section.
@@ -467,6 +510,7 @@ of individual characters or words, in sync or other.
 
 ## TODO
 
+- [ ] fab_derive: Split the path detection code in a different crate.
 - [ ] all: design feature gates to avoid compiling stuff not used.
 - [ ] fab parse: performance: use jagged array for `tree::Sections` to avoid insane amount of alloc
 - [ ] richtext: put the public types such as RichText & MakeRichText & WorldBindings into their own mod
@@ -477,22 +521,21 @@ of individual characters or words, in sync or other.
 - [X] fab/datazoo cleanup: remove all u32::try_from(usize) and add a const () = assert!(sizeof);
 - [X] fab_derive: Write the doc strings of modify functions on the modify enum variants and constructor.
 - [X] bevy_fab: Reduce the trait boilerplate.
-- [ ] fab_derive: Document which fields are accessed in modify enum variant and constructor.
+- [X] fab_derive: Document which fields are accessed in modify enum variant and constructor.
 - [ ] fab_derive: Document `impl_modify` macro fully. Specifically: settle on a naming convention
       and use it consistently.
 - [ ] fab_derive: Test `impl_modify` more thourougfully
-- [ ] fab_derive: Define error messages as txt files and use `include_str` in both doc and code.
 - [ ] fab: Let user specify `track::Write`s
 - [ ] fab resolve: Verify validaty of multiple write fields
 - [X] fab: Entry api to bindings, allows skipping allocations wholesale.
 - [X] fab resolve: Implement proper dependency resolution
 - [X] fab resolve: Fix modifiers overwritting static children
 - [ ] fab resolve + fab_derive: Context field access tracking
-- [ ] fab resolve + fab_derive: Nested fields handling, modifying (.foo → .foo.x + .foo.y)
+- [X] fab resolve + fab_derive: Nested fields handling, modifying (.foo → .foo.x + .foo.y)
 - [X] fab resolve: Lightweight dumb resolver
-- [X] fab resolve: Test MinResolver
+- [ ] fab resolve: Test MinResolver
 - [ ] richtext trackers: Cleanup error handling
-- [ ] fab_parse post_process: Cleanup error handling (major issue)
+- [X] fab_parse post_process: Cleanup error handling (major issue)
 - [ ] bevy_fab trackers: Manage when cached entity changes/not accessible
 - [X] bevy_fab trackers: Cleanup module tree
 - [ ] bevy_fab trackers: Check is_changed of resources and components before updating binding

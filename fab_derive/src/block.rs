@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, mem};
+use std::mem;
 
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
@@ -6,6 +6,7 @@ use syn::{meta::ParseNestedMeta, spanned::Spanned, Visibility};
 
 use crate::{
     extensions::{GetIdentExt, IntoSynErrorsExt},
+    modifiers::AtomicAccessors,
     modify_fn::ModifyFn,
 };
 
@@ -90,13 +91,14 @@ impl Default for Config {
     }
 }
 const CONFIG_ATTR_DESCR: &str = "\
-- `cuicui_fab_path = alternate::path`: specify which path to use for the `cuicui_fab` crate
-  by default, it is `::cuicui_fab`
-- `enumset_crate = identifier`: specify which path to use for the `enumset` crate
-  by default, it is `enumset`
+- `cuicui_fab_path = alternate::path`: specify which path to use for the \
+  `cuicui_fab` crate by default, it is `::cuicui_fab`
+- `enumset_crate = identifier`: specify which path to use for the `enumset` \
+  crate by default, it is `enumset`
 - `no_derive(Debug | Clone)`: Do not automatically implement given trait for Modifier.
 - `visibility = [pub(crate)]`: specify the visibility for the generated enums.
   by default, it is `pub`\n";
+
 impl Config {
     pub(crate) fn parse(&mut self, meta: ParseNestedMeta) -> syn::Result<()> {
         match () {
@@ -130,7 +132,6 @@ impl Config {
     }
 }
 
-#[derive(Debug)]
 pub(crate) struct Block {
     attributes: Vec<syn::Attribute>,
     item: syn::Type,
@@ -139,7 +140,7 @@ pub(crate) struct Block {
     context_generics: syn::Generics,
     resolver: Option<syn::Type>,
     functions: Vec<ModifyFn>,
-    fields: BTreeSet<Ident>,
+    field_accessors: AtomicAccessors,
     // TODO(feat): allow generics
     modify_ty: Ident,
     fab_path: syn::Path,
@@ -163,8 +164,15 @@ impl Block {
         let err = syn::Error::new(input.span(), msg);
         let modify_ty = input.self_ty.get_ident().ok_or(err)?.clone();
         let attributes = mem::take(&mut input.attrs);
-        let functions: Vec<_> = input.items.drain(..).filter_map(read_fn).collect();
-        let fields = functions.iter().flat_map(ModifyFn::access_idents).collect();
+        let mut functions: Vec<_> = input.items.drain(..).filter_map(read_fn).collect();
+        let field_accessors = AtomicAccessors::from_non_atomic(
+            functions
+                .iter()
+                .flat_map(|f| f.modifiers.non_atomic_paths()),
+        );
+        functions
+            .iter_mut()
+            .for_each(|f| f.atomize_accessors(&field_accessors));
 
         if let Some(error) = errors.into_syn_errors() {
             return Err(error);
@@ -190,7 +198,7 @@ impl Block {
             context_generics,
             resolver: assocs.resolver,
             functions,
-            fields,
+            field_accessors,
             modify_ty,
             fab_path: config.fab_path,
             enumset_ident: config.enumset_crate,
@@ -207,7 +215,7 @@ impl Block {
             context,
             context_generics,
             resolver,
-            fields,
+            field_accessors,
             modify_ty,
             fab_path,
             enumset_ident,
@@ -222,6 +230,7 @@ impl Block {
         let ctx = Ident::new("ctx", Span::call_site());
         let item_param = Ident::new("item", Span::call_site());
 
+        let field_accessors = field_accessors.all_variants();
         let field_ty = format_ident!("{modify_ty}Field");
 
         let fns = || self.functions.iter();
@@ -259,7 +268,7 @@ impl Block {
             #[derive( ::#enumset_ident::EnumSetType, ::std::fmt::Debug )]
             #[enumset(crate_name = #enset_string)]
             #visibility enum #field_ty {
-                #( #fields ),*
+                #( #field_accessors ),*
             }
             #( #attributes )*
             #debug_derive
