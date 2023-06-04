@@ -12,9 +12,18 @@ fn main() {
         .add_plugins(
             DefaultPlugins.set(bevy::log::LogPlugin {
                 level: bevy::log::Level::DEBUG,
-                filter:
-                    "wgpu=warn,bevy_ecs=info,naga=info,bevy_app=info,gilrs_core=info,gilrs=info,cuicui_fab=trace,cuicui_richtext=trace,cuicui_richtext::modifiers=debug"
-                        .to_string(),
+                filter: "\
+                    bevy_app=info,\
+                    bevy_ecs=info,\
+                    cuicui_fab=trace,\
+                    cuicui_richtext::modifiers=debug,\
+                    cuicui_richtext=trace,\
+                    gilrs_core=info,\
+                    gilrs=info,\
+                    naga=info,\
+                    wgpu=warn\
+                "
+                .to_string(),
             }),
         )
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
