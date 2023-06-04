@@ -59,12 +59,6 @@ impl<'a, M: Modify> Make<'a, M> {
             let current_index = i;
             i += 1;
 
-            let is_static = checker.is_static(modifier);
-
-            if !is_static {
-                masker.add_index(current_index);
-                return true;
-            }
             for section in modifier.range.clone() {
                 // SAFETY: sections.len() == max(modifiers.range.end)
                 let section = unsafe { sections.get_unchecked_mut(section as usize) };
@@ -73,6 +67,11 @@ impl<'a, M: Modify> Make<'a, M> {
                 if let Err(err) = modifier.apply(ctx, section) {
                     self.errors.push(err);
                 };
+            }
+
+            if !checker.is_static(modifier) {
+                masker.add_index(current_index);
+                return true;
             }
             false
         });
