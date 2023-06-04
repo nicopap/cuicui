@@ -1,16 +1,25 @@
 # Rich text
 
-https://github.com/nicopap/cuicui/assets/26321040/e81b2dae-1dda-4188-ace1-6c2a8316c90c
-
 A rich text component for bevy.
 
-The current bevy `Text` component is [a misery to use][misery-bui].
+https://github.com/nicopap/cuicui/assets/26321040/e81b2dae-1dda-4188-ace1-6c2a8316c90c
 
-`RichText` "manages" `Text` sections,
-it associates section contents and styles to a "binding" (a name).
-As a user, you set the value of bindings through `richtext.set(&str, value)`,
-or use one of the reflection-based hook declaration, avoiding you any further
-code to update text content.
+The current bevy `Text` component extremely primitive, forcing you to do a bunch
+of error-prone operations to interact with it.
+
+`cuicui_richtext` gives you all you need to display fancy text on screen.
+With `cuicui_richtext` you can:
+
+- When spawning the `Text` component, refer directly to fields in `Reflect`
+  components and resources to display and update them in-line. No need to
+  manually update them afterward!
+- Declare styling inline, rather than through code.
+- Not have to worry about `TextSection`s at all.
+- Set text value by name rather than by index.
+- And _wayyy too much_ more!
+
+I won't introduce individually each feature. Rather, the rest of this README is
+a tutorial explaining how to use `cuicui_richtext`.
 
 ## Showing your character stats
 
@@ -192,8 +201,7 @@ fn bind_stuff(mut bindings: WorldBindingsMut, mut rich_texts: Query<RichText>) {
 }
 ```
 
-> *🖠 Info*
->
+> **Note**
 > Notice how we use the `set_content` method, see more in the
 > section about *modifiers*.
 
@@ -250,8 +258,8 @@ Defense: {Marked(Player).Stats.defense:}
 Mana: {Marked(Player).Stats.mana:}";
 ```
 
-That's all we need to do, now we can **delete the `update_stat_menu` system and everything
-is taken care of**.
+That's all we need to do, now we can *delete the `update_stat_menu` system and everything
+is taken care of*.
 
 <details><summary><b>Click here to learn how the binding source syntax works</b></summary>
 
@@ -451,23 +459,23 @@ Concerning our *format string*, we need to introduce a binding for the `Color`
 modifier on the whole text:
 
 ```diff
-fn main() {
-    app
+ fn main() {
+     app
 -        .add_plugin(MinRichTextPlugin)
 +        .add_plugin(RichTextPlugin)
-}
-
-// ...
-
-const MENU_FORMAT_STRING: &str = "\
-- { Font: stats_menu_font.ttf |\
-+ { Font: stats_menu_font.ttf, Color: {color} |\
-Player stats
-------------
-{Color:Red    |Health: {Marked(Player).Stats.health:}}
-{Color:Blue   |Defense: {Marked(Player).Stats.defense:}}
-{Color:Purple |Mana: {Marked(Player).Stats.mana:}}\
-}";
+ }
+ 
+ // ...
+ 
+ const MENU_FORMAT_STRING: &str = "\
+-{ Font: stats_menu_font.ttf |\
++{ Font: stats_menu_font.ttf, Color: {color} |\
+ Player stats
+ ------------
+ {Color:Red    |Health: {Marked(Player).Stats.health:}}
+ {Color:Blue   |Defense: {Marked(Player).Stats.defense:}}
+ {Color:Purple |Mana: {Marked(Player).Stats.mana:}}\
+ }";
 ```
 
 Now, we have a `color` binding. We can update it by accessing the `WorldBindingsMut`
@@ -485,8 +493,7 @@ fn update_color_system(mut bindings: WorldBindingsMut, time: Res<Time>) {
 
 ## A dialog system in bevy
 
-> **warning**
->
+> **Warning**
 > TODO: complete this section when context fields land.
 >
 > TODO: This is false until we do Entity as section.
@@ -559,4 +566,3 @@ of individual characters or words, in sync or other.
 - [ ] (unsure) fab resolve: Handle binding that depends on fields (Option<Modifier> in binding view)
     -> Problem: Requires clone + updating it is non-trivial
 
-[misery-bui]: https://github.com/bevyengine/bevy/blob/22121e69fb4a72bb514d43240df220b8938a1e13/examples/3d/shadow_biases.rs#L107-L141
