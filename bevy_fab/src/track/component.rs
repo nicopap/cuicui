@@ -41,10 +41,9 @@ impl<T: Component, M> TrackerBundle<T, M> {
     {
         Self::new(t, binding_name, |entity, entry| {
             let Some(s) = entity.get::<T>() else { return; };
-            let write = |m: &mut M| {
-                write!(m, "{s}").unwrap();
-            };
-            entry.modify(write).or_insert_with(|| s.to_string().into());
+            entry
+                .modify(|m| m.set_content(format_args!("{s}")))
+                .or_insert_with(|| M::init_content(format_args!("{s}")));
         })
     }
     /// Keep the `binding_name` [content] binding in sync with `T`'s debug value.
@@ -62,11 +61,9 @@ impl<T: Component, M> TrackerBundle<T, M> {
     {
         Self::new(t, binding_name, |entity, entry| {
             let Some(s) = entity.get::<T>() else { return; };
-            let write = |m: &mut M| {
-                write!(m, "{s:?}").unwrap();
-            };
-            let debug_text = || M::from(format!("{s:?}"));
-            entry.modify(write).or_insert_with(debug_text);
+            entry
+                .modify(|m| m.set_content(format_args!("{s:?}")))
+                .or_insert_with(|| M::init_content(format_args!("{s:?}")));
         })
     }
     #[cfg(feature = "no_tracked_debug")]

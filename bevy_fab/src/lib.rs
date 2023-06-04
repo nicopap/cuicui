@@ -6,7 +6,8 @@ mod make;
 mod track;
 mod world;
 
-use std::{fmt, marker::PhantomData};
+use std::fmt::Arguments;
+use std::marker::PhantomData;
 
 use bevy::app::{App, CoreSet, Plugin};
 use bevy::ecs::prelude::*;
@@ -19,9 +20,12 @@ pub use make::{parse_into_resolver_system, ParseFormatString};
 pub use track::{update_component_trackers_system, TrackerBundle};
 pub use world::{update_hooked, Hook, WorldBindings};
 
-pub trait BevyModify: Parsable + fmt::Write + From<String> + Send + Sync + 'static {
+pub trait BevyModify: Parsable + Send + Sync + 'static {
     type Param: SystemParam;
     type ItemsCtorData: Send + Sync;
+
+    fn set_content(&mut self, s: Arguments);
+    fn init_content(s: Arguments) -> Self;
 
     fn context<'a>(param: &'a SystemParamItem<Self::Param>) -> Self::Context<'a>;
 

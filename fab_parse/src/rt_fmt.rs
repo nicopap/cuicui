@@ -1,16 +1,10 @@
 //! Get a string from reflection.
-use bevy_math::*;
 use std::{any::Any, fmt};
+
+use bevy_math::*;
 
 // TODO(feat): make this public, allow trait reflection
 struct Formattable(fn(&RuntimeFormat, &dyn Any, &mut fmt::Formatter) -> Option<fmt::Result>);
-fn format_any<T: Any + fmt::Display + fmt::Debug>() -> Formattable {
-    Formattable(|format, input, f| {
-        input
-            .downcast_ref::<T>()
-            .map(|v| format.format_display(v, f))
-    })
-}
 
 /// A runtime formatters for rust primitives.
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -50,6 +44,13 @@ impl RuntimeFormat {
         DisplayFormatAny { any, format: self }
     }
     pub fn format(&self, input: &dyn Any, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn format_any<T: Any + fmt::Display + fmt::Debug>() -> Formattable {
+            Formattable(|format, input, f| {
+                input
+                    .downcast_ref::<T>()
+                    .map(|v| format.format_display(v, f))
+            })
+        }
         macro_rules! all_formats {
             ($( $to_format:ty ),* $(,)?) => {
                     [ $( format_any::<$to_format>() ),* ]

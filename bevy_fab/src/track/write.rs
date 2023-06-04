@@ -23,9 +23,9 @@ impl<M: BevyModify> Write<M> {
     pub fn modify(&self, value: &dyn Reflect, entry: binding::Entry<M>) {
         match self {
             // TODO(feat): Proper runtime formatter
-            Write::Format(fmt) => set_content(entry, DisplayReflect(value, Some(fmt))),
+            Write::Format(fmt) => set_content(entry, &DisplayReflect(value, Some(fmt))),
             Write::Arbitrary(run) => run(value, entry),
-            Write::Debug => set_content(entry, DisplayReflect(value, None)),
+            Write::Debug => set_content(entry, &DisplayReflect(value, None)),
         }
     }
 
@@ -37,10 +37,10 @@ impl<M: BevyModify> Write<M> {
         }
     }
 }
-fn set_content<M: BevyModify>(entry: binding::Entry<M>, s: impl fmt::Display) {
+fn set_content<M: BevyModify>(entry: binding::Entry<M>, s: &impl fmt::Display) {
     entry
-        .modify(|m| write!(m, "{s}").unwrap())
-        .or_insert(s.to_string().into());
+        .modify(|m| m.set_content(format_args!("{s}")))
+        .or_insert_with(|| M::init_content(format_args!("{s}")));
 }
 struct DisplayReflect<'a>(&'a dyn Reflect, Option<&'a RuntimeFormat>);
 impl fmt::Display for DisplayReflect<'_> {

@@ -44,7 +44,7 @@ impl<'w, 's> WorldBindingsMut<'w, 's> {
             self.bindings.bindings.set(key, value.to_string().into());
             return;
         };
-        write!(modifier, "{value}").unwrap();
+        modifier.set_content(format_args!("{value}"));
     }
 }
 #[derive(WorldQuery)]
@@ -71,7 +71,7 @@ impl RichTextItem<'_> {
             self.inner.bindings.set(key, value.to_string().into());
             return;
         };
-        write!(modifier, "{value}").unwrap();
+        modifier.set_content(format_args!("{value}"));
     }
 }
 #[derive(Bundle)]
@@ -137,6 +137,20 @@ impl BevyModify for Modifier {
             let size_change = (20.0 + t * *ampl).floor();
             Modifier::font_size(size_change)
         })
+    }
+
+    fn set_content(&mut self, s: fmt::Arguments) {
+        if let Modifier::Content { statik } = self {
+            let statik = statik.to_mut();
+            statik.clear();
+            let _ = statik.write_fmt(s);
+        } else {
+            *self = Modifier::content(s.to_string().into());
+        }
+    }
+
+    fn init_content(s: fmt::Arguments) -> Self {
+        Modifier::content(s.to_string().into())
     }
 }
 

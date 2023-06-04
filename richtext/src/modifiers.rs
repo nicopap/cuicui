@@ -143,21 +143,6 @@ impl Parsable for Modifier {
     }
 }
 
-impl fmt::Write for Modifier {
-    /// Set this [`Modifier`] to [`Modifier::Content`].
-    ///
-    /// Note that this **doesn't allocate** if `self` is already [`Modifier::Content`].
-    fn write_str(&mut self, s: &str) -> fmt::Result {
-        if let Modifier::Content { statik } = self {
-            let statik = statik.to_mut();
-            statik.clear();
-            statik.push_str(s);
-        } else {
-            *self = Modifier::content(s.to_string().into());
-        }
-        Ok(())
-    }
-}
 impl From<String> for Modifier {
     fn from(value: String) -> Self {
         Modifier::content(value.into())

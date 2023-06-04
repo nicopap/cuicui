@@ -57,7 +57,7 @@ const MODIFY_ATTR_DESCR: &str = "\
 - `read_write([ident =] .path.in.item)`: read/write path in item to pass as `&mut ident`
 - `dynamic_read_write(read_ident, write_ident [, ident])`: pass `&mut item` and read
   those fields for checking which paths in item are read from and writen to.
-  The thirs optional parameter is which function argument to passt it to
+  The thirs optional parameter is which function argument to pass it to
   (by default it is `item`)
 ";
 #[derive(Debug, Clone, Copy)]
