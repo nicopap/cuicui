@@ -97,31 +97,6 @@ flowchart LR
   bevy_fab --> richtext
 ```
 
-### Trait hierarchy
-
-`fab` has a lot of traits:
-
-- `cuicui_fab::Prefab`: Basically glue to make a collection of `Modify` work.
-- `cuicui_fab::Modify<I>`: A single operation on `I`
-- `cuicui_fab::Indexed<P>`: A collection of `P::Item` accessible by index.
-- `cuicui_fab_parse::ParsablePrefab`: `Prefab`, of which `Modify` can be
-  parsed from a `(name, input)` pair.
-- `cuicui_bevy_fab::BevyPrefab`: `ParsablePrefab` that can be stored and read
-  from the ECS.
-
-```mermaid
-classDiagram
-  class Prefab["`fab::Prefab`"]
-  class Modify["`fab::Modify<I>`"]
-  class Indexed["`fab::Indexed<P>`"]
-  class ParsablePrefab["`fab_parse::ParsablePrefab`"]
-  class BevyPrefab["`bevy_fab::BevyPrefab`"]
-
-  Modify ..> Prefab
-  Indexed ..> Prefab
-  Prefab --|> ParsablePrefab
-  ParsablePrefab --|> BevyPrefab
-```
 
 ## Widges
 
