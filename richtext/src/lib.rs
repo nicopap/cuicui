@@ -88,13 +88,13 @@
 //! [`Resource`]: bevy::prelude::Resource
 
 mod color;
+mod integration;
 pub mod modifiers;
-mod richtext;
 mod track_macro;
 
 pub use bevy_fab::TrackerBundle;
-pub use modifiers::{GetFont, Modifier};
-pub use richtext::{
+pub use integration::{
     MakeRichText, RichText, RichTextFetch, RichTextItem, RichTextPlugin, WorldBindings,
     WorldBindingsMut,
 };
+pub use modifiers::{GetFont, Modifier};

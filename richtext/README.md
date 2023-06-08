@@ -520,7 +520,7 @@ of individual characters or words, in sync or other.
 - [ ] fab_derive: Split the path detection code in a different crate.
 - [ ] all: design feature gates to avoid compiling stuff not used.
 - [ ] fab parse: performance: use jagged array for `tree::Sections` to avoid insane amount of alloc
-- [ ] richtext: put the public types such as RichText & MakeRichText & WorldBindings into their own mod
+- [X] richtext: put the public types such as RichText & MakeRichText & WorldBindings into their own mod
 - [X] all crates: Rename all occurences of "prefab"
 - [X] all crates: Do a pass on references to "text" in fab crates.
 - [X] rt_fmt: Fix formatting doing weird things

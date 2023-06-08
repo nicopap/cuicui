@@ -156,6 +156,6 @@ See modules and data structure methods
 
 - provide an API completely devoid of the complexity of all the fab crates
 
-      
+
 [rust fmt module]: https://doc.rust-lang.org/stable/std/fmt/index.html
 [see grammar spec]: https://github.com/nicopap/cuicui/blob/main/design_doc/richtext/informal_grammar.md
