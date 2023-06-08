@@ -13,12 +13,12 @@ use bevy::app::{App, CoreSet, Plugin};
 use bevy::ecs::prelude::*;
 use bevy::ecs::system::{StaticSystemParam, SystemParam, SystemParamItem};
 use fab::modify::FieldsOf;
-use fab_parse::{Parsable, TransformedTree};
+use fab_parse::Parsable;
 
 pub use local::LocalBindings;
 pub use make::{parse_into_resolver_system, ParseFormatString};
 pub use track::{update_component_trackers_system, TrackerBundle};
-pub use world::{update_hooked, Hook, WorldBindings};
+pub use world::{update_hooked, Hook, StyleFn, Styles, WorldBindings};
 
 pub trait BevyModify: Parsable + Send + Sync + 'static {
     type Param: SystemParam;
@@ -30,10 +30,6 @@ pub trait BevyModify: Parsable + Send + Sync + 'static {
     fn context<'a>(param: &'a SystemParamItem<Self::Param>) -> Self::Context<'a>;
 
     fn make_items(extra: &Self::ItemsCtorData, items: Vec<Self::Item>) -> Self::Items;
-
-    fn transform(tree: TransformedTree<'_, Self>) -> TransformedTree<'_, Self> {
-        tree
-    }
 }
 
 pub fn update_items_system<BM: BevyModify>(
@@ -72,6 +68,7 @@ where
     fn build(&self, app: &mut App) {
         use CoreSet::PostUpdate;
         app.init_resource::<WorldBindings<BM>>()
+            .init_resource::<Styles<BM>>()
             .add_system(update_hooked::<BM>.in_base_set(PostUpdate))
             .add_system(update_items_system::<BM>.in_base_set(PostUpdate))
             .add_system(update_component_trackers_system::<BM>.in_base_set(PostUpdate))

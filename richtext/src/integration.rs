@@ -8,7 +8,7 @@ use bevy::{
     prelude::*,
     text::{BreakLineOn, Font, Text, TextAlignment, TextSection},
 };
-use bevy_fab::{BevyModify, FabPlugin, LocalBindings, ParseFormatString};
+use bevy_fab::{BevyModify, FabPlugin, LocalBindings, ParseFormatString, StyleFn, Styles};
 use fab_parse::{Split, TransformedTree};
 
 use crate::modifiers::{GetFont, Modifier};
@@ -125,20 +125,6 @@ impl BevyModify for Modifier {
         GetFont::new(fonts)
     }
 
-    fn transform(tree: TransformedTree<'_, Self>) -> TransformedTree<'_, Self> {
-        use Split::{ByChar, ByWord};
-
-        let sin_curve = CardinalSpline::new_catmull_rom([1., 0., 1., 0., 1., 0.]);
-
-        tree.acc_chop(ByChar, "Rainbow", |hue_offset: &mut f32, i, _| {
-            Modifier::hue_offset(*hue_offset * i as f32)
-        })
-        .curve_chop(ByWord, "Sine", sin_curve.to_curve(), |ampl: &mut f32, t| {
-            let size_change = (20.0 + t * *ampl).floor();
-            Modifier::font_size(size_change)
-        })
-    }
-
     fn set_content(&mut self, s: fmt::Arguments) {
         if let Modifier::Content { statik } = self {
             let statik = statik.to_mut();
@@ -154,10 +140,31 @@ impl BevyModify for Modifier {
     }
 }
 
-pub struct RichTextPlugin(FabPlugin<Modifier>);
+fn default_styles(tree: TransformedTree<Modifier>) -> TransformedTree<Modifier> {
+    use Split::{ByChar, ByWord};
+
+    let sin_curve = CardinalSpline::new_catmull_rom([1., 0., 1., 0., 1., 0.]);
+
+    tree.acc_chop(ByChar, "Rainbow", |hue_offset: &mut f32, i, _| {
+        Modifier::hue_offset(*hue_offset * i as f32)
+    })
+    .curve_chop(ByWord, "Sine", sin_curve.to_curve(), |ampl: &mut f32, t| {
+        let size_change = (20.0 + t * *ampl).floor();
+        Modifier::font_size(size_change)
+    })
+}
+
+pub struct RichTextPlugin(FabPlugin<Modifier>, Styles<Modifier>);
 impl RichTextPlugin {
+    /// Initialize the `RichTextPlugin` with given style.
+    ///
+    /// See [`Styles`] documentation for a detailed breakdown on how to use this
+    /// to its full potential.
+    pub fn with_styles(styles: StyleFn<Modifier>) -> Self {
+        RichTextPlugin(FabPlugin::new(), Styles::new(styles))
+    }
     pub fn new() -> Self {
-        RichTextPlugin(FabPlugin::new())
+        RichTextPlugin(FabPlugin::new(), Styles::new(default_styles))
     }
 }
 impl Default for RichTextPlugin {

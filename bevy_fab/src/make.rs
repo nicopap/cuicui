@@ -5,7 +5,7 @@ use fab::{modify::FieldsOf, resolve::Resolver};
 use fab_parse::tree as parse;
 use log::error;
 
-use crate::{BevyModify, LocalBindings, WorldBindings};
+use crate::{BevyModify, LocalBindings, Styles, WorldBindings};
 
 #[derive(Component)]
 pub struct ParseFormatString<BM: BevyModify> {
@@ -45,6 +45,7 @@ impl<P: BevyModify> ParseFormatString<P> {
 /// - Interns in [`WorldBindings<BM>`] bindings found in `format_string`.
 fn mk<'fstr, BM: BevyModify>(
     bindings: &mut WorldBindings<BM>,
+    style: &Styles<BM>,
     default_item: &BM::Item,
     context: &BM::Context<'_>,
     format_string: &'fstr str,
@@ -55,7 +56,7 @@ where
     let mut new_hooks = Vec::new();
 
     let tree = fab_parse::format_string(format_string)?;
-    let tree = BM::transform(tree.transform());
+    let tree = style.process(tree.transform());
     let parsed = tree.finish(&mut bindings.bindings, &mut new_hooks);
     let parsed: Vec<_> = parsed.into_iter().collect::<anyhow::Result<_>>()?;
 
@@ -72,7 +73,14 @@ where
 pub fn parse_into_resolver_system<BM: BevyModify + 'static>(
     world: &mut World,
     mut to_make: Local<QueryState<(Entity, &mut ParseFormatString<BM>)>>,
-    mut cache: Local<SystemState<(Commands, ResMut<WorldBindings<BM>>, BM::Param)>>,
+    mut cache: Local<
+        SystemState<(
+            Commands,
+            Res<Styles<BM>>,
+            ResMut<WorldBindings<BM>>,
+            BM::Param,
+        )>,
+    >,
 ) where
     BM::Items: Component,
     FieldsOf<BM>: Sync + Send,
@@ -99,13 +107,19 @@ pub fn parse_into_resolver_system<BM: BevyModify + 'static>(
     // Furthermore, `richtext::mk` needs mutable access to WorldBindings and
     // immutable to the context, so we use the SystemState to extract them.
     {
-        let (mut cmds, mut world_bindings, params) = cache.get_mut(world);
+        let (mut cmds, styles, mut world_bindings, params) = cache.get_mut(world);
 
         let context = BM::context(&params);
 
         // TODO(perf): batch commands update.
         for (entity, (ctor_data, default_item, format_string)) in to_make.iter() {
-            match mk(&mut world_bindings, default_item, &context, format_string) {
+            match mk(
+                &mut world_bindings,
+                &styles,
+                default_item,
+                &context,
+                format_string,
+            ) {
                 Ok((items, resolver, mut hooks)) => {
                     new_hooks.append(&mut hooks);
 
