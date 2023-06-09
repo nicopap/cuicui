@@ -88,20 +88,20 @@ impl MakeRichText {
         self.inner.default_item.style = style;
         self
     }
-    /// Returns this [`MakeRichTextBundle`] with a new [`TextAlignment`] on [`Text`].
+    /// Returns this [`MakeRichText`] with a new [`TextAlignment`] on [`Text`].
     pub fn with_text_alignment(mut self, alignment: TextAlignment) -> Self {
         let extras = self.inner.items_extra.as_mut().unwrap();
         extras.alignment = alignment;
         self
     }
 
-    /// Returns this [`MakeRichTextBundle`] with a new [`Style`].
+    /// Returns this [`MakeRichText`] with a new [`Style`].
     pub fn with_style(mut self, style: Style) -> Self {
         self.text_bundle.style = style;
         self
     }
 
-    /// Returns this [`MakeRichTextBundle`] with a new [`BackgroundColor`].
+    /// Returns this [`MakeRichText`] with a new [`BackgroundColor`].
     pub const fn with_background_color(mut self, color: Color) -> Self {
         self.text_bundle.background_color = BackgroundColor(color);
         self

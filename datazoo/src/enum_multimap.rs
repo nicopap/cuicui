@@ -8,7 +8,7 @@ use enumset::{EnumSet, EnumSetType};
 
 use crate::{jagged_const_row_array, JaggedConstRowArray};
 
-/// A [multimap] stored in a [`JaggedArray`].
+/// A [multimap] stored in a [`JaggedConstRowArray`].
 ///
 /// The key set need to be bound and exhaustively known at compile time,
 /// ie: it must be an enum derived with `#[derive(EnumSetType)]`.

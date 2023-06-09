@@ -9,6 +9,9 @@ use datazoo::{sorted, SortedPairIterator};
 use smallvec::SmallVec;
 use string_interner::{backend::StringBackend, StringInterner, Symbol};
 
+#[cfg(doc)]
+use crate::Modify;
+
 pub use entry::Entry;
 
 /// A binding id used in [`World`] and [`Local`] to associate a name to a

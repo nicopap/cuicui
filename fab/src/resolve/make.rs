@@ -24,7 +24,7 @@ pub(super) struct Make<'a, M: Modify> {
 }
 
 impl<'a, M: Modify> Make<'a, M> {
-    /// Initialize a [`Make`] to create a [`Resolver`] using [`Make::build`].
+    /// Initialize a [`Make`] to create a [`DepsResolver`] using [`Make::build`].
     ///
     /// # Limitations
     ///

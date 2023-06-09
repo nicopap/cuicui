@@ -1,5 +1,5 @@
 //! A bit matrix similar to [`BitMatrix`](super::BitMatrix),
-//! but with columns of variable length like [`JaggedArray`](super::JaggedArray).
+//! but with columns of variable length like [`JaggedVec`](super::JaggedVec).
 
 use std::{fmt, hint, iter, mem};
 
@@ -8,7 +8,7 @@ use sorted_iter::{assume::AssumeSortedByItemExt, sorted_iterator::SortedByItem};
 use crate::{div_ceil, Bitset};
 
 /// A bit matrix similar to [`BitMatrix`](super::BitMatrix),
-/// but with columns of variable length like [`JaggedArray`](super::JaggedArray).
+/// but with columns of variable length like [`JaggedVec`](super::JaggedVec).
 ///
 /// Use [`jagged_bitset::Builder`](`Builder`) to create a [`JaggedBitset`].
 ///

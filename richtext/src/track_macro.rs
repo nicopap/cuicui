@@ -1,4 +1,4 @@
-//! Define the [`track!`] macro.
+//! Define the `track!` macro.
 
 /// Add a component and keep track of its value in [`WorldBindings`],
 /// this is a soft wrapper around [`TrackerBundle`] methods.
@@ -23,7 +23,7 @@
 ///   If the cargo feature `no_tracked_debug` is enabled, it will just insert the component.
 /// - `'m`: See [`TrackerBundle::modifier`].
 ///   Track the component as a modifier binding.
-///   It must implement [`IntoModify`] and [`Clone`].
+///   It must implement `Into<Modifier>` and [`Clone`].
 ///
 /// The second parameter is a rust identifier. It will be the name of the binding
 /// in [`WorldBindings`] the component will have.
@@ -97,6 +97,14 @@
 /// thing that can be matched by name in macro expansion, outside of an identifier
 /// and a generic token. But identifier is already used in this position, so
 /// we chose a lifetime (I would have rather used a string literal).
+///
+/// [`WorldBindings`]: crate::integration::WorldBindings
+/// [`TrackerBundle`]: crate::TrackerBundle
+/// [`TrackerBundle::content`]: crate::TrackerBundle::content
+/// [`TrackerBundle::debug`]: crate::TrackerBundle::debug
+/// [`TrackerBundle::modifier`]: crate::TrackerBundle::modifier
+/// [`fmt::Debug`]: std::fmt::Debug
+/// [`fmt::Display`]: std::fmt::Display
 #[macro_export]
 macro_rules! track {
     (@ctor 'd) => { $crate::TrackerBundle::<_, $crate::Modifier>::debug };

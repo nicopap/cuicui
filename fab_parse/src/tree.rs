@@ -51,13 +51,13 @@ impl<'a> Source<'a> {
 /// Where to pull from the value.
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Query<'a> {
-    /// A [`Resource`] implementing [`Reflect`].
+    /// A `Resource` implementing `Reflect`.
     Res(&'a str),
-    /// The first [`Entity`] found with provided component.
+    /// The first `Entity` found with provided component.
     One(&'a str),
-    /// The first [`Entity`] found with the given name
+    /// The first `Entity` found with the given name
     Name { name: &'a str, access: &'a str },
-    /// The first [`Entity`] found with provided component, but access a
+    /// The first `Entity` found with provided component, but access a
     /// different component.
     Marked { marker: &'a str, access: &'a str },
 }

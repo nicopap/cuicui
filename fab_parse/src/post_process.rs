@@ -5,6 +5,7 @@ use std::{borrow::Cow, iter, marker::PhantomData, ops::Range, str::FromStr};
 use bevy_math::cubic_splines::CubicCurve;
 use enumset::{EnumSet, EnumSetType};
 use fab::{binding, modify::Modify, resolve::MakeModify, resolve::ModifyKind};
+use log::warn;
 
 use crate::tree::{self, get_content, get_content_mut, is_content, Dyn, Hook};
 
@@ -53,31 +54,16 @@ pub trait Parsable: Modify {
     fn dependencies_of(name: &str) -> Deps<Self::Field>;
     fn parse(name: &str, value: &str) -> Result<Self, Self::Err>;
 }
-pub trait StringPair {
-    fn string_pair(self) -> (Box<str>, Box<str>);
+/// Two strings, one on the left represents the `name` of a modifer,
+/// the one on the right represents its `value`.
+///
+/// Used in the [`TransformedTree::alias`] method.
+pub trait StringPair<'a> {
+    fn string_pair(self) -> (&'a str, &'a str);
 }
-impl<'a, V: Into<String>> StringPair for (&'a str, V) {
-    fn string_pair(self) -> (Box<str>, Box<str>) {
-        (
-            self.0.to_owned().into_boxed_str(),
-            self.1.into().into_boxed_str(),
-        )
-    }
-}
-impl<V: Into<String>> StringPair for (String, V) {
-    fn string_pair(self) -> (Box<str>, Box<str>) {
-        (self.0.into_boxed_str(), self.1.into().into_boxed_str())
-    }
-}
-
-struct Alias<'a, Mk, I> {
-    alias: &'a str,
-    producer: Mk,
-    _p: PhantomData<I>,
-}
-impl<'a, Sp: StringPair, I: IntoIterator<Item = Sp>, Mk: FnMut(&str) -> I> Alias<'a, Mk, I> {
-    fn process<M>(self, _sections: Vec<Section<M>>) -> Vec<Section<M>> {
-        todo!()
+impl<'a, 'b: 'a, K: AsRef<str> + 'a, V: AsRef<str> + 'a> StringPair<'a> for &'b (K, V) {
+    fn string_pair(self) -> (&'a str, &'a str) {
+        (self.0.as_ref(), self.1.as_ref())
     }
 }
 
@@ -308,19 +294,93 @@ impl<'a, M: Parsable> TransformedTree<'a, M> {
 }
 /// Add aliases
 impl<'a, M: Modify> TransformedTree<'a, M> {
-    // .alias("Bleepoo", |_| [
-    //   ("Zooba", "whoop_whoop"),
-    //   ("Bazinga", "whaab"),
-    //   ("Bilyboo", "tarumba"),
-    // ])
-    // TODO(feat): (str, [Modifier]) kind of aliases
-    pub fn alias<SP: StringPair, I: IntoIterator<Item = SP>>(
-        self,
+    /// Replace all occurences of modifier named `alias` with the output of
+    /// `producers`, as pure text values.
+    ///
+    /// The input value of `producers` is the value (right side of `modifier: value`)
+    /// of the modifier with given alias.
+    ///
+    /// Note that the generated modifiers will be appended at the end of the
+    /// modifiers of this section, and keep the same section range.
+    ///
+    /// # Example
+    ///
+    /// The lifetimes are a bit tricky here, hopefully they work out for you!
+    ///
+    /// Note that the return value of `producer` is `I: IntoIterator<Item = Sp>`,
+    /// meaning the following should work:
+    ///
+    /// ```no_run
+    /// # use cuicui_fab::__private::DummyModify;
+    /// # use cuicui_fab_parse::TransformedTree;
+    /// # // This would be unsoud only if this code ran.
+    /// # let transformed_tree: TransformedTree<DummyModify> = unsafe {
+    /// #     std::mem::MaybeUninit::uninit().assume_init() };
+    /// let aliased_bleepo = transformed_tree.alias("Bleepoo", |_| [
+    ///   ("Zooba", "whoop_whoop"),
+    ///   ("Bazinga", "whaab"),
+    ///   ("Bilyboo", "tarumba"),
+    /// ]);
+    /// // Now, all occurences of Bleepo will be replaced with given modifiers
+    /// ```
+    pub fn alias<Sp: StringPair<'a>, I: IntoIterator<Item = Sp>>(
+        mut self,
         alias: &str,
-        producer: impl FnMut(&str) -> I,
+        mut producer: impl FnMut(&str) -> I,
     ) -> Self {
-        let aliaser = Alias { alias, producer, _p: PhantomData };
-        TransformedTree { sections: aliaser.process(self.sections) }
+        for section in &mut self.sections {
+            let mut extensions = Vec::new();
+            let mut iter = section.0.modifiers.iter();
+            if let Some(modifier) = iter.find(|m| m.name == alias) {
+                if let Dyn::Static(value) = modifier.value {
+                    let new_modifiers =
+                        producer(value)
+                            .into_iter()
+                            .map(Sp::string_pair)
+                            .map(|(name, value)| tree::Modifier {
+                                name,
+                                value: Dyn::Static(value),
+                                subsection_count: modifier.subsection_count,
+                            });
+                    extensions.extend(new_modifiers);
+                } else {
+                    warn!("alias {alias} had a bound value, this isn't supported",);
+                }
+            }
+            section.0.modifiers.retain(|m| m.name != alias);
+            section.0.modifiers.append(&mut extensions);
+        }
+        TransformedTree { sections: self.sections }
+    }
+    /// Replace all occurences of modifier named `alias` with the output of
+    /// `producers`.
+    ///
+    /// The input value of `producers` is the value (right side of `modifier: value`)
+    /// of the modifier with given alias.
+    ///
+    /// Note that the generated modifiers will be appended at the end of the
+    /// modifiers of this section, and keep the same section range.
+    pub fn alias_mods<I: IntoIterator<Item = M>>(
+        mut self,
+        alias: &str,
+        mut producer: impl FnMut(&str) -> I,
+    ) -> Self {
+        for section in &mut self.sections {
+            let mut extensions = Vec::new();
+            let mut iter = section.0.modifiers.iter();
+            if let Some(modifier) = iter.find(|m| m.name == alias) {
+                if let Dyn::Static(value) = modifier.value {
+                    let mk_modifier =
+                        |inner| Modifier { inner, influence: modifier.subsection_count };
+                    extensions.extend(producer(value).into_iter().map(mk_modifier));
+                } else {
+                    warn!("alias {alias} had a bound value, this isn't supported",);
+                }
+            }
+            section.0.modifiers.retain(|m| m.name != alias);
+            section.1.append(&mut extensions);
+        }
+        TransformedTree { sections: self.sections }
     }
 }
 /// Cut the tree in various ways

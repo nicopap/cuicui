@@ -5,6 +5,8 @@ use fab::{modify::FieldsOf, resolve::Resolver};
 use fab_parse::tree as parse;
 use log::error;
 
+#[cfg(doc)]
+use crate::world;
 use crate::{BevyModify, LocalBindings, Styles, WorldBindings};
 
 #[derive(Component)]
@@ -39,10 +41,12 @@ impl<P: BevyModify> ParseFormatString<P> {
 /// Effects:
 ///
 /// - Returns `Vec<BM::Item>`: The list of items the [`Resolver`] will work on.
-/// - Returns `Resolver<BM, R>`: The resolver containing the parsed [`Modify`].
-/// - Returns `Vec<parse::Hook<'fstr>>`: The parsed but not created [`Hook`]s used in
-///   the format string. It has the lifetime of `format_string`.
+/// - Returns `BM::Resolver`: The resolver containing the parsed [`BevyModify`].
+/// - Returns `Vec<parse::Hook<'fstr>>`: The parsed but not created [`world::Hook`]s
+///   used in the format string. It has the lifetime of `format_string`.
 /// - Interns in [`WorldBindings<BM>`] bindings found in `format_string`.
+///
+/// [`Resolver`]: fab::resolve::Resolver
 fn mk<'fstr, BM: BevyModify>(
     bindings: &mut WorldBindings<BM>,
     style: &Styles<BM>,
@@ -69,7 +73,7 @@ where
 /// updating [`WorldBindings<BM>`].
 ///
 /// This is an exclusive system, as it requires access to the [`World`] to generate
-/// the [`Hook`]s specified in the format string.
+/// the [`world::Hook`]s specified in the format string.
 pub fn parse_into_resolver_system<BM: BevyModify + 'static>(
     world: &mut World,
     mut to_make: Local<QueryState<(Entity, &mut ParseFormatString<BM>)>>,
@@ -138,7 +142,7 @@ pub fn parse_into_resolver_system<BM: BevyModify + 'static>(
     }
     cache.apply(world);
 
-    // To convert the parse::Hook into an actual track::Hook that goes into track::Hooks,
+    // To convert the parse::Hook into an actual world::Hook that goes into world::Hooks,
     // we need excluisve world access.
     world.resource_scope(|world, mut bindings: Mut<WorldBindings<BM>>| {
         let parse_hook = |&hook| bindings.parse_hook(hook, world);

@@ -151,6 +151,9 @@ See modules and data structure methods
 - `ParseFormatString`: Allow user to spawn and create `Resolver`s indirectly
   through a "make" component, that is then read in an exclusive system that
   updates bindings and creates hooks based on the format string
+- `Styles`: Let users provide an arbitrary function to modify format strings
+  before they are turned into `Modify::Items`, using the `chop` and `alias`
+  features of `fab_parse::post_processing`.
 
 ### `richtext`
 

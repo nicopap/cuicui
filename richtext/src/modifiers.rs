@@ -9,11 +9,8 @@ use fab::modify::Indexed;
 use fab::{impl_modify, modify::Modify};
 use fab_parse::{Deps, Parsable};
 
-/// A Boxed [`TextModifier`]. This allows you to extend [`Modifier`] with your
+/// A Boxed [`TextModify`]. This allows you to extend [`Modifier`] with your
 /// own modifiers.
-///
-/// [`Resource`]: bevy::prelude::Resource
-/// [`Component`]: bevy::prelude::Component
 pub type ModifyBox = Box<dyn TextModify + Send + Sync + 'static>;
 
 #[derive(Default, Clone, Copy)]

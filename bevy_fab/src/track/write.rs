@@ -6,16 +6,16 @@ use fab_parse::{tree as parse, RuntimeFormat};
 
 use crate::BevyModify;
 
-/// Turn a [`&dyn Reflect`] into a [`TextModifier`].
+/// Turn a [`&dyn Reflect`] into a [`BevyModify`].
 pub enum Write<M> {
-    /// Print the `Reflect` as a [`TextModifier::content`] displayed with the
+    /// Print the [`Reflect`] as a [`BevyModify::set_content`] displayed with the
     /// given format specification.
     Format(RuntimeFormat),
 
-    /// An arbitrary function to run on the `Reflect`.
+    /// An arbitrary function to run on the [`Reflect`].
     Arbitrary(fn(&dyn Reflect, binding::Entry<M>)),
 
-    /// Print the `Reflect` as a [`TextM::content`] displayed with
+    /// Print the [`Reflect`] as a [`BevyModify::set_content`] displayed with
     /// [`Reflect::debug`].
     Debug,
 }

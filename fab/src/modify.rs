@@ -34,6 +34,7 @@ pub type FieldsOf<M> = EnumSet<<M as Modify>::Field>;
 ///
 /// [read]: Modify::depends
 /// [update]: Modify::changes
+/// [`impl_modify!`]: crate::impl_modify
 pub trait Modify: Clone + fmt::Debug {
     /// The type on which `Modify` operates
     type Item: Clone + fmt::Debug + Send + Sync;
@@ -50,6 +51,7 @@ pub trait Modify: Clone + fmt::Debug {
     where
         Self: 'a;
 
+    /// The [`Resolver`] used for this `Modify`.
     type Resolver: Resolver<Self> + fmt::Debug + Send + Sync;
 
     /// Apply this modifier to the [`Self::Item`].

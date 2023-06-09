@@ -3,12 +3,12 @@
 //! # Usage
 //!
 //! - [ ] Add [`RichTextPlugin`] to your app
-//! - [ ] Create a [`RichText`] using [`RichTextBundle`] and add it to your UI.
+//! - [ ] Create a [`RichText`] using [`MakeRichText`] and add it to your UI.
 //! - [ ] Update the [`RichText`]'s context. There is actually multiple approaches:
 //!     - Use the [`track!`] macro to make [`RichText`] binding's follow the value
 //!       of components you added to the ECS.
-//!     - Manually use the [`RichTextData::set`],
-//!       [`set_typed`](RichTextData::set_typed) or [`set_content`](RichTextData::set_content)
+//!     - Manually use the [`RichText::set`](integration::RichTextItem::set) or
+//!       [`set_content`](integration::RichTextItem::set_content).
 //!       to update a specific [`RichText`] context.
 //!     - Update [`WorldBindings`] to update the context of all the [`RichText`]s
 //!       present in the ECS.

@@ -16,7 +16,7 @@ struct Tracker<M> {
 
 /// Add a tracked `T` which value will be kept in sync in [`WorldBindings`].
 ///
-/// Use one of `Tracked`'s method or the [`track!`] macro to create a tracked
+/// Use one of `TrackerBundle`'s method or the `track!` macro to create a tracked
 /// component.
 #[derive(Bundle)]
 pub struct TrackerBundle<T: Component, M: 'static> {
@@ -33,7 +33,7 @@ impl<T: Component, M> TrackerBundle<T, M> {
     }
     /// Keep the `binding_name` [content] binding in sync with `T`'s value.
     ///
-    /// [content]: crate::modifiers::Content
+    /// [content]: BevyModify::set_content
     pub fn content(binding_name: &'static str, t: T) -> Self
     where
         T: fmt::Display,
@@ -48,11 +48,11 @@ impl<T: Component, M> TrackerBundle<T, M> {
     }
     /// Keep the `binding_name` [content] binding in sync with `T`'s debug value.
     ///
-    /// Typically useful for debugging, as, unlike [`Tracked::content`],
+    /// Typically useful for debugging, as, unlike [`TrackerBundle::content`],
     /// you can derive `Debug`. You may enable the `"no_tracked_debug"`
     /// `cuicui_richtext` crate feature to turns this into a no-op.
     ///
-    /// [content]: crate::modifiers::Content
+    /// [content]: BevyModify::set_content
     #[cfg(not(feature = "no_tracked_debug"))]
     pub fn debug(binding_name: &'static str, t: T) -> Self
     where
@@ -72,7 +72,7 @@ impl<T: Component, M> TrackerBundle<T, M> {
     }
     /// Keep `binding_name` binding in sync with `T`'s [`Modify`] value.
     ///
-    /// [`Modify`]: crate::Modify
+    /// [`Modify`]: fab::Modify
     pub fn modifier(binding_name: &'static str, t: T) -> Self
     where
         M: for<'a> From<&'a T>,

@@ -18,6 +18,35 @@ pub use minimal::MinResolver;
 
 type SmallKeySorted<K, V, const C: usize> = sorted::KeySorted<SmallVec<[(K, V); C]>, K, V>;
 
+/// A Resolver for the [`Modify`] trait.
+///
+/// A resolver stores and manages many
+/// different `Modify`, it triggers them when `update` is called and one of the
+/// dependencies of the relevant `Modify` has changed.
+///
+/// The resolver can also read bindings (`Modify` values associated with a plain
+/// text name) from the [`View`] struct. `View` tells the `Resolver` which
+/// binding was updated since last time `update` was ran.
+///
+/// When initializing a `Resolver` with `new`, the output should both contain
+/// the `Resolver` in question and a list of `Modify` items. Usually, most of
+/// the final `Modify::Items` can be created and set at initialization. `Modify`
+/// resolved through `Resolver` only manage a small subset of the `Items`.
+///
+/// # Implementations
+///
+/// This trait is not sealed, yet it is not recommend to implement it yourself.
+/// Here are the provided implementations:
+///
+/// - `()` empty tuple: This does nothing and can't store `Modify`. This is a
+///   dummy implementation for tests and example illustrations.
+/// - [`MinResolver`]: A simple resolver that can build an initial `Vec<Modify::Item>`
+///   and trigger `Modify` marked as updated in the `View` `update` argument.
+/// - [`DepsResolver`]: A fully-featured resolver that manages `Modify`s that
+///   may depend on the output of other `Modify`s stored in the same resolver.
+///   \
+///   `DepsResover` will not only trigger updated modifiers, but also modifiers
+///   that depends on updated modifiers (repeating, of course).
 pub trait Resolver<M: Modify>: Sized {
     fn new(
         modifiers: Vec<MakeModify<M>>,
@@ -101,9 +130,11 @@ struct Modifier<M> {
     range: Range<u32>,
 }
 
-// TODO(clean): Create a trait that wraps `Resolver`, so that we can erase
-// MOD_COUNT. We could then use it as an associated type of `Modify` instead
-// of propagating it all the way.
+/// A fully-featured resolver that manages `Modify`s that
+/// may depend on the output of other `Modify`s stored in the same resolver.
+///
+/// `DepsResover` will not only trigger updated modifiers, but also modifiers
+/// that depends on updated modifiers (repeating, of course).
 #[derive(Debug)]
 pub struct DepsResolver<M: Modify, const MOD_COUNT: usize> {
     modifiers: Box<[Modifier<M>]>,

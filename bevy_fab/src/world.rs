@@ -1,4 +1,4 @@
-//! Global world-scopped data relevant to [`Modify`]s located in the bevy ECS.
+//! Global world-scopped data relevant to [`BevyModify`]s located in the bevy ECS.
 use bevy::prelude::{error, Mut, Resource, World};
 
 use fab::binding;
