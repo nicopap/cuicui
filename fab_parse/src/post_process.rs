@@ -218,15 +218,18 @@ where
     }
 }
 
-pub struct TransformedTree<'a, M> {
+/// A format string's sections, parsed but still can be manipulated through styles.
+///
+/// See methods on this `struct` for more details on what kind of transforms apply.
+pub struct Styleable<'a, M> {
     sections: Vec<Section<'a, M>>,
 }
 impl<'a> tree::Tree<'a> {
-    pub fn transform<M: Parsable>(self) -> TransformedTree<'a, M> {
-        TransformedTree::new(self.sections)
+    pub fn transform<M: Parsable>(self) -> Styleable<'a, M> {
+        Styleable::new(self.sections)
     }
 }
-impl<'a, M: Parsable> TransformedTree<'a, M> {
+impl<'a, M: Parsable> Styleable<'a, M> {
     pub(super) fn new(sections: Vec<tree::Section<'a>>) -> Self {
         let max_range = |s: &tree::Section| s.modifiers.iter().map(|m| m.subsection_count).max();
         let max_sect = |(i, s): (usize, _)| max_range(s).unwrap_or(0) + i;
@@ -235,7 +238,7 @@ impl<'a, M: Parsable> TransformedTree<'a, M> {
 
         assert!(max_sect < u32::MAX as usize, "Too many sections! over 2³²");
 
-        TransformedTree {
+        Styleable {
             sections: sections.into_iter().map(Section::from).collect(),
         }
     }
@@ -293,7 +296,7 @@ impl<'a, M: Parsable> TransformedTree<'a, M> {
     }
 }
 /// Add aliases
-impl<'a, M: Modify> TransformedTree<'a, M> {
+impl<'a, M: Modify> Styleable<'a, M> {
     /// Replace all occurences of modifier named `alias` with the output of
     /// `producers`, as pure text values.
     ///
@@ -350,7 +353,7 @@ impl<'a, M: Modify> TransformedTree<'a, M> {
             section.0.modifiers.retain(|m| m.name != alias);
             section.0.modifiers.append(&mut extensions);
         }
-        TransformedTree { sections: self.sections }
+        Styleable { sections: self.sections }
     }
     /// Replace all occurences of modifier named `alias` with the output of
     /// `producers`.
@@ -380,14 +383,14 @@ impl<'a, M: Modify> TransformedTree<'a, M> {
             section.0.modifiers.retain(|m| m.name != alias);
             section.1.append(&mut extensions);
         }
-        TransformedTree { sections: self.sections }
+        Styleable { sections: self.sections }
     }
 }
 /// Cut the tree in various ways
-impl<'a, M: Modify> TransformedTree<'a, M> {
+impl<'a, M: Modify> Styleable<'a, M> {
     pub fn chop(self, split: Split, alias: &str, chopper: impl FnMut(&str, usize) -> M) -> Self {
         let split = Splitter { split, alias, chopper, _p: PhantomData };
-        TransformedTree { sections: split.process(self.sections) }
+        Styleable { sections: split.process(self.sections) }
     }
     pub fn acc_chop<Acc: FromStr>(
         self,

@@ -9,7 +9,7 @@ use bevy::{
     text::{BreakLineOn, Font, Text, TextAlignment, TextSection},
 };
 use bevy_fab::{BevyModify, FabPlugin, LocalBindings, ParseFormatString, StyleFn, Styles};
-use fab_parse::{Split, TransformedTree};
+use fab_parse::{Split, Styleable};
 
 use crate::modifiers::{GetFont, Modifier};
 
@@ -140,7 +140,7 @@ impl BevyModify for Modifier {
     }
 }
 
-fn default_styles(tree: TransformedTree<Modifier>) -> TransformedTree<Modifier> {
+fn default_styles(tree: Styleable<Modifier>) -> Styleable<Modifier> {
     use Split::{ByChar, ByWord};
 
     let sin_curve = CardinalSpline::new_catmull_rom([1., 0., 1., 0., 1., 0.]);

@@ -3,7 +3,7 @@ use bevy::prelude::{error, Mut, Resource, World};
 
 use fab::binding;
 use fab_parse::tree::Hook as ParsedHook;
-use fab_parse::TransformedTree;
+use fab_parse::Styleable;
 
 use crate::track::{Read, Write};
 use crate::BevyModify;
@@ -12,8 +12,7 @@ use crate::BevyModify;
 ///
 /// See [`Styles`] documentation for a detailed breakdown on how to use this
 /// to its full potential.
-pub type StyleFn<M> =
-    Box<dyn FnMut(TransformedTree<'_, M>) -> TransformedTree<'_, M> + Send + Sync + 'static>;
+pub type StyleFn<M> = Box<dyn FnMut(Styleable<'_, M>) -> Styleable<'_, M> + Send + Sync + 'static>;
 
 /// Stores the styles used when parsing format strings.
 ///
@@ -60,36 +59,31 @@ pub type StyleFn<M> =
 /// Relying on mutable state in a `FnMut` is always a bit tricky.
 #[derive(Resource)]
 pub struct Styles<M> {
-    processes: Vec<StyleFn<M>>,
+    styles: Vec<StyleFn<M>>,
 }
 impl<M: BevyModify> Styles<M> {
-    pub(crate) fn process<'a>(
-        &mut self,
-        transform: TransformedTree<'a, M>,
-    ) -> TransformedTree<'a, M> {
-        self.processes.iter_mut().fold(transform, |acc, f| f(acc))
+    /// Apply all the styles to the `transform`
+    pub(crate) fn process<'a>(&mut self, transform: Styleable<'a, M>) -> Styleable<'a, M> {
+        self.styles.iter_mut().fold(transform, |acc, f| f(acc))
     }
+    /// Insert a new style before all others.
     pub fn overwrite(
         &mut self,
-        process: impl FnMut(TransformedTree<M>) -> TransformedTree<M> + Send + Sync + 'static,
+        style: impl FnMut(Styleable<M>) -> Styleable<M> + Send + Sync + 'static,
     ) {
-        self.processes.insert(0, Box::new(process));
+        self.styles.insert(0, Box::new(style));
     }
-    pub fn add(
-        &mut self,
-        process: impl FnMut(TransformedTree<M>) -> TransformedTree<M> + Send + Sync + 'static,
-    ) {
-        self.processes.push(Box::new(process));
+    /// Add a new style after existing ones.
+    pub fn add(&mut self, style: impl FnMut(Styleable<M>) -> Styleable<M> + Send + Sync + 'static) {
+        self.styles.push(Box::new(style));
     }
-    pub fn new(
-        process: impl FnMut(TransformedTree<M>) -> TransformedTree<M> + Send + Sync + 'static,
-    ) -> Self {
-        Styles { processes: vec![Box::new(process)] }
+    pub fn new(style: impl FnMut(Styleable<M>) -> Styleable<M> + Send + Sync + 'static) -> Self {
+        Styles { styles: vec![Box::new(style)] }
     }
 }
 impl<M> Default for Styles<M> {
     fn default() -> Self {
-        Styles { processes: Vec::new() }
+        Styles { styles: Vec::new() }
     }
 }
 
