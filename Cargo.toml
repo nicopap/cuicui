@@ -1,3 +1,12 @@
 [workspace]
-members = ["richtext", "layout", "widges", "datazoo", "fab", "fab_derive"]
+members = [
+    "richtext",
+    "layout",
+    "widges",
+    "datazoo",
+    "fab",
+    "fab_derive",
+    "reflect_query",
+]
+
 resolver = "2"

@@ -1,0 +1,14 @@
+[package]
+name = "cuicui_reflect_query"
+authors = ["Nicola Papale"]
+description = "A bevy reflection addon to query world data from Reflect Components"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["bevy", "reflection"]
+categories = ["game-development"]
+repository = "https://github.com/nicopap/cuicui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = { version = "0.10", default-features = false }

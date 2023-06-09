@@ -86,7 +86,7 @@ impl Read {
         };
         Ok(Read { query })
     }
-    pub(crate) fn world<'a>(&mut self, world: &'a World) -> GetResult<&'a dyn Reflect> {
+    pub(crate) fn world<'a>(&mut self, world: &'a mut World) -> GetResult<&'a dyn Reflect> {
         match &self.query {
             Query::Res(access) => access.get(world),
             Query::One(access) => access.get(world),

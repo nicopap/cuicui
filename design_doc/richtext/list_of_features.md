@@ -154,6 +154,8 @@ See modules and data structure methods
 - `Styles`: Let users provide an arbitrary function to modify format strings
   before they are turned into `Modify::Items`, using the `chop` and `alias`
   features of `fab_parse::post_processing`.
+- `UserWrites`: A list of formatters to use to create hooks based on the right
+  side of the `:` in source bindings.
 
 ### `richtext`
 

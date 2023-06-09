@@ -138,7 +138,7 @@ impl<M: BevyModify> Hook<M> {
     /// access to later access the value it reads much faster.
     fn read_into_binding(
         &mut self,
-        world: &World,
+        world: &mut World,
         bindings: &mut binding::World<M>,
     ) -> Result<(), Error> {
         let value = self.read.world(world)?;
