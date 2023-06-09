@@ -173,14 +173,22 @@ impl<M> Default for WorldBindings<M> {
     }
 }
 impl<M: BevyModify> WorldBindings<M> {
-    pub fn add_formatter(
+    pub fn add_formatter<T: Reflect>(
+        &mut self,
+        name: impl Into<String>,
+        formatter: impl Fn(&T, Entry<M>) + Send + Sync + 'static,
+    ) {
+        self.add_reflect_formatter(name, move |reflect, e| {
+            let Some(value) = reflect.downcast_ref() else { return; };
+            formatter(value, e);
+        })
+    }
+    pub fn add_reflect_formatter(
         &mut self,
         name: impl Into<String>,
         value: impl Fn(&dyn Reflect, Entry<M>) + Send + Sync + 'static,
-    ) -> bool {
-        self.formatters
-            .insert(name.into(), Arc::new(value))
-            .is_none()
+    ) {
+        self.formatters.insert(name.into(), Arc::new(value));
     }
     pub fn add_hooks(&mut self, iter: impl IntoIterator<Item = Hook<M>>) {
         self.hooks.extend(iter)
