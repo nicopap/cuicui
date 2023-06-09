@@ -1,10 +1,35 @@
 use std::fmt;
+use std::sync::Arc;
 
-use bevy::reflect::Reflect;
+use bevy::{reflect::Reflect, utils::HashMap};
 use fab::binding;
 use fab_parse::{tree as parse, RuntimeFormat};
+use thiserror::Error;
 
 use crate::BevyModify;
+
+/// A writer defined by the user, it allows converting arbitrary values into `M` modifiers.
+pub type UserWrite<M> = Arc<dyn Fn(&dyn Reflect, binding::Entry<M>) + Send + Sync>;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Formatter not found: {0}")]
+    NotFormatter(String),
+}
+
+pub(crate) struct UserWrites<M>(HashMap<String, UserWrite<M>>);
+
+impl<M> UserWrites<M> {
+    fn get(&self, name: &str) -> Option<UserWrite<M>> {
+        self.0.get(name).map(Arc::clone)
+    }
+    pub fn new() -> Self {
+        UserWrites(HashMap::new())
+    }
+    pub fn insert(&mut self, name: String, value: UserWrite<M>) -> Option<UserWrite<M>> {
+        self.0.insert(name, value)
+    }
+}
 
 /// Turn a [`&dyn Reflect`] into a [`BevyModify`].
 pub enum Write<M> {
@@ -13,7 +38,7 @@ pub enum Write<M> {
     Format(RuntimeFormat),
 
     /// An arbitrary function to run on the [`Reflect`].
-    Arbitrary(fn(&dyn Reflect, binding::Entry<M>)),
+    Arbitrary(UserWrite<M>),
 
     /// Print the [`Reflect`] as a [`BevyModify::set_content`] displayed with
     /// [`Reflect::debug`].
@@ -22,18 +47,23 @@ pub enum Write<M> {
 impl<M: BevyModify> Write<M> {
     pub fn modify(&self, value: &dyn Reflect, entry: binding::Entry<M>) {
         match self {
-            // TODO(feat): Proper runtime formatter
             Write::Format(fmt) => set_content(entry, &DisplayReflect(value, Some(fmt))),
             Write::Arbitrary(run) => run(value, entry),
             Write::Debug => set_content(entry, &DisplayReflect(value, None)),
         }
     }
 
-    pub(crate) fn from_parsed(format: Option<parse::Format>) -> Self {
+    pub(crate) fn from_parsed(
+        format: Option<parse::Format>,
+        provided: &UserWrites<M>,
+    ) -> Result<Self, Error> {
         match format {
-            Some(parse::Format::Fmt(format)) => Write::Format(format),
-            Some(parse::Format::UserDefined(_)) => todo!(),
-            None => Write::Debug,
+            None => Ok(Write::Debug),
+            Some(parse::Format::Fmt(format)) => Ok(Write::Format(format)),
+            Some(parse::Format::UserDefined(name)) => provided
+                .get(name)
+                .map(Write::Arbitrary)
+                .ok_or_else(|| Error::NotFormatter(name.to_owned())),
         }
     }
 }

@@ -6,5 +6,6 @@ mod read;
 mod write;
 
 pub use component::{update_component_trackers_system, TrackerBundle};
-pub use read::Read;
-pub use write::Write;
+pub use read::{GetError, ParseError, Read};
+pub(crate) use write::UserWrites;
+pub use write::{Error as WriteError, UserWrite, Write};

@@ -48,6 +48,8 @@ pub enum Deps<F: EnumSetType> {
         depends: EnumSet<F>,
     },
 }
+
+/// A [`fab::Modify`] that can be read from a format string.
 pub trait Parsable: Modify {
     type Err: Into<anyhow::Error> + Send + Sync;
 

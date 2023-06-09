@@ -1,12 +1,25 @@
 //! Global world-scopped data relevant to [`BevyModify`]s located in the bevy ECS.
-use bevy::prelude::{error, Mut, Resource, World};
 
-use fab::binding;
-use fab_parse::tree::Hook as ParsedHook;
-use fab_parse::Styleable;
+use std::sync::Arc;
 
-use crate::track::{Read, Write};
+use bevy::prelude::{error, Mut, Reflect, Resource, World};
+use fab::binding::{self, Entry};
+use fab_parse::{tree::Hook as ParsedHook, Styleable};
+use log::warn;
+use thiserror::Error;
+
+use crate::track::{GetError, ParseError, Read, UserWrites, Write, WriteError};
 use crate::BevyModify;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+    #[error(transparent)]
+    Get(#[from] GetError),
+    #[error(transparent)]
+    Write(#[from] WriteError),
+}
 
 /// A function that adds styles to the parsed format strings.
 ///
@@ -17,7 +30,7 @@ pub type StyleFn<M> = Box<dyn FnMut(Styleable<'_, M>) -> Styleable<'_, M> + Send
 /// Stores the styles used when parsing format strings.
 ///
 /// Styles are transformation operations on the parse tree of the format strings.
-/// Check out the [`TransformedTree`] methods for an exhaustive list of what is
+/// Check out the [`Styleable`] methods for an exhaustive list of what is
 /// possible.
 ///
 /// # Style transform operations
@@ -35,7 +48,7 @@ pub type StyleFn<M> = Box<dyn FnMut(Styleable<'_, M>) -> Styleable<'_, M> + Send
 /// code), or you directly return concrete modifier values.
 ///
 /// Since a modifier always has a string value, you can even parametrize the
-/// resulting modifiers on that value. See the [`TransformedTree::alias`]
+/// resulting modifiers on that value. See the [`Styleable::alias`]
 /// documentation for details.
 ///
 /// ## `chop`
@@ -48,14 +61,14 @@ pub type StyleFn<M> = Box<dyn FnMut(Styleable<'_, M>) -> Styleable<'_, M> + Send
 /// Even subsections of the section with the `chop` modifier will be correctly handled.
 /// It's honestly amazing this is even possible on a theoretical level.
 ///
-/// The `chop` methods on [`TransformedTree`] always accept a `FnMut` that returns
+/// The `chop` methods on [`Styleable`] always accept a `FnMut` that returns
 /// a modifier. This `FnMut` will be called several times — once per created section.
 /// You should return a different one per call.
 ///
 /// For example, if you want to define a `Rainbow` modifier, you'd return a `HueShift`
 /// modifier with a different amount of shift per section.
 ///
-/// [`TransformedTree`] provides methods to make this a bit less error prone.
+/// [`Styleable`] provides methods to make this a bit less error prone.
 /// Relying on mutable state in a `FnMut` is always a bit tricky.
 #[derive(Resource)]
 pub struct Styles<M> {
@@ -107,12 +120,13 @@ impl<M: BevyModify> Hook<M> {
     fn from_parsed(
         hook: ParsedHook,
         world: &mut World,
+        writes: &UserWrites<M>,
         intern: impl FnOnce(&str) -> binding::Id,
-    ) -> Option<Self> {
-        Some(Hook {
+    ) -> Result<Self, Error> {
+        Ok(Hook {
             binding: intern(hook.source.binding),
             read: Read::from_parsed(hook.source, world)?,
-            write: Write::from_parsed(hook.format),
+            write: Write::from_parsed(hook.format, writes)?,
         })
     }
 
@@ -122,10 +136,14 @@ impl<M: BevyModify> Hook<M> {
     ///
     /// Note: `self` is mutable here, this is because [`Read`] caches world
     /// access to later access the value it reads much faster.
-    fn read_into_binding(&mut self, world: &World, bindings: &mut binding::World<M>) -> Option<()> {
+    fn read_into_binding(
+        &mut self,
+        world: &World,
+        bindings: &mut binding::World<M>,
+    ) -> Result<(), Error> {
         let value = self.read.world(world)?;
         self.write.modify(value, bindings.entry(self.binding));
-        Some(())
+        Ok(())
     }
 }
 
@@ -143,22 +161,35 @@ impl<M: BevyModify> Hook<M> {
 pub struct WorldBindings<M> {
     pub bindings: binding::World<M>,
     hooks: Vec<Hook<M>>,
+    formatters: UserWrites<M>,
 }
 impl<M> Default for WorldBindings<M> {
     fn default() -> Self {
-        WorldBindings { bindings: Default::default(), hooks: Vec::new() }
+        WorldBindings {
+            bindings: Default::default(),
+            hooks: Vec::new(),
+            formatters: UserWrites::new(),
+        }
     }
 }
 impl<M: BevyModify> WorldBindings<M> {
+    pub fn add_formatter(
+        &mut self,
+        name: impl Into<String>,
+        value: impl Fn(&dyn Reflect, Entry<M>) + Send + Sync + 'static,
+    ) -> bool {
+        self.formatters
+            .insert(name.into(), Arc::new(value))
+            .is_none()
+    }
     pub fn add_hooks(&mut self, iter: impl IntoIterator<Item = Hook<M>>) {
         self.hooks.extend(iter)
     }
     pub fn parse_hook(&mut self, hook: ParsedHook, world: &mut World) {
-        let Self { bindings, hooks } = self;
-        if let Some(hook) = Hook::from_parsed(hook, world, |n| bindings.get_or_add(n)) {
-            hooks.push(hook);
-        } else {
-            error!("A tracker failed to be loaded");
+        let Self { bindings, hooks, formatters } = self;
+        match Hook::from_parsed(hook, world, formatters, |n| bindings.get_or_add(n)) {
+            Ok(hook) => hooks.push(hook),
+            Err(err) => error!("A tracker failed to be loaded: {err}"),
         }
     }
 }
@@ -171,9 +202,11 @@ impl<M: BevyModify> WorldBindings<M> {
 /// [`LocalBindings`]: crate::LocalBindings
 pub fn update_hooked<M: BevyModify>(world: &mut World) {
     world.resource_scope(|world, mut bindings: Mut<WorldBindings<M>>| {
-        let WorldBindings { bindings, hooks } = &mut *bindings;
+        let WorldBindings { bindings, hooks, .. } = &mut *bindings;
         for hook in hooks.iter_mut() {
-            hook.read_into_binding(world, bindings);
+            if let Err(err) = hook.read_into_binding(world, bindings) {
+                warn!("Error while running binding: {err}");
+            }
         }
     })
 }

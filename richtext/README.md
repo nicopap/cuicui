@@ -517,6 +517,10 @@ of individual characters or words, in sync or other.
 
 ## TODO
 
+- [ ] fab_parse: Consider using a `View<Box<Fn(&mut Style)>>` for styling
+    - This would make it very much like bindings, which is cool
+    - Would allow local styles, which is more sensible than having to define them not where they are used.
+- [ ] bevy_fab: Implement efficient writes as described in `design_doc/fab/binding_source_perf.md`
 - [ ] fab_derive: Split the path detection code in a different crate.
 - [ ] all: design feature gates to avoid compiling stuff not used.
 - [ ] fab parse: performance: use jagged array for `tree::Sections` to avoid insane amount of alloc
@@ -532,12 +536,12 @@ of individual characters or words, in sync or other.
 - [ ] fab_derive: Document `impl_modify` macro fully. Specifically: settle on a naming convention
       and use it consistently.
 - [ ] fab_derive: Test `impl_modify` more thourougfully
-- [ ] fab: Let user specify `track::Write`s
+- [X] fab: Let user specify `track::Write`s
 - [ ] fab resolve: Verify validaty of multiple write fields
 - [X] fab: Entry api to bindings, allows skipping allocations wholesale.
 - [X] fab resolve: Implement proper dependency resolution
 - [X] fab resolve: Fix modifiers overwritting static children
-- [ ] fab resolve + fab_derive: Context field access tracking
+- [ ] fab resolve + fab_derive: Context field access tracking (implemented, not tested)
 - [X] fab resolve + fab_derive: Nested fields handling, modifying (.foo → .foo.x + .foo.y)
 - [X] fab resolve: Lightweight dumb resolver
 - [ ] fab resolve: Test MinResolver

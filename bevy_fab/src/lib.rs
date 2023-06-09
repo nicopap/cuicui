@@ -20,6 +20,7 @@ pub use make::{parse_into_resolver_system, ParseFormatString};
 pub use track::{update_component_trackers_system, TrackerBundle};
 pub use world::{update_hooked, Hook, StyleFn, Styles, WorldBindings};
 
+/// A [`fab::Modify`] that works on a bevy component and can be inserted in the ECS.
 pub trait BevyModify: Parsable + Send + Sync + 'static {
     type Param: SystemParam;
     type ItemsCtorData: Send + Sync;

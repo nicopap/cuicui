@@ -116,28 +116,21 @@ pub fn parse_into_resolver_system<BM: BevyModify + 'static>(
         let context = BM::context(&params);
 
         // TODO(perf): batch commands update.
-        for (entity, (ctor_data, default_item, format_string)) in to_make.iter() {
-            match mk(
-                &mut world_bindings,
-                &mut styles,
-                default_item,
-                &context,
-                format_string,
-            ) {
+        for (entity, (ctor_data, item, fmt)) in to_make.iter() {
+            match mk(&mut world_bindings, &mut styles, item, &context, fmt) {
                 Ok((items, resolver, mut hooks)) => {
                     new_hooks.append(&mut hooks);
 
-                    let local = LocalBindings::<BM>::new(resolver, default_item.clone());
+                    let local = LocalBindings::<BM>::new(resolver, item.clone());
                     let items = BM::make_items(ctor_data, items);
 
-                    cmds.entity(*entity)
-                        .insert((local, items))
-                        .remove::<ParseFormatString<BM>>();
+                    cmds.entity(*entity).insert((local, items));
                 }
                 Err(err) => {
-                    error!("Error when building a resolver: {err}");
+                    error!("Error '{err}' when building '''{fmt}'''")
                 }
             }
+            cmds.entity(*entity).remove::<ParseFormatString<BM>>();
         }
     }
     cache.apply(world);
