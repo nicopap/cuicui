@@ -1,4 +1,6 @@
 //! Reflect [`TypeData`] to query efficiently individual components.
+mod predefined;
+
 use std::{iter, ops::Deref};
 
 use bevy::{
@@ -6,6 +8,8 @@ use bevy::{
     prelude::{Component, DetectChanges, Mut, QueryState, Ref as BRef, World},
     reflect::{FromType, Reflect},
 };
+
+pub use predefined::BaseReflectQueryPlugin;
 
 pub type SingleResult<T> = Result<T, QuerySingleError>;
 
