@@ -49,7 +49,7 @@ impl<P: BevyModify> ParseFormatString<P> {
 /// [`Resolver`]: fab::resolve::Resolver
 fn mk<'fstr, BM: BevyModify>(
     bindings: &mut WorldBindings<BM>,
-    style: &Styles<BM>,
+    style: &mut Styles<BM>,
     default_item: &BM::Item,
     context: &BM::Context<'_>,
     format_string: &'fstr str,
@@ -80,7 +80,7 @@ pub fn parse_into_resolver_system<BM: BevyModify + 'static>(
     mut cache: Local<
         SystemState<(
             Commands,
-            Res<Styles<BM>>,
+            ResMut<Styles<BM>>,
             ResMut<WorldBindings<BM>>,
             BM::Param,
         )>,
@@ -111,7 +111,7 @@ pub fn parse_into_resolver_system<BM: BevyModify + 'static>(
     // Furthermore, `richtext::mk` needs mutable access to WorldBindings and
     // immutable to the context, so we use the SystemState to extract them.
     {
-        let (mut cmds, styles, mut world_bindings, params) = cache.get_mut(world);
+        let (mut cmds, mut styles, mut world_bindings, params) = cache.get_mut(world);
 
         let context = BM::context(&params);
 
@@ -119,7 +119,7 @@ pub fn parse_into_resolver_system<BM: BevyModify + 'static>(
         for (entity, (ctor_data, default_item, format_string)) in to_make.iter() {
             match mk(
                 &mut world_bindings,
-                &styles,
+                &mut styles,
                 default_item,
                 &context,
                 format_string,
