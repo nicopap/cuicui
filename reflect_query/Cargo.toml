@@ -10,5 +10,14 @@ repository = "https://github.com/nicopap/cuicui"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = []
+register_core_pipeline = ["bevy/bevy_core_pipeline"]
+register_pbr = ["bevy/bevy_pbr"]
+register_sprite = ["bevy/bevy_sprite"]
+register_render = ["bevy/bevy_render"]
+register_ui = ["bevy/bevy_ui"]
+register_text = ["bevy/bevy_text"]
+
 [dependencies]
 bevy = { version = "0.10", default-features = false }
