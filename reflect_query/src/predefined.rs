@@ -1,4 +1,4 @@
-//! Add `ReflectQuery` to the app for all pre-existing bevy components.
+//! Add `ReflectQueryable` to the app for all pre-existing bevy components.
 use bevy::{
     core_pipeline::bloom::BloomSettings,
     core_pipeline::fxaa::Fxaa,
@@ -17,17 +17,17 @@ use bevy::{
     window::PrimaryWindow,
 };
 
-use crate::ReflectQuery;
+use crate::ReflectQueryable;
 
 macro_rules! register_reflect_query {
     ($registry:expr, $( $to_register:ty ),* $(,)?) => {
-        $( $registry.register_type_data::<$to_register, ReflectQuery>() );*
+        $( $registry.register_type_data::<$to_register, ReflectQueryable>() );*
     };
 }
 
-/// Add [`ReflectQuery`] registration for all base bevy components. _All_.
-pub struct BaseReflectQueryPlugin;
-impl Plugin for BaseReflectQueryPlugin {
+/// Add [`ReflectQueryable`] registration for all base bevy components. _All_.
+pub struct BaseReflectQueryablePlugin;
+impl Plugin for BaseReflectQueryablePlugin {
     fn build(&self, app: &mut App) {
         add_all_reflect_query(app);
     }
