@@ -11,7 +11,7 @@ use bevy::{
     sprite::MaterialMesh2dBundle,
     utils::HashMap,
 };
-use cuicui_richtext::{track, MakeRichText, RichTextPlugin, WorldBindingsMut};
+use cuicui_richtext::{MakeRichText, ReflectQueryable, RichTextPlugin, WorldBindingsMut};
 
 const TIME_STEP: f32 = 1.0 / 60.0;
 
@@ -75,6 +75,8 @@ fn main() {
         .add_plugin(RichTextPlugin::new())
         .register_type::<Score>()
         .register_type::<Deaths>()
+        .register_type::<Paddle>()
+        .register_type::<Collider>()
         .init_resource::<Score>()
         .init_resource::<Deaths>()
         .insert_resource(ClearColor(BACKGROUND_COLOR))
@@ -99,7 +101,8 @@ fn main() {
         .run();
 }
 
-#[derive(Component)]
+#[derive(Component, Default, Reflect)]
+#[reflect(Component, Queryable)]
 struct Paddle;
 
 #[derive(Component)]
@@ -108,7 +111,8 @@ struct Ball;
 #[derive(Component, Deref, DerefMut)]
 struct Velocity(Vec2);
 
-#[derive(Component, Debug, Default)]
+#[derive(Component, Debug, Default, Reflect)]
+#[reflect(Component, Queryable)]
 struct Collider {
     collision_count: usize,
 }
@@ -230,7 +234,7 @@ fn setup(
             ..default()
         },
         Paddle,
-        track!('d, paddle_hits, Collider::default()),
+        Collider::default(),
     ));
 
     // Ball
@@ -251,7 +255,7 @@ fn setup(
             "Score: {Font: fonts/FiraMono-Medium.ttf, Color: rgb(1.0, 0.5, 0.5), \
             RelSize: 1.5, Content: {Res.Score.score:}}\n\
             {Color: rgb(1.0, 0.2, 0.2), Content: {Res.Deaths:?}}\n\
-            Paddle hits: {Color: pink, Content: {paddle_hits}}\n\
+            Paddle hits: {Color: pink, Content: {Marked(Paddle).Collider.collision_count:print_hit}}\n\
             Ball position: {Font: fonts/FiraMono-Medium.ttf, Color: pink|\
             \\{x: {ball_x}, y: {ball_y}\\}}",
         )

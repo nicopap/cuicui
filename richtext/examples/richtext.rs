@@ -4,8 +4,11 @@ use bevy::{
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
+use bevy_fab::BevyModify;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use cuicui_richtext::{modifiers, MakeRichText, RichText, RichTextPlugin};
+use cuicui_richtext::{
+    modifiers, trait_extensions::*, MakeRichText, Modifier, RichText, RichTextPlugin,
+};
 
 fn main() {
     App::new()
@@ -29,6 +32,19 @@ fn main() {
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(RichTextPlugin::new())
         .add_plugin(WorldInspectorPlugin::default())
+        .with_formatter("print_interaction", |i: &Interaction, entry| {
+            let text = match i {
+                Interaction::Clicked => {
+                    println!("Clicked!");
+                    "Clicked"
+                }
+                Interaction::Hovered => "Hovered",
+                Interaction::None => "None",
+            };
+            entry
+                .modify(|e| e.set_content(format_args!("{text}")))
+                .or_insert_with(|| Modifier::init_content(format_args!("{text}")));
+        })
         .init_resource::<Fps>()
         .insert_resource(ClearColor(Color::BLACK))
         .register_type::<Fps>()
@@ -53,6 +69,43 @@ struct ColorText;
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // UI camera
     commands.spawn(Camera2dBundle::default());
+
+    // Button
+    commands
+        .spawn(NodeBundle {
+            style: Style {
+                size: Size { width: Val::Percent(100.0), ..default() },
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            ..default()
+        })
+        .with_children(|parent| {
+            parent
+                .spawn(ButtonBundle {
+                    style: Style {
+                        size: Size { width: Val::Px(150.0), height: Val::Px(65.0) },
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    background_color: Color::FUCHSIA.into(),
+                    ..default()
+                })
+                .with_children(|parent| {
+                    parent.spawn(TextBundle::from_section(
+                        "Button",
+                        TextStyle {
+                            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                            font_size: 40.0,
+                            color: Color::rgb(0.9, 0.9, 0.9),
+                        },
+                    ));
+                });
+        });
+
+    // Rich Text
     commands.spawn((
         MakeRichText::new(
             "{Color:{color}|{Rainbow:20.0|Bonjour} {greeted}!\n\
@@ -87,7 +140,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         // This is why we added the `FiraMediumHolder` resource earlier,
         // otherwise, the font doesn't show up.
         MakeRichText::new(
-            "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold, Content:{Res.Fps.fps:.1}}",
+            "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold, Content:{Res.Fps.fps:.1}}\n\
+             Button state: {Marked(Button).Interaction:print_interaction}",
         )
         .with_text_style(TextStyle {
             font: asset_server.load("fonts/FiraSans-Bold.ttf"),
