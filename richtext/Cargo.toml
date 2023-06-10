@@ -25,6 +25,14 @@ thiserror = "1"
 fab = { path = "../fab", package = "cuicui_fab" }
 fab_parse = { path = "../fab_parse", package = "cuicui_fab_parse" }
 bevy_fab = { path = "../bevy_fab", package = "cuicui_bevy_fab" }
+reflect_query = { path = "../reflect_query", package = "cuicui_reflect_query", features = [
+ "register_core_pipeline",
+ "register_pbr",
+ "register_sprite",
+ "register_render",
+ "register_ui",
+ "register_text",
+] }
 
 [dev-dependencies]
 bevy = { version = "0.10", features = ["png", "x11", "bevy_asset", "bevy_render" ] }
