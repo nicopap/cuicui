@@ -8,7 +8,9 @@ use bevy::{
     prelude::*,
     text::{BreakLineOn, Font, Text, TextAlignment, TextSection},
 };
-use bevy_fab::{BevyModify, FabPlugin, LocalBindings, ParseFormatString, Styles};
+use bevy_fab::{
+    trait_extensions::AppStylesExtension, BevyModify, FabPlugin, LocalBindings, ParseFormatString,
+};
 use fab_parse::{Split, Styleable};
 
 use crate::modifiers::{GetFont, Modifier};
@@ -154,41 +156,7 @@ fn default_styles(tree: Styleable<Modifier>) -> Styleable<Modifier> {
     })
 }
 
-// Initially, I wanted to pass the styles to `RichTextPlugin` and insert them
-// at initialization. But it's impossible due to `Styles` containing `Box<dyn FnMut>`,
-// which cannot be wrought to implement `Clone`. I temporarilly considered using
-// `Arc<dyn FnMut>` instead. But then it is impossible to call the functions, since
-// `Arc` is immutable. So I opted to add the following
-
-/// Extension trait to add `alias` and `chop` modifiers to the string format parser.
-pub trait AppStylesExtension<M: BevyModify> {
-    /// Insert a new style before all others.
-    fn overwrite_style<F: FnMut(Styleable<M>) -> Styleable<M> + Send + Sync + 'static>(
-        &mut self,
-        style: F,
-    );
-    /// Add a new style after existing ones.
-    fn add_style<F: FnMut(Styleable<M>) -> Styleable<M> + Send + Sync + 'static>(
-        &mut self,
-        style: F,
-    );
-}
-impl<M: BevyModify> AppStylesExtension<M> for App {
-    fn overwrite_style<F: FnMut(Styleable<M>) -> Styleable<M> + Send + Sync + 'static>(
-        &mut self,
-        style: F,
-    ) {
-        let Some(mut styles) = self.world.get_resource_mut::<Styles<M>>() else { return; };
-        styles.overwrite(style)
-    }
-    fn add_style<F: FnMut(Styleable<M>) -> Styleable<M> + Send + Sync + 'static>(
-        &mut self,
-        style: F,
-    ) {
-        let Some(mut styles) = self.world.get_resource_mut::<Styles<M>>() else { return; };
-        styles.add(style)
-    }
-}
+/// Plugin to add to get `RichText` stuff working, it wouldn't otherwise, you silly goose.
 pub struct RichTextPlugin {
     fab: FabPlugin<Modifier>,
     default_styles: bool,

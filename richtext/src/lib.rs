@@ -98,3 +98,47 @@ pub use integration::{
     WorldBindingsMut,
 };
 pub use modifiers::{GetFont, Modifier};
+
+pub mod trait_extensions {
+    use bevy::reflect::Reflect;
+    use bevy_fab::trait_extensions::{AppFormattersExtension, AppStylesExtension};
+    use fab::binding::Entry;
+    use fab_parse::Styleable;
+
+    use crate::Modifier;
+
+    /// Explicit [`AppStylesExtension`] for this crate's [`Modifier`]
+    pub trait AppTextStylesExtension: AppStylesExtension<Modifier> {
+        /// Insert a new style before all others.
+        fn overwrite_style<
+            F: FnMut(Styleable<Modifier>) -> Styleable<Modifier> + Send + Sync + 'static,
+        >(
+            &mut self,
+            style: F,
+        ) -> &mut Self {
+            AppStylesExtension::overwrite_style(self, style)
+        }
+        /// Add a new style after existing ones.
+        fn add_style<
+            F: FnMut(Styleable<Modifier>) -> Styleable<Modifier> + Send + Sync + 'static,
+        >(
+            &mut self,
+            style: F,
+        ) -> &mut Self {
+            AppStylesExtension::add_style(self, style)
+        }
+    }
+    impl<T: AppStylesExtension<Modifier>> AppTextStylesExtension for T {}
+
+    /// Explicit [`AppFormattersExtension`] for this crate's [`Modifier`]
+    pub trait AppTextFormattersExtension: AppFormattersExtension<Modifier> {
+        fn with_formatter<T: Reflect>(
+            &mut self,
+            name: impl Into<String>,
+            formatter: impl Fn(&T, Entry<Modifier>) + Send + Sync + 'static,
+        ) -> &mut Self {
+            AppFormattersExtension::with_formatter(self, name, formatter)
+        }
+    }
+    impl<T: AppFormattersExtension<Modifier>> AppTextFormattersExtension for T {}
+}
