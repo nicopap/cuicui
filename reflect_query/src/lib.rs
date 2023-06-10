@@ -27,9 +27,17 @@ where
 {
 }
 
-pub struct WIter<'a, 'w: 'a, 's: 'a>(pub Box<dyn TIter<'w, 's> + 'a>);
+pub struct WIter<'a, 'w: 'a, 's: 'a>(Box<dyn TIter<'w, 's> + 'a>);
 
-pub trait TState {
+impl<'a, 'w: 'a, 's: 'a> Iterator for WIter<'a, 'w, 's> {
+    type Item = &'w dyn Reflect;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}
+
+trait TState {
     fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w World) -> WIter<'a, 'w, 's>;
 }
 
@@ -54,9 +62,17 @@ where
 {
 }
 
-pub struct WrIter<'a, 'w: 'a, 's: 'a>(pub Box<dyn TrIter<'w, 's> + 'a>);
+pub struct WrIter<'a, 'w: 'a, 's: 'a>(Box<dyn TrIter<'w, 's> + 'a>);
 
-pub trait TrState {
+impl<'a, 'w: 'a, 's: 'a> Iterator for WrIter<'a, 'w, 's> {
+    type Item = Ref<'w, dyn Reflect>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}
+
+trait TrState {
     fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w World) -> WrIter<'a, 'w, 's>;
 }
 
@@ -79,9 +95,17 @@ pub trait TeIter<'w, 's>: Iterator<Item = Entity> {}
 
 impl<'w, 's, C: Component> TeIter<'w, 's> for QueryIter<'w, 's, Entity, With<C>> {}
 
-pub struct WeIter<'a, 'w: 'a, 's: 'a>(pub Box<dyn TeIter<'w, 's> + 'a>);
+pub struct WeIter<'a, 'w: 'a, 's: 'a>(Box<dyn TeIter<'w, 's> + 'a>);
 
-pub trait TeState {
+impl<'a, 'w: 'a, 's: 'a> Iterator for WeIter<'a, 'w, 's> {
+    type Item = Entity;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}
+
+trait TeState {
     fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w World) -> WeIter<'a, 'w, 's>;
 }
 
@@ -106,15 +130,23 @@ where
 {
 }
 
-pub struct WmIter<'a, 'w: 'a, 's: 'a>(pub Box<dyn TmIter<'w, 's> + 'a>);
+pub struct WmIter<'a, 'w: 'a, 's: 'a>(Box<dyn TmIter<'w, 's> + 'a>);
 
-pub trait TmState {
-    fn iter_mut<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w mut World) -> WmIter<'a, 'w, 's>;
+impl<'a, 'w: 'a, 's: 'a> Iterator for WmIter<'a, 'w, 's> {
+    type Item = Mut<'w, dyn Reflect>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}
+
+trait TmState {
+    fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w mut World) -> WmIter<'a, 'w, 's>;
 }
 
 impl<C: Component + Reflect> TmState for QueryState<&'static mut C, ()> {
     /// Get an iterator of `Mut<C>`.
-    fn iter_mut<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w mut World) -> WmIter<'a, 'w, 's> {
+    fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w mut World) -> WmIter<'a, 'w, 's> {
         fn map_unchanged<C: Component + Reflect>(value: Mut<C>) -> Mut<dyn Reflect> {
             value.map_unchanged(C::as_reflect_mut)
         }
@@ -126,10 +158,43 @@ impl<C: Component + Reflect> TmState for QueryState<&'static mut C, ()> {
 // `ReflectQueryableFns`
 //
 
-pub struct ReflectQueryableIter(pub Box<dyn TState>);
-pub struct ReflectQueryableIterEntities(pub Box<dyn TeState>);
-pub struct ReflectQueryableIterMut(pub Box<dyn TmState>);
-pub struct ReflectQueryableIterRef(pub Box<dyn TrState>);
+pub struct ReflectQueryableIter(Box<dyn TState>);
+pub struct ReflectQueryableIterEntities(Box<dyn TeState>);
+pub struct ReflectQueryableIterMut(Box<dyn TmState>);
+pub struct ReflectQueryableIterRef(Box<dyn TrState>);
+
+impl ReflectQueryableIter {
+    pub fn iter<'a, 'w: 'a, 's: 'a>(
+        &'s mut self,
+        world: &'w World,
+    ) -> impl Iterator<Item = &'w dyn Reflect> + 'a {
+        self.0.iter(world).0
+    }
+}
+
+impl ReflectQueryableIterEntities {
+    pub fn iter<'a, 'w: 'a, 's: 'a>(
+        &'s mut self,
+        world: &'w World,
+    ) -> impl Iterator<Item = Entity> + 'a {
+        self.0.iter(world).0
+    }
+}
+
+impl ReflectQueryableIterMut {
+    pub fn iter_mut<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w mut World) -> WmIter<'a, 'w, 's> {
+        self.0.iter(world)
+    }
+}
+
+impl ReflectQueryableIterRef {
+    pub fn iter<'a, 'w: 'a, 's: 'a>(
+        &'s mut self,
+        world: &'w World,
+    ) -> impl Iterator<Item = Ref<'w, dyn Reflect>> + 'a {
+        self.0.iter(world).0
+    }
+}
 
 #[derive(Clone)]
 pub struct ReflectQueryableFns {
@@ -150,6 +215,12 @@ pub struct ReflectQueryableFns {
 #[derive(Clone)]
 pub struct ReflectQueryable(ReflectQueryableFns);
 
+impl ReflectQueryable {
+    pub fn get(&self) -> &ReflectQueryableFns {
+        &self.0
+    }
+}
+
 /// Get a single entity with the reflected queryable [`Component`].
 impl ReflectQueryable {
     pub fn get_single<'a>(&self, world: &'a mut World) -> SingleResult<&'a dyn Reflect> {
@@ -161,7 +232,7 @@ impl ReflectQueryable {
     pub fn get_single_mut<'a>(&self, world: &'a mut World) -> SingleResult<Mut<'a, dyn Reflect>> {
         (self.0.get_single_mut)(world)
     }
-    pub fn get_single_entity<'a>(&self, world: &'a mut World) -> SingleResult<Entity> {
+    pub fn get_single_entity(&self, world: &mut World) -> SingleResult<Entity> {
         (self.0.get_single_entity)(world)
     }
 }
