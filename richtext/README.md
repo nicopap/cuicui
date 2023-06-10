@@ -229,11 +229,11 @@ First, let's derive `Reflect` on the components we read:
 
 ```rust
 #[derive(Component, Reflect)]
-#[reflect(Component)]
+#[reflect(Component, Queryable)]
 struct Player;
 
 #[derive(Component, Reflect)]
-#[reflect(Component)]
+#[reflect(Component, Queryable)]
 struct Stats {
     // ...
 }
@@ -310,12 +310,19 @@ The code only runs if the component in question has been updated since last time
 
 `cuicui_richtext` has several *queries* you can chose from:
 
-| query         | example                          | description |
-|---------------|----------------------------------|------------ |
-| `Res`         | `Res.SomeResource.path.to.field` | Read `.path.to.field` from `Resource` with type `SomeResource` |
-| `One(<type>)` | `One(PlayerStats).path.to.field` | Read `.path.to.field` from `PlayerStats` on first entity found with the `PlayerStats` component |
-| `Name(value)` | `Name(Player).Stats.path.to.field` | Read `.path.to.field` from `Stats` on first entity found with a [`Name`] component equal to "Player" |
-| `Marked(<type>)` | `Marked(Player).Stats.path.to.field` | Read `.path.to.field` from `Stats`  on first entity found with the `Player` component |
+| query         | example                          | matches | reads |
+|---------------|----------------------------------|---------|-------|
+| `Res`         | `Res.SomeResource.path.to.field` | `Resource` with type `SomeResource` | The same resource |
+| `One(<type>)` | `One(PlayerStats).path.to.field` | An `Entity` with `PlayerStats`, fails if more than one entity has the `PlayerStats` component | The same component |
+| `Name(value)` | `Name(Player).Stats.path.to.field` | The first `Entity` encountered with the [`Name`] component which value is "Player" | The `Stats` component |
+| `Marked(<type>)` | `Marked(Player).Stats.path.to.field` | An `Entity` with `Player`, fails if more than one entity has the `Player` component | The `Stats` component |
+
+
+| ❗ **The `Name` query iterates over all entities repetitively if none has the give name** ❗ |
+|----------------------------------------------------------------------------------------------|
+
+| ❗ **You must `#[reflect(Queryable)]` components you wish to access with binding sources** ❗ |
+|-----------------------------------------------------------------------------------------------|
 
 
 [reflection path]: https://docs.rs/bevy/latest/bevy/reflect/trait.GetPath.html#syntax
@@ -517,10 +524,7 @@ of individual characters or words, in sync or other.
 
 ## TODO
 
-- [ ] fab_parse: Consider using a `View<Box<Fn(&mut Style)>>` for styling
-    - This would make it very much like bindings, which is cool
-    - Would allow local styles, which is more sensible than having to define them not where they are used.
-- [ ] bevy_fab: Implement efficient writes as described in `design_doc/fab/binding_source_perf.md`
+- [X] bevy_fab: Implement efficient writes as described in `design_doc/fab/binding_source_perf.md`
 - [ ] fab_derive: Split the path detection code in a different crate.
 - [ ] all: design feature gates to avoid compiling stuff not used.
 - [ ] fab parse: performance: use jagged array for `tree::Sections` to avoid insane amount of alloc
@@ -545,16 +549,18 @@ of individual characters or words, in sync or other.
 - [X] fab resolve + fab_derive: Nested fields handling, modifying (.foo → .foo.x + .foo.y)
 - [X] fab resolve: Lightweight dumb resolver
 - [ ] fab resolve: Test MinResolver
-- [ ] richtext trackers: Cleanup error handling
+- [X] richtext trackers: Cleanup error handling
 - [X] fab_parse post_process: Cleanup error handling (major issue)
-- [ ] bevy_fab trackers: Manage when cached entity changes/not accessible
+- [X] bevy_fab trackers: Manage when cached entity changes/not accessible
 - [X] bevy_fab trackers: Cleanup module tree
-- [ ] bevy_fab trackers: Check is_changed of resources and components before updating binding
-- [ ] bevy_fab trackers: Check that the target field changed before updating binding
+- [X] bevy_fab trackers: Check is_changed of resources and components before updating binding
 - [ ] bevy_fab trackers: Test the reflection-component-based trackers
 - [ ] fab parse: review the informal_grammar.md file
 - [ ] richtext: Text2d support
 - [ ] richtext: Modify a Vec<&mut Text> over TextSections, to allow all kind of effects
+- [ ] fab_parse: Consider using a `View<Box<Fn(&mut Style)>>` for styling
+    - This would make it very much like bindings, which is cool
+    - Would allow local styles, which is more sensible than having to define them not where they are used.
 - [X] richtext: way to apply the same Modify in series, by splitting text word/character
 - [X] richtext split: figure out why this isn't rendered nicely.
 - [X] richtext parse: Implement b2m (binding to modifier) probably with a smallvec of
@@ -565,6 +571,7 @@ of individual characters or words, in sync or other.
       being created, still sharing the same interner and Modify (though this conflicts with Resolver
       as a Modify associated type).
 - [ ] fab parse: test and improve error messages
+- [ ] (unsure) bevy_fab trackers: Check that the target field changed before updating binding
 - [ ] (unsure) optimization: take inspiration from https://github.com/Wallacoloo/jagged_array/blob/master/src/lib.rs#L68 for `VarMatrix`s impls
 - [ ] (unsure) richtext parser: Allow compile-time verification of rich text spec through a proc macro
 - [ ] (unsure) fab resolve: Handle binding that depends on fields (Option<Modifier> in binding view)

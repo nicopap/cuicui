@@ -92,7 +92,7 @@ mod integration;
 pub mod modifiers;
 mod track_macro;
 
-pub use bevy_fab::TrackerBundle;
+pub use bevy_fab::{ReflectQueryable, TrackerBundle};
 pub use integration::{
     MakeRichText, RichText, RichTextFetch, RichTextItem, RichTextPlugin, WorldBindings,
     WorldBindingsMut,
