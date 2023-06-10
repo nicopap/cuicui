@@ -3,30 +3,27 @@ use std::{any, fmt};
 
 use bevy::app::AppTypeRegistry;
 use bevy::core::Name;
-use bevy::ecs::{
-    prelude::*, query::QuerySingleError, reflect::ReflectComponentFns, reflect::ReflectResourceFns,
-    world::EntityRef,
-};
+use bevy::ecs::world::unsafe_world_cell::UnsafeWorldCell;
+use bevy::ecs::world::EntityRef;
+use bevy::ecs::{prelude::*, query::QuerySingleError, reflect::ReflectResourceFns};
 use bevy::reflect::{ParsedPath, Reflect, ReflectPathError, TypeData};
 use fab_parse::tree as parse;
-use reflect_query::{ReflectQueryable, ReflectQueryableFns, ReflectQueryableIterEntities};
+use reflect_query::{Ref, ReflectQueryable, ReflectQueryableFns};
 use thiserror::Error;
 
 pub type NewResult<T> = Result<T, ParseError>;
 pub type GetResult<T> = Result<T, GetError>;
 
-type FromEntity = fn(EntityRef<'_>) -> Option<&dyn Reflect>;
+type ReflectMut = unsafe fn(UnsafeWorldCell) -> Option<Mut<dyn Reflect>>;
+type FromEntity = fn(EntityRef) -> Option<Ref<dyn Reflect>>;
 
 #[derive(Debug, Error)]
 pub enum ParseError {
     #[error("Couldn't parse the source path: {0}")]
     ReflectPath(String),
 
-    #[error("`world` Doesn't contain the component in the binding source")]
-    NotInWorld,
-
-    #[error(transparent)]
-    OneError(#[from] QuerySingleError),
+    #[error("`world` Doesn't contain an entity with name `{0}`")]
+    NotInWorld(String),
 
     #[error("`world` has no type regsitry")]
     NoTypeRegistry,
@@ -54,6 +51,11 @@ pub enum GetError {
     #[error("Can't extract resource from world, it isn't in it")]
     NotInWorld,
 
+    #[error(transparent)]
+    OneError(#[from] QuerySingleError),
+
+    /// This only happens if the path contains an index dereference (such as `["foo"]` or `[0]`)
+    /// and the value of the reflected component changed between creation and querying.
     #[error("Couldn't parse the source path: {0}")]
     ReflectPath(String),
 }
@@ -98,7 +100,7 @@ impl Read {
         };
         Ok(Read { query })
     }
-    pub fn world<'a>(&mut self, world: &'a mut World) -> GetResult<&'a dyn Reflect> {
+    pub fn world<'a>(&mut self, world: &'a mut World) -> GetResult<Ref<'a, dyn Reflect>> {
         match &self.query {
             Query::Res(access) => access.get(world),
             Query::One(access) => access.get(world),
@@ -117,10 +119,10 @@ fn cast_to_resource_fns(reflect: &ReflectResource) -> ReflectResourceFns {
     let new_ref: &ReflectResourceFns = unsafe { NonNull::from(reflect).cast().as_ref() };
     new_ref.clone()
 }
-fn cast_to_comp_fns(reflect: &ReflectComponent) -> ReflectComponentFns {
-    // SAFETY: see above
-    let new_ref: &ReflectComponentFns = unsafe { NonNull::from(reflect).cast().as_ref() };
-    new_ref.clone()
+pub fn reflect_ref(f: ReflectMut, world: &mut World) -> Option<Ref<dyn Reflect>> {
+    // SAFETY: unique world access
+    let reflect_mut = unsafe { f(world.as_unsafe_world_cell()) };
+    reflect_mut.map(|r| Ref::map_from(r.into(), |i| i))
 }
 fn get_queryable_fns(reflect: &ReflectQueryable) -> ReflectQueryableFns {
     reflect.get().clone()
@@ -132,14 +134,20 @@ fn get_path(path: &str) -> NewResult<Option<ParsedPath>> {
         path => Ok(Some(ParsedPath::parse(path)?)),
     }
 }
-fn read_path<'a>(
-    path: &Option<ParsedPath>,
+fn read_opt_path<'a, 'p>(
+    path: &'p Option<ParsedPath>,
     reflect: &'a dyn Reflect,
-) -> GetResult<&'a dyn Reflect> {
+) -> Result<&'a dyn Reflect, ReflectPathError<'p>> {
     match path {
         None => Ok(reflect),
-        Some(path) => Ok(path.reflect_element(reflect)?),
+        Some(path) => path.reflect_element(reflect),
     }
+}
+fn read_path<'a>(
+    path: &Option<ParsedPath>,
+    reflect: Ref<'a, dyn Reflect>,
+) -> GetResult<Ref<'a, dyn Reflect>> {
+    Ok(reflect.map_failable(|r| read_opt_path(path, r))?)
 }
 fn get_data<T: TypeData, Out>(
     world: &World,
@@ -165,38 +173,34 @@ fn get_data<T: TypeData, Out>(
         .data()
         .ok_or_else(no_type_data)?))
 }
-/// iterates over all entities in the world in research for the one matched by `from_entity`.
+/// Iterates over all entities with a `Name` component to find if one matches
+/// the provided name.
 ///
-/// This will, of course, iterate over all entities if `from_entity` doesn't match
-/// anything. So use sparingly.
-fn get_first_entity(world: &World, matches: impl Fn(EntityRef) -> bool) -> NewResult<Entity> {
+/// Returns the first encountered `Entity` with given `name`.
+/// `None` if no such thing exist.
+fn get_with_name(world: &mut World, name: &Name) -> Option<Entity> {
     world
-        .iter_entities()
-        .find_map(|e| matches(e).then_some(e.id()))
-        .ok_or(ParseError::NotInWorld)
+        .query::<(Entity, &Name)>()
+        .iter(world)
+        .find_map(|(e, n)| (name == n).then_some(e))
 }
 
 #[derive(Clone)]
 pub(crate) struct ResAccess {
-    from_world: fn(&World) -> Option<&dyn Reflect>,
+    from_world: ReflectMut,
     path: Option<ParsedPath>,
 }
 // TODO(perf): consider storing a pointer offset and cast from `Ptr<'a, _>`
 // taken from `World::get_*_by_id(ComponentId) + offset` instead of Option<ParsedPath>
 #[derive(Clone)]
 pub(crate) struct OneAccess {
-    entity: Entity,
-    from_entity: FromEntity,
-    #[allow(unused)] // TODO(feat): react to when world.get(entity) -> None
-    get_entity: fn(&mut World) -> Result<Entity, QuerySingleError>,
+    get: fn(&mut World) -> Result<Ref<dyn Reflect>, QuerySingleError>,
     path: Option<ParsedPath>,
 }
 #[derive(Clone)]
 pub(crate) struct MarkedAccess {
-    entity: Entity,
+    get_entity: fn(&mut World) -> Result<Entity, QuerySingleError>,
     from_entity: FromEntity,
-    #[allow(unused)] // TODO(feat): react to when world.get(entity) -> None
-    get_entities: fn(&mut World) -> ReflectQueryableIterEntities,
     path: Option<ParsedPath>,
 }
 #[derive(Clone)]
@@ -204,62 +208,66 @@ pub(crate) struct NameAccess {
     entity: Entity,
     from_entity: FromEntity,
     path: Option<ParsedPath>,
-    #[allow(unused)] // TODO(feat): react to when world.get(entity) -> None
     name: Name,
 }
 impl ResAccess {
-    // TODO(bug): update Access when world changes
-    fn get<'a>(&self, world: &'a World) -> GetResult<&'a dyn Reflect> {
-        let resource = (self.from_world)(world).ok_or(GetError::NotInWorld)?;
+    fn get<'a>(&self, world: &'a mut World) -> GetResult<Ref<'a, dyn Reflect>> {
+        let resource = reflect_ref(self.from_world, world).ok_or(GetError::NotInWorld)?;
         read_path(&self.path, resource)
     }
     fn new(type_name: &str, path: &str, world: &World) -> NewResult<Self> {
-        let from_world = get_data(world, type_name, cast_to_resource_fns)?.reflect;
-        let path = get_path(path)?;
-        Ok(ResAccess { from_world, path })
+        Ok(ResAccess {
+            from_world: get_data(world, type_name, cast_to_resource_fns)?.reflect_unchecked_mut,
+            path: get_path(path)?,
+        })
     }
 }
 impl OneAccess {
-    fn get<'a>(&self, world: &'a World) -> GetResult<&'a dyn Reflect> {
-        let entity = world.get_entity(self.entity).ok_or(GetError::NoEntity)?;
-        let entity = (self.from_entity)(entity).ok_or(GetError::NoComponent)?;
-        read_path(&self.path, entity)
+    fn get<'a>(&self, world: &'a mut World) -> GetResult<Ref<'a, dyn Reflect>> {
+        Ok((self.get)(world)?.map_failable(|r| read_opt_path(&self.path, r))?)
     }
-    fn new(one: &str, path: &str, world: &mut World) -> NewResult<Self> {
-        let from_entity = get_data(world, one, cast_to_comp_fns)?.reflect;
-        let get_entity = get_data(world, one, get_queryable_fns)?.get_single_entity;
-        let path = get_path(path)?;
-        let entity = get_entity(world)?;
-        Ok(OneAccess { from_entity, get_entity, entity, path })
+    fn new(one: &str, path: &str, world: &World) -> NewResult<Self> {
+        Ok(OneAccess {
+            get: get_data(world, one, get_queryable_fns)?.get_single_ref,
+            path: get_path(path)?,
+        })
     }
 }
 impl MarkedAccess {
-    fn get<'a>(&self, world: &'a World) -> GetResult<&'a dyn Reflect> {
-        let entity = world.get_entity(self.entity).ok_or(GetError::NoEntity)?;
-        let entity = (self.from_entity)(entity).ok_or(GetError::NoComponent)?;
+    fn get<'a>(&self, world: &'a mut World) -> GetResult<Ref<'a, dyn Reflect>> {
+        use GetError::NoComponent;
+
+        let entity = (self.get_entity)(world)?;
+        // SAFETY: we just got the entity from the world.
+        let entity = unsafe { world.get_entity(entity).unwrap_unchecked() };
+        let entity = (self.from_entity)(entity).ok_or(NoComponent)?;
         read_path(&self.path, entity)
     }
-    fn new(marker: &str, accessed: &str, path: &str, world: &mut World) -> NewResult<Self> {
-        let from_entity = get_data(world, accessed, cast_to_comp_fns)?.reflect;
-        let get_entities = get_data(world, marker, get_queryable_fns)?.iter_entities;
-        let path = get_path(path)?;
-        let entity = get_entities(world).iter(world).next();
-        let entity = entity.ok_or(ParseError::NotInWorld)?;
-        Ok(MarkedAccess { from_entity, get_entities, entity, path })
+    fn new(marker: &str, accessed: &str, path: &str, world: &World) -> NewResult<Self> {
+        Ok(MarkedAccess {
+            from_entity: get_data(world, accessed, get_queryable_fns)?.reflect_ref,
+            get_entity: get_data(world, marker, get_queryable_fns)?.get_single_entity,
+            path: get_path(path)?,
+        })
     }
 }
 impl NameAccess {
-    fn get<'a>(&self, world: &'a World) -> GetResult<&'a dyn Reflect> {
-        let entity = world.get_entity(self.entity).ok_or(GetError::NoEntity)?;
-        let entity = (self.from_entity)(entity).ok_or(GetError::NoComponent)?;
+    fn get<'a>(&self, world: &'a World) -> GetResult<Ref<'a, dyn Reflect>> {
+        use GetError::{NoComponent, NoEntity};
+
+        let entity = world.get_entity(self.entity).ok_or(NoEntity)?;
+        let entity = (self.from_entity)(entity).ok_or(NoComponent)?;
         read_path(&self.path, entity)
     }
-    fn new(name: String, accessed: &str, path: &str, world: &World) -> NewResult<Self> {
-        let name = name.into();
-        let from_entity = get_data(world, accessed, cast_to_comp_fns)?.reflect;
-        let path = get_path(path)?;
-        let entity = get_first_entity(world, |e| e.get::<Name>() == Some(&name))?;
-        Ok(NameAccess { from_entity, name, entity, path })
+    fn new(name: String, accessed: &str, path: &str, world: &mut World) -> NewResult<Self> {
+        let name: Name = name.into();
+        let not_in_world = || ParseError::NotInWorld(name.to_string());
+        Ok(NameAccess {
+            from_entity: get_data(world, accessed, get_queryable_fns)?.reflect_ref,
+            entity: get_with_name(world, &name).ok_or_else(not_in_world)?,
+            path: get_path(path)?,
+            name,
+        })
     }
 }
 

@@ -142,7 +142,10 @@ impl<M: BevyModify> Hook<M> {
         bindings: &mut binding::World<M>,
     ) -> Result<(), Error> {
         let value = self.read.world(world)?;
-        self.write.modify(value, bindings.entry(self.binding));
+        if value.is_changed() {
+            let value = value.into_inner();
+            self.write.modify(value, bindings.entry(self.binding));
+        }
         Ok(())
     }
 }
