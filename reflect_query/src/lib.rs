@@ -4,7 +4,7 @@ mod predefined;
 use std::{iter, ops::Deref};
 
 use bevy::{
-    ecs::query::{QueryIter, QuerySingleError},
+    ecs::{query::QueryIter, query::QuerySingleError, world::EntityRef},
     prelude::{Component, DetectChanges, Entity, Mut, QueryState, Ref as BRef, With, World},
     reflect::{FromType, Reflect},
 };
@@ -18,7 +18,11 @@ pub type SingleResult<T> = Result<T, QuerySingleError>;
 // erased using trait objects.
 //
 
-pub trait TIter<'w, 's>: Iterator<Item = &'w dyn Reflect> {}
+trait TState {
+    fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w World) -> WIter<'a, 'w, 's>;
+}
+trait TIter<'w, 's>: Iterator<Item = &'w dyn Reflect> {}
+pub struct WIter<'a, 'w: 'a, 's: 'a>(Box<dyn TIter<'w, 's> + 'a>);
 
 impl<'w, 's, C, F> TIter<'w, 's> for iter::Map<QueryIter<'w, 's, &'static C, ()>, F>
 where
@@ -27,18 +31,12 @@ where
 {
 }
 
-pub struct WIter<'a, 'w: 'a, 's: 'a>(Box<dyn TIter<'w, 's> + 'a>);
-
 impl<'a, 'w: 'a, 's: 'a> Iterator for WIter<'a, 'w, 's> {
     type Item = &'w dyn Reflect;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
     }
-}
-
-trait TState {
-    fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w World) -> WIter<'a, 'w, 's>;
 }
 
 impl<C: Component + Reflect> TState for QueryState<&'static C, ()> {
@@ -53,7 +51,11 @@ impl<C: Component + Reflect> TState for QueryState<&'static C, ()> {
 // erased using trait objects.
 //
 
-pub trait TrIter<'w, 's>: Iterator<Item = Ref<'w, dyn Reflect>> {}
+trait TrState {
+    fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w World) -> WrIter<'a, 'w, 's>;
+}
+trait TrIter<'w, 's>: Iterator<Item = Ref<'w, dyn Reflect>> {}
+pub struct WrIter<'a, 'w: 'a, 's: 'a>(Box<dyn TrIter<'w, 's> + 'a>);
 
 impl<'w, 's, C, F> TrIter<'w, 's> for iter::Map<QueryIter<'w, 's, BRef<'static, C>, ()>, F>
 where
@@ -62,18 +64,12 @@ where
 {
 }
 
-pub struct WrIter<'a, 'w: 'a, 's: 'a>(Box<dyn TrIter<'w, 's> + 'a>);
-
 impl<'a, 'w: 'a, 's: 'a> Iterator for WrIter<'a, 'w, 's> {
     type Item = Ref<'w, dyn Reflect>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
     }
-}
-
-trait TrState {
-    fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w World) -> WrIter<'a, 'w, 's>;
 }
 
 impl<C: Component + Reflect> TrState for QueryState<BRef<'static, C>, ()> {
@@ -91,11 +87,13 @@ impl<C: Component + Reflect> TrState for QueryState<BRef<'static, C>, ()> {
 // Erased using trait objects.
 //
 
-pub trait TeIter<'w, 's>: Iterator<Item = Entity> {}
+trait TeState {
+    fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w World) -> WeIter<'a, 'w, 's>;
+}
+trait TeIter<'w, 's>: Iterator<Item = Entity> {}
+pub struct WeIter<'a, 'w: 'a, 's: 'a>(Box<dyn TeIter<'w, 's> + 'a>);
 
 impl<'w, 's, C: Component> TeIter<'w, 's> for QueryIter<'w, 's, Entity, With<C>> {}
-
-pub struct WeIter<'a, 'w: 'a, 's: 'a>(Box<dyn TeIter<'w, 's> + 'a>);
 
 impl<'a, 'w: 'a, 's: 'a> Iterator for WeIter<'a, 'w, 's> {
     type Item = Entity;
@@ -103,10 +101,6 @@ impl<'a, 'w: 'a, 's: 'a> Iterator for WeIter<'a, 'w, 's> {
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
     }
-}
-
-trait TeState {
-    fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w World) -> WeIter<'a, 'w, 's>;
 }
 
 impl<C: Component> TeState for QueryState<Entity, With<C>> {
@@ -121,7 +115,11 @@ impl<C: Component> TeState for QueryState<Entity, With<C>> {
 // erased using trait objects.
 //
 
-pub trait TmIter<'w, 's>: Iterator<Item = Mut<'w, dyn Reflect>> {}
+trait TmState {
+    fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w mut World) -> WmIter<'a, 'w, 's>;
+}
+trait TmIter<'w, 's>: Iterator<Item = Mut<'w, dyn Reflect>> {}
+pub struct WmIter<'a, 'w: 'a, 's: 'a>(Box<dyn TmIter<'w, 's> + 'a>);
 
 impl<'w, 's, C, F> TmIter<'w, 's> for iter::Map<QueryIter<'w, 's, &'static mut C, ()>, F>
 where
@@ -130,18 +128,12 @@ where
 {
 }
 
-pub struct WmIter<'a, 'w: 'a, 's: 'a>(Box<dyn TmIter<'w, 's> + 'a>);
-
 impl<'a, 'w: 'a, 's: 'a> Iterator for WmIter<'a, 'w, 's> {
     type Item = Mut<'w, dyn Reflect>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
     }
-}
-
-trait TmState {
-    fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: &'w mut World) -> WmIter<'a, 'w, 's>;
 }
 
 impl<C: Component + Reflect> TmState for QueryState<&'static mut C, ()> {
@@ -198,6 +190,8 @@ impl ReflectQueryableIterRef {
 
 #[derive(Clone)]
 pub struct ReflectQueryableFns {
+    pub reflect_ref: fn(EntityRef) -> Option<Ref<dyn Reflect>>,
+
     pub get_single: fn(&mut World) -> SingleResult<&dyn Reflect>,
     pub get_single_entity: fn(&mut World) -> SingleResult<Entity>,
     pub get_single_ref: fn(&mut World) -> SingleResult<Ref<dyn Reflect>>,
@@ -256,6 +250,19 @@ impl ReflectQueryable {
 impl<C: Component + Reflect> FromType<C> for ReflectQueryable {
     fn from_type() -> Self {
         ReflectQueryable(ReflectQueryableFns {
+            reflect_ref: |entity| {
+                let world = entity.world();
+                let last_change_tick = world.last_change_tick();
+                let change_tick = world.read_change_tick();
+                let ticks = entity.get_change_ticks::<C>()?;
+
+                let with_ticks = Ref {
+                    value: entity.get::<C>()?,
+                    is_added: ticks.is_added(last_change_tick, change_tick),
+                    is_changed: ticks.is_changed(last_change_tick, change_tick),
+                };
+                Some(with_ticks.map(C::as_reflect))
+            },
             get_single: |world| {
                 let component = world.query::<&C>().get_single(world)?;
                 Ok(component.as_reflect())
@@ -283,36 +290,38 @@ pub struct Ref<'a, T: ?Sized> {
     value: &'a T,
     is_added: bool,
     is_changed: bool,
-    last_changed: u32,
-}
-impl<T: ?Sized> DetectChanges for Ref<'_, T> {
-    fn is_added(&self) -> bool {
-        self.is_added
-    }
-    fn is_changed(&self) -> bool {
-        self.is_changed
-    }
-    fn last_changed(&self) -> u32 {
-        self.last_changed
-    }
 }
 impl<'w, T: ?Sized> Ref<'w, T> {
+    pub fn is_added(&self) -> bool {
+        self.is_added
+    }
+    pub fn is_changed(&self) -> bool {
+        self.is_changed
+    }
     pub fn into_inner(self) -> &'w T {
         self.value
+    }
+    pub fn map_failable<E, U: ?Sized>(
+        self,
+        f: impl FnOnce(&T) -> Result<&U, E>,
+    ) -> Result<Ref<'w, U>, E> {
+        Ok(Ref {
+            value: f(self.value)?,
+            is_added: self.is_added,
+            is_changed: self.is_changed,
+        })
     }
     pub fn map<U: ?Sized>(self, f: impl FnOnce(&T) -> &U) -> Ref<'w, U> {
         Ref {
             value: f(self.value),
             is_added: self.is_added,
             is_changed: self.is_changed,
-            last_changed: self.last_changed,
         }
     }
     pub fn map_from<U: ?Sized>(bevy: BRef<'w, U>, f: impl FnOnce(&U) -> &T) -> Self {
         Ref {
             is_added: bevy.is_added(),
             is_changed: bevy.is_changed(),
-            last_changed: bevy.last_changed(),
             value: f(bevy.into_inner()),
         }
     }
