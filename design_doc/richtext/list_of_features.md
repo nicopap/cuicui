@@ -120,15 +120,23 @@ See modules and data structure methods
     - with arbitrary function
     - Handle nested subsections properly
 
+### `reflect_query`
+
+- `ReflectQueryableFns` and all its fields
+- An erased (using trait object) iterator that wraps `QueryState` and `QueryIter`.
+  The output values of `iter_*` methods
+- `predefined` plugin and crate cargo flags to add selectively `ReflectQueryable`
+  registration for bevy components.
+- The `Ref` struct, a copy of the bevy `Ref` but with less features. Necessary to
+  enable change detection.
+
 ### `bevy_fab`
 
 - `tracker`s
   - system reading hooks and updating associated bindings with values of
     hook source
-  - **Unimplemented**: avoid updating bindings when the source didn't change,
+  - avoid updating bindings when the source didn't change,
     using bevy's ECS change detection system
-  - **Unimplemented**: avoid updating bindings when the source didn't change,
-    by caching the old value and comparing to the new one.
   - binding source queries
     - Efficient caching of functions used to read from world the `Reflect`
       components/resources & access the reflected `GetPath`.
@@ -136,7 +144,7 @@ See modules and data structure methods
     - `One`
     - `Name`
     - `Marked`
-  - `TrackerBundle` a bundle to automatically add a `Hook` reading a component
+  - **Set for removal**: `TrackerBundle` a bundle to automatically add a `Hook` reading a component
     it wraps.
     - `TrackerBundle::debug`: prints the `fmt::Debug` of component,
       can be disabled with feature flag
@@ -156,10 +164,12 @@ See modules and data structure methods
   features of `fab_parse::post_processing`.
 - `UserWrites`: A list of formatters to use to create hooks based on the right
   side of the `:` in source bindings.
+- `trait_extensions`: allow defining `Styles` and formatters at the `App` level.
 
 ### `richtext`
 
 - provide an API completely devoid of the complexity of all the fab crates
+- app trait extensions wrapper for the ones defined in `bevy_fab`.
 
 
 [rust fmt module]: https://doc.rust-lang.org/stable/std/fmt/index.html
