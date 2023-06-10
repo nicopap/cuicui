@@ -4,10 +4,12 @@ use std::{any, fmt};
 use bevy::app::AppTypeRegistry;
 use bevy::core::Name;
 use bevy::ecs::{
-    prelude::*, reflect::ReflectComponentFns, reflect::ReflectResourceFns, world::EntityRef,
+    prelude::*, query::QuerySingleError, reflect::ReflectComponentFns, reflect::ReflectResourceFns,
+    world::EntityRef,
 };
 use bevy::reflect::{ParsedPath, Reflect, ReflectPathError, TypeData};
 use fab_parse::tree as parse;
+use reflect_query::{ReflectQueryable, ReflectQueryableFns, ReflectQueryableIterEntities};
 use thiserror::Error;
 
 pub type NewResult<T> = Result<T, ParseError>;
@@ -22,6 +24,9 @@ pub enum ParseError {
 
     #[error("`world` Doesn't contain the component in the binding source")]
     NotInWorld,
+
+    #[error(transparent)]
+    OneError(#[from] QuerySingleError),
 
     #[error("`world` has no type regsitry")]
     NoTypeRegistry,
@@ -58,6 +63,13 @@ impl From<ReflectPathError<'_>> for GetError {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum ReflectTrait {
+    Component,
+    Resource,
+    Queryable,
+}
+
 #[derive(Clone)]
 pub(crate) enum Query {
     Res(ResAccess),
@@ -72,7 +84,7 @@ pub struct Read {
 }
 
 impl Read {
-    pub(crate) fn from_parsed(parsed: parse::Source, world: &mut World) -> NewResult<Self> {
+    pub fn from_parsed(parsed: parse::Source, world: &mut World) -> NewResult<Self> {
         let path: Box<str> = parsed.reflect_path.into();
         let query = match parsed.query {
             parse::Query::Res(res) => Query::Res(ResAccess::new(res, &path, world)?),
@@ -86,7 +98,7 @@ impl Read {
         };
         Ok(Read { query })
     }
-    pub(crate) fn world<'a>(&mut self, world: &'a mut World) -> GetResult<&'a dyn Reflect> {
+    pub fn world<'a>(&mut self, world: &'a mut World) -> GetResult<&'a dyn Reflect> {
         match &self.query {
             Query::Res(access) => access.get(world),
             Query::One(access) => access.get(world),
@@ -102,17 +114,16 @@ fn cast_to_resource_fns(reflect: &ReflectResource) -> ReflectResourceFns {
     // however, this isn't unsound as of the current (1.69) version of rust,
     // since `ReflectResource` is a newtype for `ReflectResourceFns` and
     // guarentees to be no different.
-    let new_ref = unsafe { NonNull::from(reflect).cast::<ReflectResourceFns>().as_ref() };
+    let new_ref: &ReflectResourceFns = unsafe { NonNull::from(reflect).cast().as_ref() };
     new_ref.clone()
 }
 fn cast_to_comp_fns(reflect: &ReflectComponent) -> ReflectComponentFns {
     // SAFETY: see above
-    let new_ref = unsafe {
-        NonNull::from(reflect)
-            .cast::<ReflectComponentFns>()
-            .as_ref()
-    };
+    let new_ref: &ReflectComponentFns = unsafe { NonNull::from(reflect).cast().as_ref() };
     new_ref.clone()
+}
+fn get_queryable_fns(reflect: &ReflectQueryable) -> ReflectQueryableFns {
+    reflect.get().clone()
 }
 
 fn get_path(path: &str) -> NewResult<Option<ParsedPath>> {
@@ -140,6 +151,7 @@ fn get_data<T: TypeData, Out>(
         let reflect_trait = match () {
             () if type_name.ends_with("Component") => ReflectTrait::Component,
             () if type_name.ends_with("Resource") => ReflectTrait::Resource,
+            () if type_name.ends_with("Queryable") => ReflectTrait::Queryable,
             () => unreachable!("Trait no one cares about"),
         };
         ParseError::NoTypeData(type_name.into(), reflect_trait)
@@ -175,6 +187,16 @@ pub(crate) struct ResAccess {
 pub(crate) struct OneAccess {
     entity: Entity,
     from_entity: FromEntity,
+    #[allow(unused)] // TODO(feat): react to when world.get(entity) -> None
+    get_entity: fn(&mut World) -> Result<Entity, QuerySingleError>,
+    path: Option<ParsedPath>,
+}
+#[derive(Clone)]
+pub(crate) struct MarkedAccess {
+    entity: Entity,
+    from_entity: FromEntity,
+    #[allow(unused)] // TODO(feat): react to when world.get(entity) -> None
+    get_entities: fn(&mut World) -> ReflectQueryableIterEntities,
     path: Option<ParsedPath>,
 }
 #[derive(Clone)]
@@ -185,21 +207,13 @@ pub(crate) struct NameAccess {
     #[allow(unused)] // TODO(feat): react to when world.get(entity) -> None
     name: Name,
 }
-#[derive(Clone)]
-pub(crate) struct MarkedAccess {
-    entity: Entity,
-    from_entity: FromEntity,
-    #[allow(unused)] // TODO(feat): react to when world.get(entity) -> None
-    contains: fn(EntityRef) -> bool,
-    path: Option<ParsedPath>,
-}
 impl ResAccess {
     // TODO(bug): update Access when world changes
     fn get<'a>(&self, world: &'a World) -> GetResult<&'a dyn Reflect> {
         let resource = (self.from_world)(world).ok_or(GetError::NotInWorld)?;
         read_path(&self.path, resource)
     }
-    pub fn new(type_name: &str, path: &str, world: &World) -> NewResult<Self> {
+    fn new(type_name: &str, path: &str, world: &World) -> NewResult<Self> {
         let from_world = get_data(world, type_name, cast_to_resource_fns)?.reflect;
         let path = get_path(path)?;
         Ok(ResAccess { from_world, path })
@@ -211,26 +225,12 @@ impl OneAccess {
         let entity = (self.from_entity)(entity).ok_or(GetError::NoComponent)?;
         read_path(&self.path, entity)
     }
-    pub fn new(one: &str, path: &str, world: &World) -> NewResult<Self> {
-        let reflect_one = get_data(world, one, cast_to_comp_fns)?;
-        let (from_entity, contains) = (reflect_one.reflect, reflect_one.contains);
+    fn new(one: &str, path: &str, world: &mut World) -> NewResult<Self> {
+        let from_entity = get_data(world, one, cast_to_comp_fns)?.reflect;
+        let get_entity = get_data(world, one, get_queryable_fns)?.get_single_entity;
         let path = get_path(path)?;
-        let entity = get_first_entity(world, contains)?;
-        Ok(OneAccess { from_entity, entity, path })
-    }
-}
-impl NameAccess {
-    fn get<'a>(&self, world: &'a World) -> GetResult<&'a dyn Reflect> {
-        let entity = world.get_entity(self.entity).ok_or(GetError::NoEntity)?;
-        let entity = (self.from_entity)(entity).ok_or(GetError::NoComponent)?;
-        read_path(&self.path, entity)
-    }
-    pub(crate) fn new(name: String, accessed: &str, path: &str, world: &World) -> NewResult<Self> {
-        let name = name.into();
-        let from_entity = get_data(world, accessed, cast_to_comp_fns)?.reflect;
-        let path = get_path(path)?;
-        let entity = get_first_entity(world, |e| e.get::<Name>() == Some(&name))?;
-        Ok(NameAccess { from_entity, name, entity, path })
+        let entity = get_entity(world)?;
+        Ok(OneAccess { from_entity, get_entity, entity, path })
     }
 }
 impl MarkedAccess {
@@ -239,14 +239,34 @@ impl MarkedAccess {
         let entity = (self.from_entity)(entity).ok_or(GetError::NoComponent)?;
         read_path(&self.path, entity)
     }
-    pub(crate) fn new(marker: &str, accessed: &str, path: &str, world: &World) -> NewResult<Self> {
+    fn new(marker: &str, accessed: &str, path: &str, world: &mut World) -> NewResult<Self> {
         let from_entity = get_data(world, accessed, cast_to_comp_fns)?.reflect;
-        let contains = get_data(world, marker, cast_to_comp_fns)?.contains;
+        let get_entities = get_data(world, marker, get_queryable_fns)?.iter_entities;
         let path = get_path(path)?;
-        let entity = get_first_entity(world, contains)?;
-        Ok(MarkedAccess { from_entity, contains, entity, path })
+        let entity = get_entities(world).iter(world).next();
+        let entity = entity.ok_or(ParseError::NotInWorld)?;
+        Ok(MarkedAccess { from_entity, get_entities, entity, path })
     }
 }
+impl NameAccess {
+    fn get<'a>(&self, world: &'a World) -> GetResult<&'a dyn Reflect> {
+        let entity = world.get_entity(self.entity).ok_or(GetError::NoEntity)?;
+        let entity = (self.from_entity)(entity).ok_or(GetError::NoComponent)?;
+        read_path(&self.path, entity)
+    }
+    fn new(name: String, accessed: &str, path: &str, world: &World) -> NewResult<Self> {
+        let name = name.into();
+        let from_entity = get_data(world, accessed, cast_to_comp_fns)?.reflect;
+        let path = get_path(path)?;
+        let entity = get_first_entity(world, |e| e.get::<Name>() == Some(&name))?;
+        Ok(NameAccess { from_entity, name, entity, path })
+    }
+}
+
+//
+// fmt::Display impls
+//
+
 impl fmt::Display for ResAccess {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Res.<accessed_type>")?;
@@ -283,16 +303,12 @@ impl fmt::Display for MarkedAccess {
         Ok(())
     }
 }
-#[derive(Debug, Clone, Copy)]
-pub enum ReflectTrait {
-    Component,
-    Resource,
-}
 impl fmt::Display for ReflectTrait {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ReflectTrait::Component => write!(f, "Component"),
             ReflectTrait::Resource => write!(f, "Resource"),
+            ReflectTrait::Queryable => write!(f, "Queryable"),
         }
     }
 }

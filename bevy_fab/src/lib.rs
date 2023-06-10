@@ -6,17 +6,18 @@ mod make;
 mod track;
 mod world;
 
-use std::fmt::Arguments;
-use std::marker::PhantomData;
+use std::{fmt::Arguments, marker::PhantomData};
 
 use bevy::app::{App, CoreSet, Plugin};
 use bevy::ecs::prelude::*;
 use bevy::ecs::system::{StaticSystemParam, SystemParam, SystemParamItem};
 use fab::modify::FieldsOf;
 use fab_parse::Parsable;
+use reflect_query::BaseReflectQueryablePlugin;
 
 pub use local::LocalBindings;
 pub use make::{parse_into_resolver_system, ParseFormatString};
+pub use reflect_query::ReflectQueryable;
 pub use track::{update_component_trackers_system, TrackerBundle};
 pub use world::{update_hooked, Hook, StyleFn, Styles, WorldBindings};
 
@@ -68,7 +69,8 @@ where
 {
     fn build(&self, app: &mut App) {
         use CoreSet::PostUpdate;
-        app.init_resource::<WorldBindings<BM>>()
+        app.add_plugin(BaseReflectQueryablePlugin)
+            .init_resource::<WorldBindings<BM>>()
             .init_resource::<Styles<BM>>()
             .add_system(update_hooked::<BM>.in_base_set(PostUpdate))
             .add_system(update_items_system::<BM>.in_base_set(PostUpdate))
