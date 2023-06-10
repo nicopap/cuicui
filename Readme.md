@@ -101,6 +101,17 @@ flowchart LR
   bevy_fab --> richtext
 ```
 
+## Reflect Query
+
+Bevy lacks a to _query_ for reflected `Component`s.
+Without this ability, you would be stuck _iterating over all `EntityRef` and
+checking if it contains the component in question_.
+
+`reflect_query` defines `ReflectQueryable`, a way to query for a given component
+from the world.
+
+See [`cuicui_reflect_query`'s README](./reflect_query)
+
 
 ## Widges
 
