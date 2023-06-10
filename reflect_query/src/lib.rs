@@ -278,7 +278,7 @@ impl<C: Component + Reflect> FromType<C> for ReflectQueryable {
         })
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Ref<'a, T: ?Sized> {
     value: &'a T,
     is_added: bool,
@@ -297,6 +297,17 @@ impl<T: ?Sized> DetectChanges for Ref<'_, T> {
     }
 }
 impl<'w, T: ?Sized> Ref<'w, T> {
+    pub fn into_inner(self) -> &'w T {
+        self.value
+    }
+    pub fn map<U: ?Sized>(self, f: impl FnOnce(&T) -> &U) -> Ref<'w, U> {
+        Ref {
+            value: f(self.value),
+            is_added: self.is_added,
+            is_changed: self.is_changed,
+            last_changed: self.last_changed,
+        }
+    }
     pub fn map_from<U: ?Sized>(bevy: BRef<'w, U>, f: impl FnOnce(&U) -> &T) -> Self {
         Ref {
             is_added: bevy.is_added(),
