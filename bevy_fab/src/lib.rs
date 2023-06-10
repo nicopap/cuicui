@@ -4,6 +4,7 @@
 mod local;
 mod make;
 mod track;
+pub mod trait_extensions;
 mod world;
 
 use std::{fmt::Arguments, marker::PhantomData};
