@@ -155,12 +155,11 @@ fn get_data<T: TypeData, Out>(
     f: impl FnOnce(&T) -> Out,
 ) -> NewResult<Out> {
     let no_type_data = || {
-        let type_name = any::type_name::<T>();
-        let reflect_trait = match () {
-            () if type_name.ends_with("Component") => ReflectTrait::Component,
-            () if type_name.ends_with("Resource") => ReflectTrait::Resource,
-            () if type_name.ends_with("Queryable") => ReflectTrait::Queryable,
-            () => unreachable!("Trait no one cares about"),
+        let reflect_trait = match any::type_name::<T>() {
+            td_name if td_name.ends_with("Component") => ReflectTrait::Component,
+            td_name if td_name.ends_with("Resource") => ReflectTrait::Resource,
+            td_name if td_name.ends_with("Queryable") => ReflectTrait::Queryable,
+            td_name => unreachable!("Trait {td_name} no one cares about"),
         };
         ParseError::NoTypeData(type_name.into(), reflect_trait)
     };
