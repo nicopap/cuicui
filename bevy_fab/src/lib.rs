@@ -19,7 +19,6 @@ use reflect_query::BaseReflectQueryablePlugin;
 pub use local::LocalBindings;
 pub use make::{parse_into_resolver_system, ParseFormatString};
 pub use reflect_query::ReflectQueryable;
-pub use track::{update_component_trackers_system, TrackerBundle};
 pub use world::{update_hooked, Hook, StyleFn, Styles, WorldBindings};
 
 /// A [`fab::Modify`] that works on a bevy component and can be inserted in the ECS.
@@ -75,7 +74,6 @@ where
             .init_resource::<Styles<BM>>()
             .add_system(update_hooked::<BM>.in_base_set(PostUpdate))
             .add_system(update_items_system::<BM>.in_base_set(PostUpdate))
-            .add_system(update_component_trackers_system::<BM>.in_base_set(PostUpdate))
             .add_system(parse_into_resolver_system::<BM>);
     }
 }

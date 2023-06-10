@@ -5,8 +5,8 @@
 //! - [ ] Add [`RichTextPlugin`] to your app
 //! - [ ] Create a [`RichText`] using [`MakeRichText`] and add it to your UI.
 //! - [ ] Update the [`RichText`]'s context. There is actually multiple approaches:
-//!     - Use the [`track!`] macro to make [`RichText`] binding's follow the value
-//!       of components you added to the ECS.
+//!     - Use source bindings in your rich text format string to read directly
+//!       from the ECS component/resource values.
 //!     - Manually use the [`RichText::set`](integration::RichTextItem::set) or
 //!       [`set_content`](integration::RichTextItem::set_content).
 //!       to update a specific [`RichText`] context.
@@ -23,15 +23,26 @@
 //! ```rust
 //! # use std::fmt;
 //! use bevy::prelude::*;
-//! use cuicui_richtext::{track, MakeRichText, modifiers};
-//! # #[derive(Component, Default)]
+//! use cuicui_richtext::{MakeRichText, modifiers, Queryable};
+//! # #[derive(Component, Reflect, Default)]
+//! # #[reflect(Component, Queryable)]
 //! # struct MaxValue(f32);
 //! #
-//! # #[derive(Component, Default)]
+//! # #[derive(Component, Reflect, Default)]
+//! # #[reflect(Component, Queryable)]
 //! # struct MinValue(f32);
 //! #
 //! #[derive(Component, Default, Reflect, Debug)]
+//! #[reflect(Component, Queryable)]
 //! struct Slider(f32);
+//!
+//! #[derive(Component, Reflect)]
+//! #[reflect(Component, Queryable)]
+//! struct Slider1;
+//!
+//! #[derive(Component, Reflect)]
+//! #[reflect(Component, Queryable)]
+//! struct Slider2;
 //!
 //! impl fmt::Display for Slider {
 //!     // ...
@@ -63,18 +74,21 @@
 //!
 //!     commands.spawn((
 //!         RangeBundle { max: MaxValue(34.0), ..default() },
-//!         track!(slider1, Slider(value)),
+//!         Slider(value),
+//!         Slider1,
 //!     ));
-//!     commands
-//!         .spawn(SliderBundle { max: MaxValue(34.0), ..default() })
-//!         .insert(track!('d, slider2, Slider(value)));
+//!     commands.spawn(SliderBundle {
+//!         max: MaxValue(34.0),
+//!         slider: Slider(value),
+//!         ..default()
+//!     }).insert(Slider2);
 //!
 //!     // Rich text will automatically be updated.
 //!     commands.spawn(
 //!         MakeRichText::new(
 //!             "{Color:{Res.DeathLineColor.0}|Death count: {Res.DeathCount.0}}\n\
-//!          slider1 value: {slider1}\n\
-//!          slider2 debug text: {slider2}",
+//!          slider1 value: {Marked(Slider1).Slider.0}\n\
+//!          slider2 debug text: {Marked(Slider2).Slider:?}",
 //!         )
 //!         .with_text_style(TextStyle {
 //!             font: asset_server.load("fonts/FiraSans-Bold.ttf"),
@@ -90,9 +104,8 @@
 mod color;
 mod integration;
 pub mod modifiers;
-mod track_macro;
 
-pub use bevy_fab::{ReflectQueryable, TrackerBundle};
+pub use bevy_fab::ReflectQueryable;
 pub use integration::{
     MakeRichText, RichText, RichTextFetch, RichTextItem, RichTextPlugin, WorldBindings,
     WorldBindingsMut,
