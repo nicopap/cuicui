@@ -312,7 +312,7 @@ The code only runs if the component in question has been updated since last time
 
 | query         | example                          | matches | reads |
 |---------------|----------------------------------|---------|-------|
-| `Res`         | `Res.SomeResource.path.to.field` | `Resource` with type `SomeResource` | The same resource |
+| `Res(<type>)` | `Res(SomeResource).path.to.field` | `Resource` with type `SomeResource` | The same resource |
 | `One(<type>)` | `One(PlayerStats).path.to.field` | An `Entity` with `PlayerStats`, fails if more than one entity has the `PlayerStats` component | The same component |
 | `Name(value)` | `Name(Player).Stats.path.to.field` | The first `Entity` encountered with the [`Name`] component which value is "Player" | The `Stats` component |
 | `Marked(<type>)` | `Marked(Player).Stats.path.to.field` | An `Entity` with `Player`, fails if more than one entity has the `Player` component | The `Stats` component |
@@ -525,6 +525,10 @@ of individual characters or words, in sync or other.
 ## TODO
 
 - [X] bevy_fab: Implement efficient writes as described in `design_doc/fab/binding_source_perf.md`
+- [ ] bevy_fab: Add way to register "Send event" as `formatter`…
+- [ ] bevy_fab: Systems as formatters: this would allow sending events… pretty much doing anything
+      with formatters
+- [ ] bevy_fab: Rename `formatter`. Clearly we can use them for more than formatting.
 - [ ] fab_derive: Split the path detection code in a different crate.
 - [ ] all: design feature gates to avoid compiling stuff not used.
 - [ ] fab parse: performance: use jagged array for `tree::Sections` to avoid insane amount of alloc

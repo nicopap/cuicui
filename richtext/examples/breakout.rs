@@ -253,8 +253,8 @@ fn setup(
     commands.spawn(
         MakeRichText::new(
             "Score: {Font: fonts/FiraMono-Medium.ttf, Color: rgb(1.0, 0.5, 0.5), \
-            RelSize: 1.5, Content: {Res.Score.score:}}\n\
-            {Color: rgb(1.0, 0.2, 0.2), Content: {Res.Deaths:?}}\n\
+            RelSize: 1.5, Content: {Res(Score).score:}}\n\
+            {Color: rgb(1.0, 0.2, 0.2), Content: {Res(Deaths):?}}\n\
             Paddle hits: {Color: pink, Content: {Marked(Paddle).Collider.collision_count:03}}\n\
             Ball position: {Font: fonts/FiraMono-Medium.ttf, Color: pink|\
             \\{x: {ball_x}, y: {ball_y}\\}}",

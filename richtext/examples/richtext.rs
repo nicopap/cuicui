@@ -140,8 +140,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         // This is why we added the `FiraMediumHolder` resource earlier,
         // otherwise, the font doesn't show up.
         MakeRichText::new(
-            "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold, Content:{Res.Fps.fps:.1}}\n\
-             Button state: {Marked(Button).Interaction:print_interaction}",
+            "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold, Content:{Res(Fps).fps:.1}}\n\
+             Button state: {One(Interaction):?}",
         )
         .with_text_style(TextStyle {
             font: asset_server.load("fonts/FiraSans-Bold.ttf"),

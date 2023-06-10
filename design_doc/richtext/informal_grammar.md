@@ -2,7 +2,7 @@
 
 ```
 namespace =
-    'Res' '.' <ident>
+    'Res' '(' <ident> ')'
     | 'One' '(' <ident> ')'
     | 'Name' '(' <ident> ')' '.' <ident>
     | 'Marked' '(' <ident> ')' '.' <ident>

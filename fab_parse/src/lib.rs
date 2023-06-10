@@ -45,7 +45,7 @@ type IResult<'a, O> = winnow::IResult<&'a str, O>;
 /// Parse the prefix of the `Target` string.
 fn path(input: &str) -> IResult<Path> {
     let namespace = dispatch! {ident;
-        "Res" => preceded('.', ident).map(Query::Res),
+        "Res" => delimited('(', ident, ')').map(Query::Res),
         "One" => delimited('(', ident, ')').map(Query::One),
         "Name" => (delimited('(', ident, ")."), ident).map(Query::name),
         "Marked" => (delimited('(', ident, ")."), ident).map(Query::marked),
