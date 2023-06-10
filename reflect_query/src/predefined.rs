@@ -14,10 +14,11 @@ macro_rules! register_reflect_query {
 pub struct BaseReflectQueryablePlugin;
 impl Plugin for BaseReflectQueryablePlugin {
     fn build(&self, app: &mut App) {
-        // add_all_reflect_query(app);
+        add_all_reflect_query(app);
     }
 }
 
+#[allow(unused)]
 fn add_all_reflect_query(app: &mut App) {
     {
         use bevy::prelude::{Children, GlobalTransform, Name, Parent, Transform, Window};
@@ -28,7 +29,7 @@ fn add_all_reflect_query(app: &mut App) {
             GlobalTransform,
             Name,
             Parent,
-            PrimaryWindow,
+            // PrimaryWindow,
             Transform,
             Window,
         );
@@ -49,7 +50,7 @@ fn add_all_reflect_query(app: &mut App) {
             Camera3d,
             DebandDither,
             DepthPrepass,
-            Fxaa,
+            // Fxaa,
             NormalPrepass,
             Tonemapping
         );
@@ -67,18 +68,23 @@ fn add_all_reflect_query(app: &mut App) {
             CubemapVisibleEntities,
             DirectionalLight,
             EnvironmentMapLight,
-            FogSettings,
-            NotShadowCaster,
-            NotShadowReceiver,
+            // FogSettings,
+            // NotShadowCaster,
+            // NotShadowReceiver,
             PointLight,
             SpotLight,
-            Wireframe,
+            // Wireframe,??
         ];
     }
     #[cfg(feature = "register_sprite")]
     {
         use bevy::sprite::{Anchor, Mesh2dHandle, Sprite, TextureAtlasSprite};
-        register_reflect_query![app, Anchor, Mesh2dHandle, Sprite, TextureAtlasSprite];
+        register_reflect_query![
+            app,
+            Anchor,
+            Mesh2dHandle,
+            Sprite, /*TextureAtlasSprite*/
+        ];
     }
 
     #[cfg(feature = "register_render")]
@@ -123,22 +129,22 @@ fn add_all_reflect_query(app: &mut App) {
             app,
             BackgroundColor,
             Button,
-            CalculatedClip,
+            // CalculatedClip,
             CalculatedSize,
             FocusPolicy,
             Interaction,
             Label,
             Node,
-            RelativeCursorPosition,
+            // RelativeCursorPosition,
             Style,
             UiImage,
-            ZIndex
+            // ZIndex
         ];
     }
 
     #[cfg(feature = "register_text")]
     {
         use bevy::text::{Text, Text2dBounds};
-        register_reflect_query![app, Text2dBounds, Text];
+        register_reflect_query![app, /*Text2dBounds,*/ Text];
     }
 }
