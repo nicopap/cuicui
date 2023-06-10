@@ -33,6 +33,8 @@ Cuicui is a collection of crates.
   Implementing static value culling and data dependency management.
   (this is very abstract, but useful for `cuicui_richtext`)
 - `cuicui_fab_parse`: A parser to generate a modifier tree from a format string
+- `cuicui_reflect_query`: A bevy `Reflect` trait to query entities and `&dyn Reflect`
+  directly from the world.
 - `cuicui_bevy_fab`: An adapter to plug `cuicui_fab` into bevy. This defines
   not only how `Resolver` fits in bevy's ECS, but also how to hooks into the ECS
   to read values declared in the format string
@@ -84,16 +86,18 @@ work in front of me before I do.
 
 ```mermaid
 flowchart LR
-  datazoo["`datazoo`"]
-  fab_derive["`fab_derive`"]
-  fab["`fab`"]
-  fab_parse["`fab_parse`"]
-  bevy_fab["`bevy_fab`"]
-  richtext["`richtext`"]
+  datazoo["datazoo"]
+  fab_derive["fab_derive"]
+  fab["fab"]
+  fab_parse["fab_parse"]
+  reflect_query["reflect_query"]
+  bevy_fab["bevy_fab"]
+  richtext["richtext"]
   datazoo --> fab
   fab_derive --> fab
   fab --> fab_parse & bevy_fab
   fab_parse --> bevy_fab & richtext
+  reflect_query --> bevy_fab
   bevy_fab --> richtext
 ```
 
