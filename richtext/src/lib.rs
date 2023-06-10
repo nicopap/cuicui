@@ -123,21 +123,17 @@ pub mod trait_extensions {
     /// Explicit [`AppStylesExtension`] for this crate's [`Modifier`]
     pub trait AppTextStylesExtension: AppStylesExtension<Modifier> {
         /// Insert a new style before all others.
-        fn overwrite_style<
+        fn overwrite_style<F>(&mut self, style: F) -> &mut Self
+        where
             F: FnMut(Styleable<Modifier>) -> Styleable<Modifier> + Send + Sync + 'static,
-        >(
-            &mut self,
-            style: F,
-        ) -> &mut Self {
+        {
             AppStylesExtension::overwrite_style(self, style)
         }
         /// Add a new style after existing ones.
-        fn add_style<
+        fn add_style<F>(&mut self, style: F) -> &mut Self
+        where
             F: FnMut(Styleable<Modifier>) -> Styleable<Modifier> + Send + Sync + 'static,
-        >(
-            &mut self,
-            style: F,
-        ) -> &mut Self {
+        {
             AppStylesExtension::add_style(self, style)
         }
     }
@@ -145,7 +141,7 @@ pub mod trait_extensions {
 
     /// Explicit [`AppFormattersExtension`] for this crate's [`Modifier`]
     pub trait AppTextFormattersExtension: AppFormattersExtension<Modifier> {
-        fn with_formatter<T: Reflect>(
+        fn with_formatter<T: Reflect, F>(
             &mut self,
             name: impl Into<String>,
             formatter: impl Fn(&T, Entry<Modifier>) + Send + Sync + 'static,

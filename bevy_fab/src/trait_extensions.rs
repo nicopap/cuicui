@@ -14,29 +14,27 @@ use crate::{BevyModify, Styles, WorldBindings};
 /// Extension trait to add `alias` and `chop` modifiers to the string format parser.
 pub trait AppStylesExtension<M: BevyModify> {
     /// Insert a new style before all others.
-    fn overwrite_style<F: FnMut(Styleable<M>) -> Styleable<M> + Send + Sync + 'static>(
-        &mut self,
-        style: F,
-    ) -> &mut Self;
+    fn overwrite_style<F>(&mut self, style: F) -> &mut Self
+    where
+        F: FnMut(Styleable<M>) -> Styleable<M> + Send + Sync + 'static;
     /// Add a new style after existing ones.
-    fn add_style<F: FnMut(Styleable<M>) -> Styleable<M> + Send + Sync + 'static>(
-        &mut self,
-        style: F,
-    ) -> &mut Self;
+    fn add_style<F>(&mut self, style: F) -> &mut Self
+    where
+        F: FnMut(Styleable<M>) -> Styleable<M> + Send + Sync + 'static;
 }
 impl<M: BevyModify> AppStylesExtension<M> for App {
-    fn overwrite_style<F: FnMut(Styleable<M>) -> Styleable<M> + Send + Sync + 'static>(
-        &mut self,
-        style: F,
-    ) -> &mut Self {
+    fn overwrite_style<F>(&mut self, style: F) -> &mut Self
+    where
+        F: FnMut(Styleable<M>) -> Styleable<M> + Send + Sync + 'static,
+    {
         let Some(mut styles) = self.world.get_resource_mut::<Styles<M>>() else { return self; };
         styles.overwrite(style);
         self
     }
-    fn add_style<F: FnMut(Styleable<M>) -> Styleable<M> + Send + Sync + 'static>(
-        &mut self,
-        style: F,
-    ) -> &mut Self {
+    fn add_style<F>(&mut self, style: F) -> &mut Self
+    where
+        F: FnMut(Styleable<M>) -> Styleable<M> + Send + Sync + 'static,
+    {
         let Some(mut styles) = self.world.get_resource_mut::<Styles<M>>() else { return self; };
         styles.add(style);
         self
