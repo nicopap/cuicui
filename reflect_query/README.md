@@ -1,7 +1,6 @@
 # Bevy Queryable `Reflect`
 
-[![Bevy tracking](https://img.shields.io/badge/Bevy%20tracking-released%20version-lightblue)](https://github.com/bevyengine/bevy
-/blob/main/docs/plugins_guidelines.md#main-branch-tracking)
+[![Bevy tracking](https://img.shields.io/badge/Bevy%20tracking-released%20version-lightblue)](https://github.com/bevyengine/bevy/blob/main/docs/plugins_guidelines.md#main-branch-tracking)
 [![Latest version](https://img.shields.io/crates/v/cuicui_reflect_query.svg)](https://crates.io/crates/cuicui_reflect_query)
 [![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](./LICENSE)
 [![Documentation](https://docs.rs/cuicui_reflect_query/badge.svg)](https://docs.rs/cuicui_reflect_query/)
