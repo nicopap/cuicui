@@ -1,5 +1,11 @@
 # Bevy Queryable `Reflect`
 
+[![Bevy tracking](https://img.shields.io/badge/Bevy%20tracking-released%20version-lightblue)](https://github.com/bevyengine/bevy
+/blob/main/docs/plugins_guidelines.md#main-branch-tracking)
+[![Latest version](https://img.shields.io/crates/v/cuicui_reflect_query.svg)](https://crates.io/crates/cuicui_reflect_query)
+[![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](./LICENSE)
+[![Documentation](https://docs.rs/cuicui_reflect_query/badge.svg)](https://docs.rs/cuicui_reflect_query/)
+
 Bevy's `ReflectComponent` allows extracting a value from a `EntityRef` or
 `EntityMut`, this can be useful, but generally not enough.
 
@@ -19,6 +25,19 @@ not complete technobable, and you are like "Wow! It's possible!" then yeah babe,
 that's for you!
 
 ## Usage
+
+First, add this crate as dependency to your `Cargo.toml`:
+
+```toml
+[dependencies]
+cuicui_reflect_query = "<current version>"
+```
+
+If you need to use `ReflectQueryable` on pre-existing bevy components, check
+the [Features section](#implementations-for-base-bevy-components).
+
+Then, you would use `ReflectQueryable` in combination with the `TypeRegistry`
+and an exclusive access `World` as follow:
 
 ```rust
 use std::any::TypeId;
@@ -107,8 +126,22 @@ pub struct ReflectQueryableFns {
 
 Since this is not part of bevy, we need to add those to the bevy components.
 
-Users of this lib might only care to use a subset of the
-bevy crates, so we can't bulk-add our components.
+To add `ReflectQueryable` implementations for bevy components, use 
+`predefined::QueryablePlugin` as follow:
+
+```rust
+use bevy::prelude::*;
+use cuicui_reflect_query::predefined::QueryablePlugin;
+
+fn main() {
+    let mut app = App::new();
+
+    app.add_plugins(DefaultPlugins)
+      // … bunch of plugins …
+      .add_plugin(QueryablePlugin);
+      // … bunch of other things
+}
+```
 
 This crate exposes one feature per bevy features, they are off by default, you
 must explicitly enable them to register `ReflectQueryable` for bevy components:
@@ -119,6 +152,13 @@ must explicitly enable them to register `ReflectQueryable` for bevy components:
 - `register_render`
 - `register_ui`
 - `register_text`
+
+You'd then add them as follow:
+
+```toml
+[dependencies]
+cuicui_reflect_query = { version = "<current version>", features = ["register_…" ] }
+```
 
 Beware that **you can add them yourself**. But _please_, if anything is missing
 **open an issue**, it's hard to make sure I didn't forget anything.
@@ -142,6 +182,13 @@ for your own types. It will look like this:
 ```
 
 Make sure to `app.register_type::<Zoobaroo>()`! and you should be good to go.
+
+## Version matrix
+
+| bevy | latest supported version |
+|------|--------------------------|
+| 0.10 | `<current version>`      |
+
 
 ## License
 

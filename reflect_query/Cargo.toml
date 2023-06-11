@@ -7,7 +7,7 @@ readme = "README.md"
 keywords = ["bevy", "reflection"]
 categories = ["game-development"]
 repository = "https://github.com/nicopap/cuicui"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [features]
