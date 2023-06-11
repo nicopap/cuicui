@@ -10,6 +10,60 @@ _the total count of entities_) while querying just for a single entity is O(1).
 
 We introduce `ReflectQueryable` to fill this gap.
 
+## Should I use this crate?
+
+In short, if you are asking this question, you most likely shouldn't!
+
+If the second paragraph of this README means anything to you, as in: this is
+not complete technobable, and you are like "Wow! It's possible!" then yeah babe,
+that's for you!
+
+## Usage
+
+```rust
+use std::any::TypeId;
+use bevy::prelude::{Reflect, ReflectComponent, Component, World};
+use bevy::reflect::TypeRegistryInternal as TypeRegistry;
+use cuicui_reflect_query::{ReflectQueryable, Ref};
+
+#[derive(Debug, Clone, PartialEq, Component, Reflect, Default)]
+#[reflect(Component, Queryable)]
+struct Zoobazee {
+    bee: u32,
+    baboo: String,
+}
+
+fn reflect_query<'w>(world: &'w mut World, registry: &TypeRegistry) -> Ref<'w, dyn Reflect> {
+    let type_data = registry
+        .get_type_data::<ReflectQueryable>(TypeId::of::<Zoobazee>())
+        .unwrap();
+
+    let mut query = type_data.query(world);
+    for element in query.iter(world) {
+        println!("{element:?}");
+    }
+    type_data.get_single_ref(world).unwrap()
+}
+fn main() {
+    let mut world = bevy::prelude::World::new();
+    let mut type_registry = TypeRegistry::new();
+
+    type_registry.register::<Zoobazee>();
+
+    let component = Zoobazee {
+      bee: 32,
+      baboo: "zoobalong".to_string(),
+    };
+
+    world.spawn(component.clone());
+
+    let single_result = reflect_query(&mut world, &type_registry);
+    assert_eq!(single_result.downcast_ref(), Some(&component));
+}
+```
+
+## Details
+
 `ReflectQueryable` adds methods to query from a dynamic value:
 
 - `reflect_ref`: This is similar to `ReflectComponent::reflect`, but also includes
@@ -18,8 +72,8 @@ We introduce `ReflectQueryable` to fill this gap.
   \
   Furthermore, the `reflect_mut` method has lifetime limitations, this might be a good
   way to work around them.
-- `iter{,_entities,_ref,_mut}`: Iterate over all entities with the reflected component.
-  Like with `world.query`, you need to call `.iter(world)` on the return value
+- `query{,_entities,_ref,_mut}`: Iterate over all entities with the reflected component.
+  Like with `world.query`, you need to call `.query(world)` on the return value
   to iterate over the query results.
 - `get_single{,_entity,_ref,_mut}`: similar to `world.get_single`, it will return
   a value only if there is **exactly** one entity containing the reflected component.
@@ -33,7 +87,7 @@ A bit of precision:
   in `cuicui_reflect_query`. It is currently impossible to use bevy's `Ref` for this.
 
 
-```rust
+```rust,ignore
 pub struct ReflectQueryableFns {
     pub reflect_ref: fn(EntityRef) -> Option<Ref<dyn Reflect>>,
 
@@ -42,10 +96,10 @@ pub struct ReflectQueryableFns {
     pub get_single_ref: fn(&mut World) -> SingleResult<Ref<dyn Reflect>>,
     pub get_single_mut: fn(&mut World) -> SingleResult<Mut<dyn Reflect>>,
 
-    pub iter: fn(&mut World) -> ReflectQueryableIter,
-    pub iter_entities: fn(&mut World) -> ReflectQueryableIterEntities,
-    pub iter_ref: fn(&mut World) -> ReflectQueryableIterRef,
-    pub iter_mut: fn(&mut World) -> ReflectQueryableIterMut,
+    pub query: fn(&mut World) -> Querydyn,
+    pub query_entities: fn(&mut World) -> EntityQuerydyn,
+    pub query_ref: fn(&mut World) -> RefQuerydyn,
+    pub query_mut: fn(&mut World) -> MutQuerydyn,
 }
 ```
 
@@ -66,9 +120,8 @@ must explicitly enable them to register `ReflectQueryable` for bevy components:
 - `register_ui`
 - `register_text`
 
-Beware that **you can add them yourself** if anythingi is missing. But _please_,
-if anything is missing **please open an issue**, it's hard to make sure I didn't
-forget anything.
+Beware that **you can add them yourself**. But _please_, if anything is missing
+**open an issue**, it's hard to make sure I didn't forget anything.
 
 ### Implementing for your own types
 
@@ -89,3 +142,11 @@ for your own types. It will look like this:
 ```
 
 Make sure to `app.register_type::<Zoobaroo>()`! and you should be good to go.
+
+## License
+
+Copyright © 2023 Nicola Papale
+
+This software is licensed under either MIT or Apache 2.0 at your leisure.
+See `licenses` directory at the root of the [`cuicui`](https://github.com/nicopap/cuicui)
+repository for details.
