@@ -8,7 +8,7 @@ use crate::{div_ceil, Bitset};
 ///
 /// Note that only the total size is tracked in `BitMatrix` and you must provide
 /// the `width` value when calling methods on `BitMatrix`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BitMatrix(Bitset<Box<[u32]>>);
 impl BitMatrix {
     /// Iterate over active bits in given `column`.

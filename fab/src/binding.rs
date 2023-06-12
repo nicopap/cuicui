@@ -5,7 +5,7 @@ mod entry;
 use std::{fmt, mem};
 
 use anyhow::anyhow;
-use datazoo::{sorted, SortedPairIterator};
+use datazoo::{index_multimap::Index, sorted, SortedPairIterator};
 use smallvec::SmallVec;
 use string_interner::{backend::StringBackend, StringInterner, Symbol};
 
@@ -22,6 +22,11 @@ pub use entry::Entry;
 /// [interns]: https://en.wikipedia.org/wiki/String_interning
 #[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Id(pub(crate) u32);
+impl Index for Id {
+    fn get(&self) -> usize {
+        self.0 as usize
+    }
+}
 
 impl fmt::Debug for Id {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

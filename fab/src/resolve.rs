@@ -1,19 +1,18 @@
 mod impl_fmt;
-mod index_multimap;
 mod make;
 mod minimal;
 
 use std::{mem::size_of, ops::Range};
 
 use datazoo::{
-    sorted, AssumeSortedByItemExt, EnumMultimap, JaggedBitset, SortedByItem, SortedIterator,
+    sorted, AssumeSortedByItemExt, EnumMultimap, IndexMultimap, JaggedBitset, SortedByItem,
+    SortedIterator,
 };
 use log::warn;
 use smallvec::SmallVec;
 
 use crate::binding::{Id, View};
 use crate::modify::{Changing, FieldsOf, Indexed, Modify};
-use index_multimap::{Index, IndexMultimap};
 
 pub use minimal::MinResolver;
 
@@ -72,13 +71,14 @@ impl ModifyIndex {
         ModifyIndex(value as u32)
     }
 }
-impl Index for ModifyIndex {
+impl datazoo::index_multimap::Index for ModifyIndex {
     fn get(&self) -> usize {
         self.0 as usize
     }
-    fn new(index: usize) -> Self {
-        let value = index.min(u32::MAX as usize) as u32;
-        ModifyIndex(value)
+}
+impl From<usize> for ModifyIndex {
+    fn from(value: usize) -> Self {
+        ModifyIndex::new(value)
     }
 }
 
@@ -157,7 +157,7 @@ pub struct DepsResolver<M: Modify, const MOD_COUNT: usize> {
     ///
     /// When a `Modify` changes, sometimes, other `Modify` need to run.
     /// `m2m` stands for "modifier to modifier dependencies".
-    m2m: IndexMultimap<ModifyIndex>,
+    m2m: IndexMultimap<ModifyIndex, ModifyIndex>,
 
     /// Index in `modifiers` of binding [`Id`].
     /// `b2m` stands for "binding to modifier dependencies".

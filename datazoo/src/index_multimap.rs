@@ -1,26 +1,28 @@
 use std::marker::PhantomData;
 
-use datazoo::BitMatrix;
+use crate::BitMatrix;
 
+/// Get an `usize` from `Self`.
 pub trait Index {
     fn get(&self) -> usize;
-    fn new(index: usize) -> Self;
 }
 
 #[derive(Debug, Clone)]
-pub struct IndexMultimap<Idx> {
+pub struct IndexMultimap<K: Index, V: From<usize>> {
     assocs: BitMatrix,
     width: usize,
-    _idx_ty: PhantomData<Idx>,
+    _idx_ty: PhantomData<fn(K, V)>,
 }
-impl<I: Index> IndexMultimap<I> {
-    pub(crate) fn get(&self, index: I) -> impl Iterator<Item = I> + '_ {
-        self.assocs.row(self.width, index.get()).map(|i| I::new(i))
+impl<K: Index, V: From<usize>> IndexMultimap<K, V> {
+    pub fn get(&self, index: K) -> impl Iterator<Item = V> + '_ {
+        self.assocs.row(self.width, index.get()).map(|i| V::from(i))
     }
 }
-impl<I: Index> FromIterator<(I, I)> for IndexMultimap<I> {
+impl<K: Index, V: From<usize> + Index> FromIterator<(K, V)> for IndexMultimap<K, V> {
     /// Create a [`IndexMultimap`] with all associations.
-    fn from_iter<T: IntoIterator<Item = (I, I)>>(iter: T) -> Self {
+    ///
+    /// Note that `K` and `V` will be dropped.
+    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
         let mut max_value = 0;
         let mut max_key = 0;
 
@@ -39,6 +41,6 @@ impl<I: Index> FromIterator<(I, I)> for IndexMultimap<I> {
         for (key, value) in key_values.iter() {
             assocs.enable_bit(width, key.get(), value.get()).unwrap();
         }
-        IndexMultimap { assocs, width, _idx_ty: PhantomData::<I> }
+        IndexMultimap { assocs, width, _idx_ty: PhantomData }
     }
 }
