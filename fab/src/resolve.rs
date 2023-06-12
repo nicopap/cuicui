@@ -1,18 +1,19 @@
 mod impl_fmt;
+mod index_multimap;
 mod make;
 mod minimal;
 
 use std::{mem::size_of, ops::Range};
 
 use datazoo::{
-    sorted, AssumeSortedByItemExt, BitMultimap, EnumMultimap, JaggedBitset, SortedByItem,
-    SortedIterator,
+    sorted, AssumeSortedByItemExt, EnumMultimap, JaggedBitset, SortedByItem, SortedIterator,
 };
 use log::warn;
 use smallvec::SmallVec;
 
 use crate::binding::{Id, View};
 use crate::modify::{Changing, FieldsOf, Indexed, Modify};
+use index_multimap::{Index, IndexMultimap};
 
 pub use minimal::MinResolver;
 
@@ -69,6 +70,15 @@ struct ModifyIndex(u32);
 impl ModifyIndex {
     fn new(value: usize) -> Self {
         ModifyIndex(value as u32)
+    }
+}
+impl Index for ModifyIndex {
+    fn get(&self) -> usize {
+        self.0 as usize
+    }
+    fn new(index: usize) -> Self {
+        let value = index.min(u32::MAX as usize) as u32;
+        ModifyIndex(value)
     }
 }
 
@@ -147,7 +157,7 @@ pub struct DepsResolver<M: Modify, const MOD_COUNT: usize> {
     ///
     /// When a `Modify` changes, sometimes, other `Modify` need to run.
     /// `m2m` stands for "modifier to modifier dependencies".
-    m2m: BitMultimap<ModifyIndex, ModifyIndex>,
+    m2m: IndexMultimap<ModifyIndex>,
 
     /// Index in `modifiers` of binding [`Id`].
     /// `b2m` stands for "binding to modifier dependencies".
@@ -257,7 +267,7 @@ impl<'a, M: Modify, const MC: usize> Evaluator<'a, M, MC> {
                 warn!("Error when applying modifier {index:?} {modify:?}: {error}");
             };
         }
-        for &dep_index in self.graph.m2m.get(&index) {
+        for dep_index in self.graph.m2m.get(index) {
             self.update(dep_index, to_update, ctx, false, None);
         }
     }

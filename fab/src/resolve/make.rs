@@ -5,12 +5,13 @@ mod mask_range;
 
 use std::mem::size_of;
 
-use datazoo::{enum_multimap, sorted::KeySorted, AssumeSortedByKeyExt, BitMultimap, JaggedBitset};
+use datazoo::{enum_multimap, sorted::KeySorted, AssumeSortedByKeyExt, JaggedBitset};
 use enumset::EnumSet;
 use log::{error, trace};
 
 use crate::binding::Id;
 use crate::modify::{FieldsOf, Modify};
+use crate::resolve::index_multimap::IndexMultimap;
 
 use super::{DepsResolver, MakeModify, ModifyIndex as Idx, ModifyKind};
 use is_static::CheckStatic;
@@ -162,7 +163,7 @@ impl<'a, M: Modify> Make<'a, M> {
             trace!("\t<M{i}>: {modi:?}");
         }
 
-        let m2m: BitMultimap<_, _> = self.m2m().collect();
+        let m2m: IndexMultimap<Idx> = self.m2m().collect();
         trace!("m2m deps: {m2m:?}");
 
         let mut f2m = enum_multimap::Builder::new();
