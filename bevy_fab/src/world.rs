@@ -1,14 +1,12 @@
 //! Global world-scopped data relevant to [`BevyModify`]s located in the bevy ECS.
 
-use std::sync::Arc;
-
-use bevy::prelude::{error, Mut, Reflect, Resource, World};
-use fab::binding::{self, Entry};
+use bevy::prelude::{error, Mut, Resource, World};
+use fab::binding;
 use fab_parse::{Hook as ParsedHook, Styleable};
 use log::warn;
 use thiserror::Error;
 
-use crate::track::{GetError, ParseError, Read, UserWrites, Write, WriteError};
+use crate::track::{GetError, ParseError, Read, UserFmt, UserFmts, Write, WriteError};
 use crate::BevyModify;
 
 #[derive(Debug, Error)]
@@ -120,7 +118,7 @@ impl<M: BevyModify> Hook<M> {
     fn from_parsed(
         hook: ParsedHook,
         world: &mut World,
-        writes: &UserWrites<M>,
+        writes: &UserFmts<M>,
         intern: impl FnOnce(&str) -> binding::Id,
     ) -> Result<Self, Error> {
         Ok(Hook {
@@ -141,10 +139,11 @@ impl<M: BevyModify> Hook<M> {
         world: &mut World,
         bindings: &mut binding::World<M>,
     ) -> Result<(), Error> {
-        let value = self.read.world(world)?;
+        let state = self.read.query(world);
+        let value = self.read.get(state, world)?;
         if value.is_changed() {
-            let value = value.into_inner();
-            self.write.modify(value, bindings.entry(self.binding));
+            self.write
+                .modify(world, value.into_inner(), bindings.entry(self.binding));
         }
         Ok(())
     }
@@ -164,41 +163,27 @@ impl<M: BevyModify> Hook<M> {
 pub struct WorldBindings<M> {
     pub bindings: binding::World<M>,
     hooks: Vec<Hook<M>>,
-    formatters: UserWrites<M>,
+    fmts: UserFmts<M>,
 }
 impl<M> Default for WorldBindings<M> {
     fn default() -> Self {
         WorldBindings {
             bindings: Default::default(),
             hooks: Vec::new(),
-            formatters: UserWrites::new(),
+            fmts: UserFmts::new(),
         }
     }
 }
 impl<M: BevyModify> WorldBindings<M> {
-    pub fn add_formatter<T: Reflect>(
-        &mut self,
-        name: impl AsRef<str>,
-        formatter: impl Fn(&T, Entry<M>) + Send + Sync + 'static,
-    ) {
-        self.add_reflect_formatter(name, move |reflect, e| {
-            let Some(value) = reflect.downcast_ref() else { return; };
-            formatter(value, e);
-        })
-    }
-    pub fn add_reflect_formatter(
-        &mut self,
-        name: impl AsRef<str>,
-        value: impl Fn(&dyn Reflect, Entry<M>) + Send + Sync + 'static,
-    ) {
+    pub fn add_user_fmt(&mut self, name: impl AsRef<str>, value: UserFmt<M>) {
         let binding = self.bindings.get_or_add(name);
-        self.formatters.insert(binding, Arc::new(value));
+        self.fmts.insert(binding, value);
     }
     pub fn add_hooks(&mut self, iter: impl IntoIterator<Item = Hook<M>>) {
         self.hooks.extend(iter)
     }
     pub fn parse_hook(&mut self, hook: ParsedHook, world: &mut World) {
-        let Self { bindings, hooks, formatters } = self;
+        let Self { bindings, hooks, fmts: formatters } = self;
         match Hook::from_parsed(hook, world, formatters, |n| bindings.get_or_add(n)) {
             Ok(hook) => hooks.push(hook),
             Err(err) => error!("A tracker failed to be loaded: {err}"),

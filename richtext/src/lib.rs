@@ -105,7 +105,8 @@ mod color;
 mod integration;
 pub mod modifiers;
 
-pub use bevy_fab::ReflectQueryable;
+pub use bevy_fab::{FmtSystem, IntoFmtSystem, ReflectQueryable, UserFmt};
+pub use fab::binding::{Entry, Id};
 pub use integration::{
     MakeRichText, RichText, RichTextFetch, RichTextItem, RichTextPlugin, WorldBindings,
     WorldBindingsMut,
@@ -114,11 +115,14 @@ pub use modifiers::{GetFont, Modifier};
 
 pub mod trait_extensions {
     use bevy::reflect::Reflect;
-    use bevy_fab::trait_extensions::{AppFormattersExtension, AppStylesExtension};
+    use bevy_fab::{
+        trait_extensions::{AppFormattersExtension, AppStylesExtension},
+        FmtSystem, IntoFmtSystem,
+    };
     use fab::binding::Entry;
     use fab_parse::Styleable;
 
-    use crate::Modifier;
+    use crate::{Modifier, UserFmt};
 
     /// Explicit [`AppStylesExtension`] for this crate's [`Modifier`]
     pub trait AppTextStylesExtension: AppStylesExtension<Modifier> {
@@ -141,12 +145,35 @@ pub mod trait_extensions {
 
     /// Explicit [`AppFormattersExtension`] for this crate's [`Modifier`]
     pub trait AppTextFormattersExtension: AppFormattersExtension<Modifier> {
-        fn with_formatter<T: Reflect>(
+        fn add_user_fmt(&mut self, name: impl AsRef<str>, fmt: UserFmt<Modifier>) -> &mut Self {
+            AppFormattersExtension::add_user_fmt(self, name, fmt)
+        }
+
+        // Add a formatter that may READ (only) the world.
+        fn add_sys_fmt<T: FmtSystem<Modifier>>(
             &mut self,
-            name: impl Into<String>,
-            formatter: impl Fn(&T, Entry<Modifier>) + Send + Sync + 'static,
+            name: impl AsRef<str>,
+            fmt: impl IntoFmtSystem<Modifier, T>,
         ) -> &mut Self {
-            AppFormattersExtension::with_formatter(self, name, formatter)
+            AppFormattersExtension::add_sys_fmt(self, name, fmt)
+        }
+
+        // Add a simple function formatter.
+        fn add_dyn_fn_fmt(
+            &mut self,
+            name: impl AsRef<str>,
+            fmt: impl Fn(&dyn Reflect, Entry<Modifier>) + Send + Sync + 'static,
+        ) -> &mut Self {
+            AppFormattersExtension::add_dyn_fn_fmt(self, name, fmt)
+        }
+
+        // Add a simple function formatter.
+        fn add_fn_fmt<T: Reflect>(
+            &mut self,
+            name: impl AsRef<str>,
+            fmt: impl Fn(&T, Entry<Modifier>) + Send + Sync + 'static,
+        ) -> &mut Self {
+            AppFormattersExtension::add_fn_fmt(self, name, fmt)
         }
     }
     impl<T: AppFormattersExtension<Modifier>> AppTextFormattersExtension for T {}

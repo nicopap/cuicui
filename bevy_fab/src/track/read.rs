@@ -8,11 +8,12 @@ use bevy::ecs::world::EntityRef;
 use bevy::ecs::{prelude::*, query::QuerySingleError, reflect::ReflectResourceFns};
 use bevy::reflect::{ParsedPath, Reflect, ReflectPathError, TypeData};
 use fab_parse::tree as parse;
+use reflect_query::queries::{EntityQuerydyn, RefQuerydyn};
 use reflect_query::{Ref, ReflectQueryable, ReflectQueryableFns};
 use thiserror::Error;
 
 pub type NewResult<T> = Result<T, ParseError>;
-pub type GetResult<T> = Result<T, GetError>;
+pub type GetResult<'a> = Result<Ref<'a, dyn Reflect>, GetError>;
 
 type ReflectMut = unsafe fn(UnsafeWorldCell) -> Option<Mut<dyn Reflect>>;
 type FromEntity = fn(EntityRef) -> Option<Ref<dyn Reflect>>;
@@ -80,6 +81,27 @@ pub(crate) enum Query {
     Marked(MarkedAccess),
 }
 
+/// Returned by [`Read::query`] and used by [`Read::get`].
+///
+/// The return value of [`Read::get`] has a lifetime bound to `World`. If we
+/// read it from a `&mut` we can't use the world and the return value at the
+/// same time.
+///
+/// It is possible to avoid this by splitting the creation of the query and
+/// the consumption in two.
+pub struct QueryState(QueryStateInner);
+enum QueryStateInner {
+    Res,
+    Name,
+    Marked(EntityQuerydyn),
+    One(RefQuerydyn),
+}
+impl From<QueryStateInner> for QueryState {
+    fn from(value: QueryStateInner) -> Self {
+        QueryState(value)
+    }
+}
+
 /// Read a value from the [`World`], through [`Read::world`], returning a [`&dyn Reflect`].
 pub struct Read {
     query: Query,
@@ -100,12 +122,23 @@ impl Read {
         };
         Ok(Read { query })
     }
-    pub fn world<'a>(&mut self, world: &'a mut World) -> GetResult<Ref<'a, dyn Reflect>> {
+    /// Prepare queries so that they can be ran.
+    pub fn query(&mut self, world: &mut World) -> QueryState {
         match &self.query {
-            Query::Res(access) => access.get(world),
-            Query::One(access) => access.get(world),
-            Query::Name(access) => access.get(world),
-            Query::Marked(access) => access.get(world),
+            Query::Res(_) => QueryStateInner::Res.into(),
+            Query::Name(_) => QueryStateInner::Name.into(),
+            Query::One(access) => QueryStateInner::One(access.query(world)).into(),
+            Query::Marked(access) => QueryStateInner::Marked(access.query(world)).into(),
+        }
+    }
+    pub fn get<'a>(&mut self, state: QueryState, world: &'a World) -> GetResult<'a> {
+        use QueryStateInner::*;
+        match (&self.query, state.0) {
+            (Query::Res(access), Res) => access.get(world),
+            (Query::One(access), One(state)) => access.get(state, world),
+            (Query::Name(access), Name) => access.get(world),
+            (Query::Marked(access), Marked(state)) => access.get(state, world),
+            _ => panic!("cuicui bug, shouldn't call Read::get with a query not created by it"),
         }
     }
 }
@@ -119,9 +152,9 @@ fn cast_to_resource_fns(reflect: &ReflectResource) -> ReflectResourceFns {
     let new_ref: &ReflectResourceFns = unsafe { NonNull::from(reflect).cast().as_ref() };
     new_ref.clone()
 }
-pub fn reflect_ref(f: ReflectMut, world: &mut World) -> Option<Ref<dyn Reflect>> {
-    // SAFETY: unique world access
-    let reflect_mut = unsafe { f(world.as_unsafe_world_cell()) };
+pub fn reflect_ref(f: ReflectMut, world: &World) -> Option<Ref<dyn Reflect>> {
+    // SAFETY: We convert this immediately into immutable value
+    let reflect_mut = unsafe { f(world.as_unsafe_world_cell_readonly()) };
     reflect_mut.map(|r| Ref::map_from(r.into(), |i| i))
 }
 fn get_queryable_fns(reflect: &ReflectQueryable) -> ReflectQueryableFns {
@@ -143,10 +176,7 @@ fn read_opt_path<'a, 'p>(
         Some(path) => path.reflect_element(reflect),
     }
 }
-fn read_path<'a>(
-    path: &Option<ParsedPath>,
-    reflect: Ref<'a, dyn Reflect>,
-) -> GetResult<Ref<'a, dyn Reflect>> {
+fn read_path<'a>(path: &Option<ParsedPath>, reflect: Ref<'a, dyn Reflect>) -> GetResult<'a> {
     Ok(reflect.map_failable(|r| read_opt_path(path, r))?)
 }
 fn get_data<T: TypeData, Out>(
@@ -193,12 +223,12 @@ pub(crate) struct ResAccess {
 // taken from `World::get_*_by_id(ComponentId) + offset` instead of Option<ParsedPath>
 #[derive(Clone)]
 pub(crate) struct OneAccess {
-    get: fn(&mut World) -> Result<Ref<dyn Reflect>, QuerySingleError>,
+    get: fn(&mut World) -> RefQuerydyn,
     path: Option<ParsedPath>,
 }
 #[derive(Clone)]
 pub(crate) struct MarkedAccess {
-    get_entity: fn(&mut World) -> Result<Entity, QuerySingleError>,
+    get_entity: fn(&mut World) -> EntityQuerydyn,
     from_entity: FromEntity,
     path: Option<ParsedPath>,
 }
@@ -210,7 +240,7 @@ pub(crate) struct NameAccess {
     name: Name,
 }
 impl ResAccess {
-    fn get<'a>(&self, world: &'a mut World) -> GetResult<Ref<'a, dyn Reflect>> {
+    fn get<'a>(&self, world: &'a World) -> GetResult<'a> {
         let resource = reflect_ref(self.from_world, world).ok_or(GetError::NotInWorld)?;
         read_path(&self.path, resource)
     }
@@ -222,36 +252,41 @@ impl ResAccess {
     }
 }
 impl OneAccess {
-    fn get<'a>(&self, world: &'a mut World) -> GetResult<Ref<'a, dyn Reflect>> {
-        Ok((self.get)(world)?.map_failable(|r| read_opt_path(&self.path, r))?)
+    fn query(&self, world: &mut World) -> RefQuerydyn {
+        (self.get)(world)
+    }
+    fn get<'a>(&self, mut state: RefQuerydyn, world: &'a World) -> GetResult<'a> {
+        let component = state.get_single(world)?;
+        Ok(component.map_failable(|r| read_opt_path(&self.path, r))?)
     }
     fn new(one: &str, path: &str, world: &World) -> NewResult<Self> {
         Ok(OneAccess {
-            get: get_data(world, one, get_queryable_fns)?.get_single_ref,
+            get: get_data(world, one, get_queryable_fns)?.query_ref,
             path: get_path(path)?,
         })
     }
 }
 impl MarkedAccess {
-    fn get<'a>(&self, world: &'a mut World) -> GetResult<Ref<'a, dyn Reflect>> {
-        use GetError::NoComponent;
-
-        let entity = (self.get_entity)(world)?;
+    fn query(&self, world: &mut World) -> EntityQuerydyn {
+        (self.get_entity)(world)
+    }
+    fn get<'a>(&self, mut state: EntityQuerydyn, world: &'a World) -> GetResult<'a> {
+        let entity = state.get_single(world)?;
         // SAFETY: we just got the entity from the world.
         let entity = unsafe { world.get_entity(entity).unwrap_unchecked() };
-        let entity = (self.from_entity)(entity).ok_or(NoComponent)?;
+        let entity = (self.from_entity)(entity).ok_or(GetError::NoComponent)?;
         read_path(&self.path, entity)
     }
     fn new(marker: &str, accessed: &str, path: &str, world: &World) -> NewResult<Self> {
         Ok(MarkedAccess {
             from_entity: get_data(world, accessed, get_queryable_fns)?.reflect_ref,
-            get_entity: get_data(world, marker, get_queryable_fns)?.get_single_entity,
+            get_entity: get_data(world, marker, get_queryable_fns)?.query_entities,
             path: get_path(path)?,
         })
     }
 }
 impl NameAccess {
-    fn get<'a>(&self, world: &'a World) -> GetResult<Ref<'a, dyn Reflect>> {
+    fn get<'a>(&self, world: &'a World) -> GetResult<'a> {
         use GetError::{NoComponent, NoEntity};
 
         let entity = world.get_entity(self.entity).ok_or(NoEntity)?;

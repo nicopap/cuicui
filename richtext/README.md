@@ -526,9 +526,9 @@ of individual characters or words, in sync or other.
 
 - [X] bevy_fab: Implement efficient writes as described in `design_doc/fab/binding_source_perf.md`
 - [ ] bevy_fab: Add way to register "Send event" as `formatter`…
-- [ ] bevy_fab: Systems as formatters: this would allow sending events… pretty much doing anything
+- [X] bevy_fab: Systems as formatters: this would allow sending events… pretty much doing anything
       with formatters
-- [ ] bevy_fab: Rename `formatter`. Clearly we can use them for more than formatting.
+- [X] bevy_fab: Rename `formatter`. Clearly we can use them for more than formatting.
 - [ ] fab_derive: Split the path detection code in a different crate.
 - [ ] all: design feature gates to avoid compiling stuff not used.
 - [ ] fab parse: performance: use jagged array for `tree::Sections` to avoid insane amount of alloc

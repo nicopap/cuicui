@@ -3,11 +3,13 @@
 use bevy::{
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
     prelude::*,
+    window::PrimaryWindow,
 };
 use bevy_fab::BevyModify;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use cuicui_richtext::{
-    modifiers, trait_extensions::*, MakeRichText, Modifier, RichText, RichTextPlugin,
+    modifiers, trait_extensions::*, Entry, MakeRichText, Modifier, ReflectQueryable, RichText,
+    RichTextPlugin,
 };
 
 fn main() {
@@ -32,7 +34,23 @@ fn main() {
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(RichTextPlugin::new())
         .add_plugin(WorldInspectorPlugin::default())
-        .with_formatter("print_interaction", |i: &Interaction, entry| {
+        .add_sys_fmt(
+            "show_right",
+            |value: &dyn Reflect, entry: Entry<_>, cursor: Query<&Window, With<PrimaryWindow>>| {
+                let Some(value) = value.downcast_ref::<Interaction>() else {
+                    panic!("We expected an Interaction");
+                };
+                let cursor = cursor.single();
+                println!("{:?}", cursor.physical_cursor_position());
+                println!("left interaction: {value:?}");
+                *entry.or_insert(Modifier::color(default())) = Modifier::color(match value {
+                    Interaction::Clicked => Color::PINK,
+                    Interaction::Hovered => Color::GREEN,
+                    Interaction::None => Color::BLUE,
+                });
+            },
+        )
+        .add_fn_fmt("show_left", |i: &Interaction, entry| {
             let text = match i {
                 Interaction::Clicked => {
                     println!("Clicked!");
@@ -48,6 +66,8 @@ fn main() {
         .init_resource::<Fps>()
         .insert_resource(ClearColor(Color::BLACK))
         .register_type::<Fps>()
+        .register_type::<TopButton>()
+        .register_type::<BottomButton>()
         .add_startup_system(setup)
         .add_system(fps_update)
         .add_system(greet_update)
@@ -66,43 +86,65 @@ struct Fps {
 #[derive(Component)]
 struct ColorText;
 
+#[derive(Component, Default, Reflect)]
+#[reflect(Component, Queryable)]
+struct TopButton;
+
+#[derive(Component, Default, Reflect)]
+#[reflect(Component, Queryable)]
+struct BottomButton;
+
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // UI camera
     commands.spawn(Camera2dBundle::default());
 
-    // Button
+    // Buttons
+    let button_text = |text: &'static str| {
+        TextBundle::from_section(
+            text,
+            TextStyle {
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size: 40.0,
+                color: Color::rgb(0.9, 0.9, 0.9),
+            },
+        )
+    };
+    let button_style = || ButtonBundle {
+        style: Style {
+            size: Size { width: Val::Px(200.0), height: Val::Px(65.0) },
+            justify_content: JustifyContent::Center,
+            margin: UiRect::all(Val::Px(30.0)),
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        background_color: Color::FUCHSIA.into(),
+        ..default()
+    };
     commands
         .spawn(NodeBundle {
             style: Style {
                 size: Size { width: Val::Percent(100.0), ..default() },
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
+                flex_direction: FlexDirection::Column,
+
                 ..default()
             },
             ..default()
         })
         .with_children(|parent| {
             parent
-                .spawn(ButtonBundle {
-                    style: Style {
-                        size: Size { width: Val::Px(150.0), height: Val::Px(65.0) },
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    background_color: Color::FUCHSIA.into(),
-                    ..default()
+                .spawn(button_style())
+                .with_children(|p| {
+                    p.spawn(button_text("Top Button"));
                 })
-                .with_children(|parent| {
-                    parent.spawn(TextBundle::from_section(
-                        "Button",
-                        TextStyle {
-                            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                            font_size: 40.0,
-                            color: Color::rgb(0.9, 0.9, 0.9),
-                        },
-                    ));
-                });
+                .insert(TopButton);
+            parent
+                .spawn(button_style())
+                .with_children(|p| {
+                    p.spawn(button_text("Bottom Button"));
+                })
+                .insert(BottomButton);
         });
 
     // Rich Text
@@ -141,7 +183,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         // otherwise, the font doesn't show up.
         MakeRichText::new(
             "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold, Content:{Res(Fps).fps:.1}}\n\
-             Button state: {One(Interaction):?}",
+            Left button: {Marked(TopButton).Interaction:show_left}\n\
+            {Color: {Marked(BottomButton).Interaction:show_right}|Bottom Button state}",
         )
         .with_text_style(TextStyle {
             font: asset_server.load("fonts/FiraSans-Bold.ttf"),

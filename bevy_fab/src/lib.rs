@@ -1,6 +1,7 @@
 #![allow(clippy::new_without_default)]
 //! Integrate the [`fab`] crate with bevy.
 
+pub mod fmt_system;
 mod local;
 mod make;
 mod track;
@@ -16,9 +17,11 @@ use fab::modify::FieldsOf;
 use fab_parse::Parsable;
 use reflect_query::predefined::QueryablePlugin;
 
+pub use fmt_system::{FmtSystem, IntoFmtSystem};
 pub use local::LocalBindings;
 pub use make::{parse_into_resolver_system, ParseFormatString};
 pub use reflect_query::ReflectQueryable;
+pub use track::UserFmt;
 pub use world::{update_hooked, Hook, StyleFn, Styles, WorldBindings};
 
 /// A [`fab::Modify`] that works on a bevy component and can be inserted in the ECS.
