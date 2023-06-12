@@ -165,10 +165,13 @@ Other plans:
 - Integrate `bevy-ui-navigation`.
 - Integrate `bevy_mod_picking` once beta branch is mainlined.
 
-### TODO
 
-- [X] Rename `recs` to `fab`
-- [ ] Split-out bevy integration of `fab` into own crate
+## License
+
+Copyright © 2023 Nicola Papale
+
+This software is licensed under either MIT or Apache 2.0 at your leisure.
+See `licenses` directory for details.
 
 [bevy_2d_outline]: https://lib.rs/crates/bevy_simple_2d_outline
 [bevy_hanabi]: https://lib.rs/crates/bevy_hanabi
