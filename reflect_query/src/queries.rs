@@ -6,8 +6,10 @@
 //! There is an individual wrapper type per [`crate::ReflectQueryable`] `query` method.
 use std::iter;
 
-use bevy::ecs::query::QueryIter;
+use bevy::ecs::query::{QueryIter, QuerySingleError};
 use bevy::prelude::{Component, Entity, Mut, QueryState, Ref as BRef, Reflect, With, World};
+
+type SingleResult<T> = Result<T, QuerySingleError>;
 
 use crate::custom_ref::Ref;
 #[cfg(doc)]
@@ -28,10 +30,12 @@ macro_rules! impl_iter {
         state: pub struct $state:ident(Box<dyn _>);
 
         // type of `world` param of $state `iter` method.
-        world_ty:$state_world_arg_ty:ty;
+        world_ty: $world_ty:ty;
 
         // Body of the `iter` method on $state
-        iter_body: $state_iter_body:expr;
+        iter_method: $iter_method:ident;
+        get_method: $get_method:ident;
+        $(iter_map: $iter_map:expr;)?
 
         impl QueryState [$($query_state_param_ty:tt)*];
 
@@ -66,24 +70,29 @@ created from."
         pub struct $state (pub(super) Box<dyn $smod::State>);
 
         #[allow(clippy::redundant_closure_call)]
+        #[allow(clippy::redundant_closure_for_method_calls)]
         impl<C: Component + Reflect> $smod::State for QueryState <$($query_state_param_ty)*> {
-            fn iter<'a, 'w: 'a, 's: 'a>(
-                &'s mut self,
-                world: $state_world_arg_ty,
-            ) -> $iter<'a, 'w, 's>
-            {
-                $iter(Box::new(($state_iter_body)(self, world)))
+            fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: $world_ty) -> $iter<'a, 'w, 's> {
+                $iter(Box::new(
+                    self .$iter_method(world) $(.map($iter_map))?
+                ))
+            }
+
+            fn get_single<'w, 's>(&'s mut self, world: $world_ty) -> SingleResult<$item_ty> {
+                self.$get_method(world)$(.map($iter_map))?
             }
         }
 
         impl $state {
             #[doc = concat!("Get an iterator over [`", $item_doc, "`](", $item_doc_link, ").")]
-            pub fn iter<'a, 'w: 'a, 's: 'a>(
-                &'s mut self,
-                world: $state_world_arg_ty,
-            ) -> $iter<'a, 'w, 's>
-            {
+            pub fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: $world_ty) -> $iter<'a, 'w, 's> {
                 self.0.iter(world)
+            }
+            #[doc = concat!("Get a single [`", $item_doc, "`](", $item_doc_link, ").\n\
+            \n\
+            Return an `Err` if there isn't exactly one such thing in `world`.")]
+            pub fn get_single<'w, 's>(&'s mut self, world: $world_ty) -> SingleResult<$item_ty> {
+                self.0.get_single(world)
             }
         }
         mod $smod {
@@ -91,10 +100,8 @@ created from."
 
             // Traits for wrapped erased values.
             pub trait State {
-                fn iter<'a, 'w: 'a, 's: 'a>(
-                    &'s mut self,
-                    world: $state_world_arg_ty,
-                ) -> $iter<'a, 'w, 's>;
+                fn iter<'a, 'w: 'a, 's: 'a>(&'s mut self, world: $world_ty) -> $iter<'a, 'w, 's>;
+                fn get_single<'w, 's>(&'s mut self, world: $world_ty) -> SingleResult<$item_ty>;
             }
             pub trait Iter<'w, 's>: ExactSizeIterator<Item = $item_ty> {}
 
@@ -109,7 +116,9 @@ impl_iter! {
     iter:  pub struct QuerydynIter(Box<dyn _>);
     state: pub struct Querydyn(Box<dyn _>);
     world_ty: &'w World;
-    iter_body: |query: &'s mut QueryState<_,_>, world| query.iter(world).map(C::as_reflect);
+    iter_method: iter;
+    get_method: get_single;
+    iter_map: C::as_reflect;
 
     impl QueryState[&'static C, ()];
 
@@ -126,7 +135,9 @@ impl_iter! {
     iter:  pub struct RefQuerydynIter(Box<dyn _>);
     state: pub struct RefQuerydyn(Box<dyn _>);
     world_ty:&'w World;
-    iter_body: |query: &'s mut QueryState<_,_>, world| query.iter(world).map(map_ref);
+    iter_method: iter;
+    get_method: get_single;
+    iter_map: map_ref;
 
     impl QueryState[BRef<'static, C>, ()] ;
 
@@ -140,7 +151,8 @@ impl_iter! {
     iter:  pub struct EntityQuerydynIter(Box<dyn _>);
     state: pub struct EntityQuerydyn(Box<dyn _>);
     world_ty:&'w World;
-    iter_body: |query: &'s mut QueryState<_,_>, world| query.iter(world);
+    iter_method: iter;
+    get_method: get_single;
 
     impl QueryState[Entity, With<C>] ;
 
@@ -156,7 +168,9 @@ impl_iter! {
     iter:  pub struct MutQuerydynIter(Box<dyn _>);
     state: pub struct MutQuerydyn(Box<dyn _>);
     world_ty:&'w mut World;
-    iter_body: |query: &'s mut QueryState<_,_>, world| query.iter_mut(world).map(map_unchanged::<C>);
+    iter_method: iter_mut;
+    get_method: get_single_mut;
+    iter_map: map_unchanged;
 
     impl QueryState[&'static mut C, ()] ;
 
