@@ -59,7 +59,7 @@ pub trait Parsable: Modify {
 /// Two strings, one on the left represents the `name` of a modifer,
 /// the one on the right represents its `value`.
 ///
-/// Used in the [`TransformedTree::alias`] method.
+/// Used in the [`Styleable::alias`] method.
 pub trait StringPair<'a> {
     fn string_pair(self) -> (&'a str, &'a str);
 }
@@ -317,9 +317,9 @@ impl<'a, M: Modify> Styleable<'a, M> {
     ///
     /// ```no_run
     /// # use cuicui_fab::__private::DummyModify;
-    /// # use cuicui_fab_parse::TransformedTree;
+    /// # use cuicui_fab_parse::Styleable;
     /// # // This would be unsoud only if this code ran.
-    /// # let transformed_tree: TransformedTree<DummyModify> = unsafe {
+    /// # let transformed_tree: Styleable<DummyModify> = unsafe {
     /// #     std::mem::MaybeUninit::uninit().assume_init() };
     /// let aliased_bleepo = transformed_tree.alias("Bleepoo", |_| [
     ///   ("Zooba", "whoop_whoop"),

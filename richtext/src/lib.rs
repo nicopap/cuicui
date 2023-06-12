@@ -141,7 +141,7 @@ pub mod trait_extensions {
 
     /// Explicit [`AppFormattersExtension`] for this crate's [`Modifier`]
     pub trait AppTextFormattersExtension: AppFormattersExtension<Modifier> {
-        fn with_formatter<T: Reflect, F>(
+        fn with_formatter<T: Reflect>(
             &mut self,
             name: impl Into<String>,
             formatter: impl Fn(&T, Entry<Modifier>) + Send + Sync + 'static,
