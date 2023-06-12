@@ -7,6 +7,7 @@ pub mod bitmultimap;
 pub mod bitset;
 pub mod enum_bitmatrix;
 pub mod enum_multimap;
+// pub mod index_map;
 pub mod index_multimap;
 pub mod jagged_bitset;
 pub mod jagged_const_row_array;
