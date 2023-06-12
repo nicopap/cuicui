@@ -14,7 +14,7 @@ use bevy::ecs::prelude::*;
 use bevy::ecs::system::{StaticSystemParam, SystemParam, SystemParamItem};
 use fab::modify::FieldsOf;
 use fab_parse::Parsable;
-use reflect_query::BaseReflectQueryablePlugin;
+use reflect_query::predefined::QueryablePlugin;
 
 pub use local::LocalBindings;
 pub use make::{parse_into_resolver_system, ParseFormatString};
@@ -69,7 +69,7 @@ where
 {
     fn build(&self, app: &mut App) {
         use CoreSet::PostUpdate;
-        app.add_plugin(BaseReflectQueryablePlugin)
+        app.add_plugin(QueryablePlugin)
             .init_resource::<WorldBindings<BM>>()
             .init_resource::<Styles<BM>>()
             .add_system(update_hooked::<BM>.in_base_set(PostUpdate))
