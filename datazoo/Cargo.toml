@@ -2,7 +2,7 @@
 name = "cuicui_datazoo"
 authors = ["Nicola Papale"]
 description = "Data structures used in cuicui"
-license = "MIT OR Apache-2.0"
+license = "MIT OR Apache-2.0 OR Zlib"
 readme = "README.md"
 keywords = ["multimap", "bitmap", "jagged array", "enummultimap"]
 categories = ["data-structures"]

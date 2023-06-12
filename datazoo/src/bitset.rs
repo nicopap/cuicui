@@ -141,6 +141,27 @@ impl<B: AsRef<[u32]> + AsMut<[u32]>> Bitset<B> {
             *block |= 1 << offset;
         })
     }
+    /// Disables bit at position `bit`.
+    ///
+    /// Returns `None` and does nothing if `bit` is out of range.
+    ///
+    /// When [`Bitset::bit(bit)`] will be called next, it will always return `false`.
+    #[inline]
+    pub fn disable_bit(&mut self, bit: usize) -> Option<()> {
+        let block = bit / u32::BITS64;
+        let offset = bit % u32::BITS64;
+
+        self.0.as_mut().get_mut(block).map(|block| {
+            *block &= !(1 << offset);
+        })
+    }
+    /// Disables all bits in given range.
+    #[inline]
+    pub fn disable_range(&mut self, range: Range<usize>) {
+        range.for_each(|i| {
+            self.disable_bit(i);
+        });
+    }
 }
 impl<B: AsRef<[u32]>> Bitset<B> {
     #[inline]
@@ -156,6 +177,25 @@ impl<B: AsRef<[u32]>> Bitset<B> {
         let Some(block) = self.0.as_ref().get(block) else { return false };
 
         block & offset == offset
+    }
+    /// Returns the 32 bits in the bitset starting at `at`.
+    ///
+    /// `None` if `at + 32` is larger than the bitset.
+    #[inline]
+    pub fn u32_at(&self, at: usize) -> Option<u32> {
+        // TODO(perf): use slice::align_to::<u64>
+        let block = at / u32::BITS64;
+        let offset = (at % u32::BITS64) as u32;
+
+        if offset == 0 {
+            self.0.as_ref().get(block).copied()
+        } else {
+            let first_half = *self.0.as_ref().get(block)? >> offset;
+            let second_half = *self.0.as_ref().get(block + 1)? << offset;
+
+            let mask = (1 << offset) - 1;
+            Some((first_half & mask) | (second_half & !mask))
+        }
     }
     pub fn ones_in_range(&self, range: Range<usize>) -> Ones {
         let Range { start, end } = range;
@@ -212,17 +252,37 @@ impl<'a, B: AsRef<[u32]>> IntoIterator for &'a Bitset<B> {
     }
 }
 impl Extend<u32> for Bitset<Vec<u32>> {
+    #[inline]
     fn extend<T: IntoIterator<Item = u32>>(&mut self, iter: T) {
-        for bit in iter {
-            self.enable_bit_extending(bit as usize)
-        }
+        iter.into_iter()
+            .for_each(|bit| self.enable_bit_extending(bit as usize))
     }
 }
 impl Extend<usize> for Bitset<Vec<u32>> {
+    #[inline]
     fn extend<T: IntoIterator<Item = usize>>(&mut self, iter: T) {
-        for bit in iter {
-            self.enable_bit_extending(bit)
-        }
+        iter.into_iter()
+            .for_each(|bit| self.enable_bit_extending(bit))
+    }
+}
+impl Extend<u32> for Bitset<Box<[u32]>> {
+    /// Add the iterator items to the `Bitset`, will **not** increase the
+    /// bitset size.
+    #[inline]
+    fn extend<T: IntoIterator<Item = u32>>(&mut self, iter: T) {
+        iter.into_iter().for_each(|bit| {
+            self.enable_bit(bit as usize);
+        })
+    }
+}
+impl Extend<usize> for Bitset<Box<[u32]>> {
+    /// Add the iterator items to the `Bitset`, will **not** increase the
+    /// bitset size.
+    #[inline]
+    fn extend<T: IntoIterator<Item = usize>>(&mut self, iter: T) {
+        iter.into_iter().for_each(|bit| {
+            self.enable_bit(bit);
+        })
     }
 }
 
@@ -235,6 +295,28 @@ pub struct Ones<'a> {
 
     bitset: u32,
     remaining_blocks: &'a [u32],
+}
+impl<'a> Ones<'a> {
+    /// Iterate over bits of a single `u32`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cuicui_datazoo::bitset::Ones;
+    /// // read the bits fro right to left.
+    /// let my_bits = 0b1001_0000_1010;
+    ///
+    /// let bit_positions: Vec<_> = Ones::from_single(my_bits).collect();
+    /// assert_eq!(&bit_positions,6 &[1, 3, 8, 11]);
+    /// ```
+    pub const fn from_single(value: u32) -> Self {
+        Ones {
+            block_idx: 0,
+            crop: u32::BITS,
+            bitset: value,
+            remaining_blocks: &[],
+        }
+    }
 }
 impl Iterator for Ones<'_> {
     type Item = u32;

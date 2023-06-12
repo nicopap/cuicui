@@ -1,3 +1,6 @@
+//! A [multimap] that goes from an integer to multiple integers.
+//!
+//! [multimap]: https://en.wikipedia.org/wiki/Multimap
 use std::marker::PhantomData;
 
 use crate::BitMatrix;
@@ -6,7 +9,36 @@ use crate::BitMatrix;
 pub trait Index {
     fn get(&self) -> usize;
 }
+impl Index for usize {
+    fn get(&self) -> usize {
+        *self
+    }
+}
 
+/// A [multimap] that goes from an integer to multiple integers.
+///
+/// This is a N-to-M mapping, see [`IndexMap`] for 1-to-(1|0) mapping.
+///
+/// The size in bytes of this `struct` is the lowest multiple of 4 over
+/// `max(K) * max(V) / 8`
+///
+/// You'll notice the size is not dependent on the number of values stored
+/// (in fact, [`IndexMultimap`] **does not** store any value). But rather the
+/// values being stored themselves.
+///
+/// It is not recommended to use this data structure if you expect to have
+/// large values in your key/value space.
+///
+/// [`IndexMultimap`] might be a good solution if you have an index to a small
+/// array or an incrementing counter.
+///
+/// # Example
+///
+/// ```
+/// todo!()
+/// ```
+///
+/// [`IndexMap`]: crate::IndexMap
 #[derive(Debug, Clone)]
 pub struct IndexMultimap<K: Index, V: From<usize>> {
     assocs: BitMatrix,
@@ -14,7 +46,8 @@ pub struct IndexMultimap<K: Index, V: From<usize>> {
     _idx_ty: PhantomData<fn(K, V)>,
 }
 impl<K: Index, V: From<usize>> IndexMultimap<K, V> {
-    pub fn get(&self, index: K) -> impl Iterator<Item = V> + '_ {
+    /// Get the values associated with given `K`
+    pub fn get<'a>(&'a self, index: &K) -> impl Iterator<Item = V> + 'a {
         self.assocs.row(self.width, index.get()).map(|i| V::from(i))
     }
 }

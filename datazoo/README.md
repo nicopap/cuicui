@@ -10,6 +10,14 @@ You probably need to add [`enumset`] to your dependencies to use this crate.
 Due to a rust proc macro limitation, it's impossible to derive `EnumSetType`
 without directly depending on `enumset`.
 
+## Limitations
+
+- Data structures are **untested with sizes `> u32::MAX`**
+- Effort is made to panic in those situations though, but you never know
+- Generally assumes `size_of(usize) >= size_of(u32)`, effort is made to use
+  `u32::try_from(usize).unwrap()` though!
+- No `#[no_std]` but I don't see why this couldn't be added as a feature
+
 ## Data structures
 
 This is a collection of [multimaps], [jagged arrays], [bit sets],
