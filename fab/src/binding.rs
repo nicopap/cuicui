@@ -2,7 +2,7 @@
 
 mod entry;
 
-use std::{fmt, mem};
+use std::{fmt, mem, num::NonZeroU32};
 
 use anyhow::anyhow;
 use datazoo::{index_multimap::Index, sorted, SortedPairIterator};
@@ -20,11 +20,28 @@ pub use entry::Entry;
 /// [`World`] [interns] strings used to identify bindings for efficiency.
 ///
 /// [interns]: https://en.wikipedia.org/wiki/String_interning
-#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Id(pub(crate) u32);
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Hash, Ord)]
+pub struct Id(pub(crate) NonZeroU32);
 impl Index for Id {
+    #[inline]
     fn get(&self) -> usize {
-        self.0 as usize
+        self.0.get() as usize - 1
+    }
+}
+impl Symbol for Id {
+    #[inline]
+    fn try_from_usize(index: usize) -> Option<Self> {
+        let u32 = u32::try_from(index).ok()?;
+        Some(Id(NonZeroU32::new(u32.saturating_add(1)).unwrap()))
+    }
+
+    #[inline]
+    fn to_usize(self) -> usize {
+        assert!(
+            mem::size_of::<usize>() >= mem::size_of::<Self>(),
+            "NOTE: please open an issue if you need to run bevy on 16 bits plateforms"
+        );
+        Index::get(&self)
     }
 }
 
@@ -167,6 +184,9 @@ impl<M> World<M> {
     pub fn get_or_add(&mut self, name: impl AsRef<str>) -> Id {
         self.interner.get_or_intern(name)
     }
+    pub fn get_id(&self, name: impl AsRef<str>) -> Option<Id> {
+        self.interner.get(name)
+    }
     pub fn view(&self) -> View<M> {
         View { root: &self.bindings, overlay: None }
     }
@@ -197,20 +217,5 @@ impl<'a, M> View<'a, M> {
             .and_then(|btm| btm.get(&id))
             .or_else(|| self.root.get(&id))
             .map(|(_c, modify)| modify)
-    }
-}
-
-impl Symbol for Id {
-    fn try_from_usize(index: usize) -> Option<Self> {
-        let u32 = u32::try_from(index).ok()?;
-        Some(Id(u32))
-    }
-
-    fn to_usize(self) -> usize {
-        assert!(
-            mem::size_of::<usize>() >= mem::size_of::<Self>(),
-            "NOTE: please open an issue if you need to run bevy on 16 bits plateforms"
-        );
-        self.0 as usize
     }
 }

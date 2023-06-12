@@ -1,6 +1,7 @@
 //! A minimal resolver that only support binding to individual sections
 //! and ignores all other features.
 
+use datazoo::index_multimap::Index;
 use log::{error, warn};
 use nonmax::NonMaxU32;
 
@@ -39,7 +40,7 @@ impl<M: Modify> Resolver<M> for MinResolver {
                     if modifier.range.end != modifier.range.start + 1 {
                         warn!("{warn_range}");
                     } else {
-                        bindings.push((binding.0 as usize, modifier.range.start))
+                        bindings.push((binding.get(), modifier.range.start))
                     }
                 }
                 ModifyKind::Modify(modify) => {
@@ -76,7 +77,7 @@ impl<M: Modify> Resolver<M> for MinResolver {
         ctx: &<M as Modify>::Context<'_>,
     ) {
         bindings.changed().for_each(|(binding, modify)| {
-            let Some(Some(index)) = self.indices.get(binding.0 as usize) else { return; };
+            let Some(Some(index)) = self.indices.get(binding.get()) else { return; };
             let index = index.get() as usize;
 
             let Some(section) = to_update.get_mut(index) else { return; };
