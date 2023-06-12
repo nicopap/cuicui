@@ -5,9 +5,7 @@ mod mask_range;
 
 use std::mem::size_of;
 
-use datazoo::{
-    enum_multimap, sorted::KeySorted, AssumeSortedByKeyExt, IndexMultimap, JaggedBitset,
-};
+use datazoo::{enum_multimap, IndexMultimap, JaggedBitset};
 use enumset::EnumSet;
 use log::{error, trace};
 
@@ -186,8 +184,7 @@ impl<'a, M: Modify> Make<'a, M> {
         let modifiers = modifiers.collect();
         trace!("modifiers: {modifiers:?}");
 
-        b2m.sort_by_key(|d| d.0);
-        let b2m = KeySorted::from_sorted_iter(b2m.into_iter().assume_sorted_by_key());
+        let b2m = b2m.into_iter().collect();
         trace!("b2m: {b2m:?}");
 
         if !self.errors.is_empty() {

@@ -5,18 +5,15 @@ mod minimal;
 use std::{mem::size_of, ops::Range};
 
 use datazoo::{
-    sorted, AssumeSortedByItemExt, EnumMultimap, IndexMultimap, JaggedBitset, SortedByItem,
+    AssumeSortedByItemExt, EnumMultimap, IndexMap, IndexMultimap, JaggedBitset, SortedByItem,
     SortedIterator,
 };
 use log::warn;
-use smallvec::SmallVec;
 
 use crate::binding::{Id, View};
 use crate::modify::{Changing, FieldsOf, Indexed, Modify};
 
 pub use minimal::MinResolver;
-
-type SmallKeySorted<K, V, const C: usize> = sorted::KeySorted<SmallVec<[(K, V); C]>, K, V>;
 
 /// A Resolver for the [`Modify`] trait.
 ///
@@ -79,6 +76,11 @@ impl datazoo::index_multimap::Index for ModifyIndex {
 impl From<usize> for ModifyIndex {
     fn from(value: usize) -> Self {
         ModifyIndex::new(value)
+    }
+}
+impl From<u32> for ModifyIndex {
+    fn from(value: u32) -> Self {
+        ModifyIndex(value)
     }
 }
 
@@ -150,18 +152,18 @@ pub struct DepsResolver<M: Modify, const MOD_COUNT: usize> {
     modifiers: Box<[Modifier<M>]>,
 
     /// `Modify` that can be triggered by a `Modify::Field` change.
-    /// `f2m` stands for "field to modifier dependencies".
+    /// `f2m` stands for "field-to-modifier dependencies".
     f2m: EnumMultimap<M::Field, ModifyIndex, MOD_COUNT>,
 
     /// `Modify` that depends on other `Modify`.
     ///
     /// When a `Modify` changes, sometimes, other `Modify` need to run.
-    /// `m2m` stands for "modifier to modifier dependencies".
+    /// `m2m` stands for "modifier-to-modifier dependencies".
     m2m: IndexMultimap<ModifyIndex, ModifyIndex>,
 
     /// Index in `modifiers` of binding [`Id`].
-    /// `b2m` stands for "binding to modifier dependencies".
-    b2m: SmallKeySorted<Id, ModifyIndex, 2>,
+    /// `b2m` stands for "binding-to-modifier dependencies".
+    b2m: IndexMap<Id, ModifyIndex>,
 
     /// Sections **not** to update when a modifier is triggered.
     ///
@@ -192,11 +194,8 @@ impl<M: Modify, const MC: usize> Resolver<M> for DepsResolver<M, MC> {
     }
 }
 impl<M: Modify, const MC: usize> DepsResolver<M, MC> {
-    fn index_of(&self, binding: Id, start_at: usize) -> Option<(usize, ModifyIndex)> {
-        let subset = &self.b2m[start_at..];
-        let index = start_at + subset.binary_search_by_key(&binding, |d| d.0).ok()?;
-        let mod_index = self.b2m[index].1;
-        Some((index, mod_index))
+    fn index_of(&self, binding: Id) -> Option<ModifyIndex> {
+        self.b2m.get(&binding)
     }
     fn depends_on(&self, changes: FieldsOf<M>) -> impl Iterator<Item = ModifyIndex> + '_ {
         self.f2m.all_rows(changes).copied()
@@ -267,7 +266,7 @@ impl<'a, M: Modify, const MC: usize> Evaluator<'a, M, MC> {
                 warn!("Error when applying modifier {index:?} {modify:?}: {error}");
             };
         }
-        for dep_index in self.graph.m2m.get(index) {
+        for dep_index in self.graph.m2m.get(&index) {
             self.update(dep_index, to_update, ctx, false, None);
         }
     }
@@ -279,12 +278,8 @@ impl<'a, M: Modify, const MC: usize> Evaluator<'a, M, MC> {
     ) {
         let bindings = self.bindings.changed();
 
-        let mut lookup_start = 0;
         for (&binding, bound_modify) in bindings {
-            let Some(ret) = self.graph.index_of(binding, lookup_start) else { continue; };
-            let (index, mod_index) = ret;
-
-            lookup_start = index + 1;
+            let Some(mod_index) = self.graph.index_of(binding) else { continue; };
 
             self.update(mod_index, to_update, ctx, false, Some(bound_modify));
             // TODO(feat): insert modify with dependencies if !modify.depends().is_empty()
