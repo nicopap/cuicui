@@ -11,6 +11,20 @@ use crate::{div_ceil, Bitset};
 #[derive(Debug, Clone)]
 pub struct BitMatrix(Bitset<Box<[u32]>>);
 impl BitMatrix {
+    /// The height this matrix would have if it had given `width`.
+    ///
+    /// Note that this might be greater than the `height` given to [`Self::new_with_size`]
+    /// due to `BitMatrix` discarding information about actual size.
+    ///
+    /// # Panics
+    /// If `Self` is not empty **and** `width` equals `0` (division by zero)
+    #[inline]
+    pub fn height(&self, width: usize) -> usize {
+        match self.0.bit_len() {
+            0 => 0,
+            total => total / width,
+        }
+    }
     /// Iterate over active bits in given `column`.
     ///
     /// # Panics
@@ -18,23 +32,34 @@ impl BitMatrix {
     /// When `width = 0` (this would otherwise mean there is an infinite
     /// amount of columns)
     #[inline]
-    pub fn active_rows_in_column(&self, width: usize, column: usize) -> Column {
+    pub fn active_rows_in_column(&self, width: usize, x: usize) -> Column {
         assert_ne!(width, 0);
-        Column { data: &self.0 .0, width, current_cell: column }
+        Column { data: &self.0 .0, width, current_cell: x }
     }
-    pub fn row(&self, width: usize, row: usize) -> impl Iterator<Item = usize> + '_ {
-        let start = row * width;
-        let end = (row + 1) * width;
+    pub fn row(&self, width: usize, y: usize) -> impl Iterator<Item = usize> + '_ {
+        let start = y * width;
+        let end = (y + 1) * width;
 
         self.0
             .ones_in_range(start..end)
             .map(move |i| (i as usize) - start)
     }
+    /// Enables bit at position `bit`.
+    ///
+    /// Returns `None` and does nothing if `bit` is out of range.
+    ///
+    /// When [`Bitset::bit(bit)`] will be called next, it will be `true`
+    /// if this returned `Some`.
     #[inline]
-    pub fn enable_bit(&mut self, width: usize, row: usize, column: usize) -> Option<()> {
-        self.0.enable_bit(width * row + column)
+    pub fn enable_bit(&mut self, width: usize, x: usize, y: usize) -> Option<()> {
+        if width == 0 {
+            return Some(());
+        }
+        self.0.enable_bit(width * y + x)
     }
     /// Create a [`BitMatrix`] with given proportions.
+    ///
+    /// Note that the total size is the lowest multiple of 32 higher or equal to `width * height`.
     #[must_use]
     pub fn new_with_size(width: usize, height: usize) -> Self {
         let bit_size = width * height;
@@ -45,7 +70,7 @@ impl BitMatrix {
     /// `true` if bit at position `x, y` in matrix is enabled.
     ///
     /// `false` otherwise, included if `x, y` is outside of the matrix.
-    pub fn bit(&self, x: usize, y: usize, width: usize) -> bool {
+    pub fn bit(&self, width: usize, x: usize, y: usize) -> bool {
         x < width && self.0.bit(x + y * width)
     }
 
@@ -122,7 +147,7 @@ impl<'a> fmt::Display for SextantDisplay<'a> {
             for x in 0..div_ceil(self.width, 2) {
                 let get_bit = |offset_x, offset_y| {
                     let (x, y) = (x * 2 + offset_x, y * 3 + offset_y);
-                    self.matrix.bit(x, y, self.width) as u32
+                    self.matrix.bit(self.width, x, y) as u32
                 };
                 let offset = get_bit(0, 0)
                     | get_bit(1, 0) << 1

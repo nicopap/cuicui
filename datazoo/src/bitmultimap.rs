@@ -150,7 +150,7 @@ impl<K: Eq + Ord + Clone, V: Eq + Ord + Clone> FromIterator<(K, V)> for BitMulti
             let value_i = sparse_values.binary_search(&value).unwrap();
 
             associations
-                .enable_bit(sparse_values.len(), key_i, value_i)
+                .enable_bit(sparse_values.len(), value_i, key_i)
                 .unwrap();
         }
         BitMultimap { sparse_keys, sparse_values, associations }

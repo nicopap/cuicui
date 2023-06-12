@@ -42,13 +42,18 @@ impl Index for usize {
 #[derive(Debug, Clone)]
 pub struct IndexMultimap<K: Index, V: From<usize>> {
     assocs: BitMatrix,
-    width: usize,
+    value_count: usize,
     _idx_ty: PhantomData<fn(K, V)>,
 }
 impl<K: Index, V: From<usize>> IndexMultimap<K, V> {
     /// Get the values associated with given `K`
-    pub fn get<'a>(&'a self, index: &K) -> impl Iterator<Item = V> + 'a {
-        self.assocs.row(self.width, index.get()).map(|i| V::from(i))
+    pub fn get<'a>(&'a self, key: &K) -> impl Iterator<Item = V> + 'a {
+        let index = key.get();
+        let max_index = self.assocs.height(self.value_count);
+        (max_index > index)
+            .then(|| self.assocs.row(self.value_count, index).map(|i| V::from(i)))
+            .into_iter()
+            .flatten()
     }
 }
 impl<K: Index, V: From<usize> + Index> FromIterator<(K, V)> for IndexMultimap<K, V> {
@@ -62,8 +67,8 @@ impl<K: Index, V: From<usize> + Index> FromIterator<(K, V)> for IndexMultimap<K,
         let key_values = iter
             .into_iter()
             .map(|(k, v)| {
-                max_key = max_key.max(k.get());
-                max_value = max_value.max(v.get());
+                max_key = max_key.max(k.get() + 1);
+                max_value = max_value.max(v.get() + 1);
                 (k, v)
             })
             .collect::<Box<[_]>>();
@@ -72,8 +77,8 @@ impl<K: Index, V: From<usize> + Index> FromIterator<(K, V)> for IndexMultimap<K,
         let mut assocs = BitMatrix::new_with_size(width, height);
 
         for (key, value) in key_values.iter() {
-            assocs.enable_bit(width, key.get(), value.get()).unwrap();
+            assocs.enable_bit(width, value.get(), key.get()).unwrap();
         }
-        IndexMultimap { assocs, width, _idx_ty: PhantomData }
+        IndexMultimap { assocs, value_count: width, _idx_ty: PhantomData }
     }
 }

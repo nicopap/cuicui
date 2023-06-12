@@ -67,8 +67,8 @@ impl<K: Index, V: From<u32>> RawIndexMap<K, V> {
         // != means the row is not empty
         (value != self.value_mask()).then(|| V::from(value))
     }
-    /// Remove value associated with `key`. Calling `map.get(key)` will return
-    /// `None`.
+    /// Remove value associated with `key`. Afterward, calling `map.get(key)`
+    /// will return `None`.
     pub fn remove(&mut self, key: &K) {
         let offset = self.row_index(key);
         self.indices.extend(offset..offset + self.value_width);
