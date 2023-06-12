@@ -14,13 +14,13 @@ use crate::{bitset::Ones, div_ceil, index_multimap::Index, Bitset};
 /// `max(K) * log₂(max(V) + 1) / 8`
 ///
 /// You'll notice the size is not dependent on the number of values stored
-/// (in fact, [`IndexMap`] **does not** store any value). But rather the
+/// (in fact, [`RawIndexMap`] **does not** store any value). But rather the
 /// values being stored themselves.
 ///
 /// It is not recommended to use this data structure if you expect to have
 /// large values in your key/value space.
 ///
-/// [`IndexMap`] might be a good solution if you have an index to a small
+/// [`RawIndexMap`] might be a good solution if you have an index to a small
 /// array or an incrementing counter.
 ///
 /// # Example
@@ -31,7 +31,7 @@ use crate::{bitset::Ones, div_ceil, index_multimap::Index, Bitset};
 ///
 /// [`IndexMultimap`]: crate::IndexMultimap
 #[derive(Debug, Clone)]
-pub struct IndexMap<K: Index, V: From<u32>> {
+pub struct RawIndexMap<K: Index, V: From<u32>> {
     /// A matrix of `max(K)` rows of `log₂(max(V) + 1)` bits, each row represents
     /// an index.
     ///
@@ -41,14 +41,14 @@ pub struct IndexMap<K: Index, V: From<u32>> {
     value_width: usize,
     _tys: PhantomData<fn(K, V)>,
 }
-impl<K: Index, V: From<u32>> IndexMap<K, V> {
+impl<K: Index, V: From<u32>> RawIndexMap<K, V> {
     /// You may **not** insert values or keys larger than those parameters.
     pub fn new_with_size(max_value: u32, max_key: usize) -> Self {
         let height = max_key;
         let value_width = (u32::BITS - (max_value + 1).leading_zeros()) as usize;
         let bit_size = value_width * height;
         let u32_size = div_ceil(bit_size, mem::size_of::<u32>());
-        IndexMap {
+        RawIndexMap {
             indices: Bitset(vec![u32::MAX; u32_size].into_boxed_slice()),
             value_width,
             _tys: PhantomData,
@@ -87,8 +87,8 @@ impl<K: Index, V: From<u32>> IndexMap<K, V> {
         self.indices.extend(iter);
     }
 }
-impl<K: Index, V: From<u32> + Index> FromIterator<(K, V)> for IndexMap<K, V> {
-    /// Create a [`IndexMap`] where value at `k` will be `value` in `(key, value)`
+impl<K: Index, V: From<u32> + Index> FromIterator<(K, V)> for RawIndexMap<K, V> {
+    /// Create a [`RawIndexMap`] where value at `k` will be `value` in `(key, value)`
     /// the last item where `key == k`.
     ///
     /// Note that all `K` and `V` will be dropped.
@@ -106,7 +106,7 @@ impl<K: Index, V: From<u32> + Index> FromIterator<(K, V)> for IndexMap<K, V> {
             .collect::<Box<[_]>>();
 
         let max_value = u32::try_from(max_value).unwrap();
-        let mut map = IndexMap::new_with_size(max_value, max_key);
+        let mut map = RawIndexMap::new_with_size(max_value, max_key);
 
         for (key, value) in key_values.iter() {
             map.set(key, value);

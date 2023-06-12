@@ -5,7 +5,7 @@ mod minimal;
 use std::{mem::size_of, ops::Range};
 
 use datazoo::{
-    AssumeSortedByItemExt, EnumMultimap, IndexMap, IndexMultimap, JaggedBitset, SortedByItem,
+    AssumeSortedByItemExt, EnumMultimap, IndexMultimap, JaggedBitset, RawIndexMap, SortedByItem,
     SortedIterator,
 };
 use log::warn;
@@ -163,7 +163,7 @@ pub struct DepsResolver<M: Modify, const MOD_COUNT: usize> {
 
     /// Index in `modifiers` of binding [`Id`].
     /// `b2m` stands for "binding-to-modifier dependencies".
-    b2m: IndexMap<Id, ModifyIndex>,
+    b2m: RawIndexMap<Id, ModifyIndex>,
 
     /// Sections **not** to update when a modifier is triggered.
     ///
