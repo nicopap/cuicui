@@ -2,7 +2,7 @@ use std::{marker::PhantomData, mem};
 
 use bevy::ecs::{prelude::*, system::SystemState};
 use fab::{modify::FieldsOf, resolve::Resolver};
-use fab_parse::tree as parse;
+use fab_parse::hook as parse;
 use log::error;
 
 #[cfg(doc)]

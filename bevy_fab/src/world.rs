@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use bevy::prelude::{error, Mut, Reflect, Resource, World};
 use fab::binding::{self, Entry};
-use fab_parse::{tree::Hook as ParsedHook, Styleable};
+use fab_parse::{Hook as ParsedHook, Styleable};
 use log::warn;
 use thiserror::Error;
 
@@ -178,7 +178,7 @@ impl<M> Default for WorldBindings<M> {
 impl<M: BevyModify> WorldBindings<M> {
     pub fn add_formatter<T: Reflect>(
         &mut self,
-        name: impl Into<String>,
+        name: impl AsRef<str>,
         formatter: impl Fn(&T, Entry<M>) + Send + Sync + 'static,
     ) {
         self.add_reflect_formatter(name, move |reflect, e| {
@@ -188,10 +188,11 @@ impl<M: BevyModify> WorldBindings<M> {
     }
     pub fn add_reflect_formatter(
         &mut self,
-        name: impl Into<String>,
+        name: impl AsRef<str>,
         value: impl Fn(&dyn Reflect, Entry<M>) + Send + Sync + 'static,
     ) {
-        self.formatters.insert(name.into(), Arc::new(value));
+        let binding = self.bindings.get_or_add(name);
+        self.formatters.insert(binding, Arc::new(value));
     }
     pub fn add_hooks(&mut self, iter: impl IntoIterator<Item = Hook<M>>) {
         self.hooks.extend(iter)

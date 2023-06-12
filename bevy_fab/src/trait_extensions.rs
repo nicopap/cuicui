@@ -44,14 +44,14 @@ impl<M: BevyModify> AppStylesExtension<M> for App {
 pub trait AppFormattersExtension<M: BevyModify> {
     fn with_formatter<T: Reflect>(
         &mut self,
-        name: impl Into<String>,
+        name: impl AsRef<str>,
         formatter: impl Fn(&T, Entry<M>) + Send + Sync + 'static,
     ) -> &mut Self;
 }
 impl<M: BevyModify> AppFormattersExtension<M> for App {
     fn with_formatter<T: Reflect>(
         &mut self,
-        name: impl Into<String>,
+        name: impl AsRef<str>,
         formatter: impl Fn(&T, Entry<M>) + Send + Sync + 'static,
     ) -> &mut Self {
         let Some(mut world_bindings) = self.world.get_resource_mut::<WorldBindings<M>>() else {

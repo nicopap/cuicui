@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use bevy::{reflect::Reflect, utils::HashMap};
 use fab::binding;
-use fab_parse::{tree as parse, RuntimeFormat};
+use fab_parse::{hook as parse, RuntimeFormat};
 use thiserror::Error;
 
 use crate::BevyModify;
@@ -13,21 +13,22 @@ pub type UserWrite<M> = Arc<dyn Fn(&dyn Reflect, binding::Entry<M>) + Send + Syn
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Formatter not found: {0}")]
-    NotFormatter(String),
+    #[error("Formatter not found: {0:?}")]
+    NotFormatter(binding::Id),
 }
 
-pub(crate) struct UserWrites<M>(HashMap<String, UserWrite<M>>);
+// TODO(perf): use a `IndexMap` when I get around to implement it.
+pub(crate) struct UserWrites<M>(HashMap<binding::Id, UserWrite<M>>);
 
 impl<M> UserWrites<M> {
-    fn get(&self, name: &str) -> Option<UserWrite<M>> {
-        self.0.get(name).map(Arc::clone)
+    fn get(&self, binding: &binding::Id) -> Option<UserWrite<M>> {
+        self.0.get(binding).map(Arc::clone)
     }
     pub fn new() -> Self {
         UserWrites(HashMap::new())
     }
-    pub fn insert(&mut self, name: String, value: UserWrite<M>) -> Option<UserWrite<M>> {
-        self.0.insert(name, value)
+    pub fn insert(&mut self, binding: binding::Id, value: UserWrite<M>) -> Option<UserWrite<M>> {
+        self.0.insert(binding, value)
     }
 }
 
@@ -60,10 +61,10 @@ impl<M: BevyModify> Write<M> {
         match format {
             None => Ok(Write::Debug),
             Some(parse::Format::Fmt(format)) => Ok(Write::Format(format)),
-            Some(parse::Format::UserDefined(name)) => provided
-                .get(name)
+            Some(parse::Format::UserDefined(binding)) => provided
+                .get(&binding)
                 .map(Write::Arbitrary)
-                .ok_or_else(|| Error::NotFormatter(name.to_owned())),
+                .ok_or(Error::NotFormatter(binding)),
         }
     }
 }

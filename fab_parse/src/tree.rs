@@ -89,12 +89,6 @@ pub(crate) enum Dyn<'a> {
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub struct Hook<'a> {
-    pub source: Source<'a>,
-    pub format: Option<Format<'a>>,
-}
-
-#[derive(PartialEq, Debug, Clone, Copy)]
 pub(crate) struct Binding<'a> {
     pub(crate) path: Path<'a>,
     pub(crate) format: Option<Format<'a>>,
@@ -104,18 +98,10 @@ impl<'a> Binding<'a> {
     pub(crate) fn named(name: &'a str) -> Self {
         Binding { path: Path::Binding(name), format: None }
     }
-
-    pub(crate) fn as_hook(&self) -> Option<Hook<'a>> {
-        if let Path::Tracked(source) = self.path {
-            Some(Hook { source, format: self.format })
-        } else {
-            None
-        }
-    }
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub enum Format<'a> {
+pub(crate) enum Format<'a> {
     UserDefined(&'a str),
     Fmt(RuntimeFormat),
 }

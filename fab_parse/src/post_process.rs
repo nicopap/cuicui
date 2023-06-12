@@ -7,7 +7,8 @@ use enumset::{EnumSet, EnumSetType};
 use fab::{binding, modify::Modify, resolve::MakeModify, resolve::ModifyKind};
 use log::warn;
 
-use crate::tree::{self, get_content, get_content_mut, is_content, Dyn, Hook};
+use crate::tree::{self, get_content, get_content_mut, is_content, Dyn};
+use crate::Hook;
 
 /// Splits the input `Vec` in three, apply `f` on the middle section,
 /// creating a new list, and stitches back the `Vec` together.
@@ -254,7 +255,7 @@ impl<'a, M: Parsable> Styleable<'a, M> {
         let mut to_modify_kind = |name, value| match value {
             Dyn::Dynamic(target) => {
                 let binding = bindings.get_or_add(target.path.binding());
-                if let Some(hook) = target.as_hook() {
+                if let Some(hook) = Hook::from_tree(bindings, target) {
                     hooks.push(hook);
                 }
                 let Deps::Some{ depends, changes } = M::dependencies_of(name) else {

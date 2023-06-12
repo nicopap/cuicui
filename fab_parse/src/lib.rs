@@ -11,6 +11,7 @@
 mod tests;
 
 mod error;
+pub mod hook;
 mod post_process;
 pub mod rt_fmt;
 pub mod tree;
@@ -32,6 +33,7 @@ use tree::{
     flatten_section, Binding, Dyn, Format, Modifier, Path, Query, Section, Sections, Source,
 };
 
+pub use hook::Hook;
 pub use post_process::{Deps, Parsable, Split, StringPair, Styleable};
 pub use rt_fmt::RuntimeFormat;
 pub use tree::Tree;
