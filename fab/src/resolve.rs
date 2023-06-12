@@ -133,7 +133,6 @@ impl<M: Modify> MakeModify<M> {
 ///
 /// [`M::Item`]: Modify::Item
 /// [`M::Items`]: Modify::Items
-#[derive(Debug)]
 struct Modifier<M> {
     /// The modifier to apply in the given `range`.
     modify: Option<M>,
