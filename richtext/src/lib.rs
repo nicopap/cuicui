@@ -145,11 +145,12 @@ pub mod trait_extensions {
 
     /// Explicit [`AppFormattersExtension`] for this crate's [`Modifier`]
     pub trait AppTextFormattersExtension: AppFormattersExtension<Modifier> {
+        /// Add a plain [`UserFmt`].
         fn add_user_fmt(&mut self, name: impl AsRef<str>, fmt: UserFmt<Modifier>) -> &mut Self {
             AppFormattersExtension::add_user_fmt(self, name, fmt)
         }
 
-        // Add a formatter that may READ (only) the world.
+        /// Add a formatter that may READ (only) the world.
         fn add_sys_fmt<T: FmtSystem<Modifier>>(
             &mut self,
             name: impl AsRef<str>,
@@ -158,7 +159,7 @@ pub mod trait_extensions {
             AppFormattersExtension::add_sys_fmt(self, name, fmt)
         }
 
-        // Add a simple function formatter.
+        /// Add a simple function formatter.
         fn add_dyn_fn_fmt(
             &mut self,
             name: impl AsRef<str>,
@@ -167,7 +168,7 @@ pub mod trait_extensions {
             AppFormattersExtension::add_dyn_fn_fmt(self, name, fmt)
         }
 
-        // Add a simple function formatter.
+        /// Add a simple function formatter.
         fn add_fn_fmt<T: Reflect>(
             &mut self,
             name: impl AsRef<str>,
