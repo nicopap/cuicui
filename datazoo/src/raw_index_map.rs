@@ -46,7 +46,7 @@ pub enum ValueEq {}
 
 /// An [associative arrays] of small integers.
 ///
-/// This is a 1-to-(1|0) mapping, see [`IndexMultimap`] for N-to-M mapping.
+/// This is a 1-to-(1|0) mapping, see [`IndexMultimap`] for 1-to-N mapping.
 ///
 /// The size in bytes of this `struct` is the lowest multiple of 4 over
 /// `max(K) * log₂(max(V) + 1) / 8`
@@ -259,6 +259,27 @@ impl<K: Index, V: From<u32>, Eq> RawIndexMap<K, V, Eq> {
             .extend(Ones::from_single(value).map(|v| v + offset as u32));
         Some(())
     }
+    /// Set value of `key` to `value`.
+    ///
+    /// Increase the size of the buffer if `value` is out of bound.
+    /// If `key` is out of bound, does nothing and returns `None`
+    #[inline]
+    pub fn set_expanding_values(&mut self, key: &K, value: &V) -> Option<()>
+    where
+        V: Index,
+    {
+        let cvalue = value.get() as u32;
+        let value_bits = cvalue.most_significant_bit();
+        let width = self.value_width as u32;
+        if value_bits > width || cvalue == self.value_mask()? {
+            let additional_bits = value_bits - width;
+            let offset = |x: u32| x + x / width * additional_bits;
+            let new_indices = self.indices.ones_in_range(..).map(offset);
+            self.indices = new_indices.collect();
+            self.value_width += additional_bits as usize;
+        }
+        self.set(key, value)
+    }
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (K, V)> + '_
     where
@@ -331,14 +352,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_key_count() {
+    fn capacity() {
         let max_value = 127_u32;
         let max_key = 32 * 7;
         let map = RawIndexMap::<usize, u32>::with_capacity(max_key, max_value);
         assert_eq!(max_key, map.capacity());
     }
     #[test]
-    fn test_max() {
+    fn compact_size() {
         let value_len = 127_u32;
         let key_len = 32 * 7;
         let mut map = RawIndexMap::<usize, u32>::with_capacity(key_len, value_len);
@@ -352,7 +373,7 @@ mod tests {
         assert_eq!(map.get(&0), Some(max_value));
     }
     #[test]
-    fn test_min() {
+    fn mini_size() {
         let mut map = RawIndexMap::<usize, u32>::with_capacity(0, 0);
         assert_eq!(map.indices.0.len(), 0);
 
@@ -381,7 +402,7 @@ mod tests {
         assert_eq!(map.get(&0), None);
     }
     #[test]
-    fn test_size() {
+    fn size() {
         let len = 128;
         let mut map = RawIndexMap::<usize, u32>::with_capacity(len, u32::MAX);
         assert_eq!(map.indices.0.len(), len);
@@ -390,5 +411,39 @@ mod tests {
         assert_eq!(map.get(&32), Some(0xffff_ff00));
         assert_eq!(map.set(&(len - 1), &0xffff_0000), Some(()));
         assert_eq!(map.get(&(len - 1)), Some(0xffff_0000));
+    }
+    #[test]
+    fn expand_size() {
+        let max_value = 127_u32;
+        let max_key = 32 * 7;
+        let mut map = RawIndexMap::<usize, u32>::with_capacity(max_key, max_value);
+        assert_eq!(max_key, map.capacity());
+
+        assert_eq!(map.set(&12, &100), Some(()));
+        assert_eq!(map.set(&20, &101), Some(()));
+        assert_eq!(map.set(&32, &102), Some(()));
+        assert_eq!(map.set(&300, &103), None);
+        assert_eq!(map.set(&32, &200), None);
+
+        // Test single bit expension
+        assert_eq!(map.set_expanding_values(&35, &200), Some(()));
+        assert_eq!(map.set_expanding_values(&300, &200), None);
+        assert_eq!(map.set(&13, &199), Some(()));
+
+        assert_eq!(map.get(&12), Some(100));
+        assert_eq!(map.get(&13), Some(199));
+        assert_eq!(map.get(&20), Some(101));
+        assert_eq!(map.get(&32), Some(102));
+        assert_eq!(map.get(&35), Some(200));
+
+        // multibit extension
+        assert_eq!(map.set_expanding_values(&36, &1845), Some(()));
+
+        assert_eq!(map.get(&12), Some(100));
+        assert_eq!(map.get(&13), Some(199));
+        assert_eq!(map.get(&20), Some(101));
+        assert_eq!(map.get(&32), Some(102));
+        assert_eq!(map.get(&35), Some(200));
+        assert_eq!(map.get(&36), Some(1845));
     }
 }
