@@ -7,7 +7,7 @@ use std::{fmt, iter, ops::Range};
 
 use sorted_iter::sorted_iterator::SortedByItem;
 
-use crate::div_ceil;
+use crate::{div_ceil, safe_n_mask};
 
 trait BlockT {
     const BITS64: usize;
@@ -269,11 +269,38 @@ impl<B: AsRef<[u32]>> Bitset<B> {
             let msb_0 = self.0.as_ref().get(block).map_or(0, |&t| t) >> offset;
             let lsb_1 = self.0.as_ref().get(block + 1).map_or(0, |&t| t) << inset;
 
-            let mask = (1 << inset) - 1;
+            let mask = safe_n_mask(inset);
 
             let spills_out = at + 32 > self.bit_len();
             let ctor = if spills_out { Err } else { Ok };
             ctor((msb_0 & mask) | (lsb_1 & !mask))
+        }
+    }
+    /// Like [`Self::u32_at`], but limited to `n` bits. `n <= 32`.
+    ///
+    /// Returns `None` if `at + n` is larger than the bitset.
+    #[inline]
+    pub fn n_at(&self, n: u32, at: usize) -> Option<u32> {
+        // TODO(perf): use slice::align_to::<u64>
+        let block = at / u32::BITS64;
+        let offset = (at % u32::BITS64) as u32;
+
+        let n_mask = safe_n_mask(n);
+
+        if at + n as usize > self.bit_len() {
+            None
+        } else if offset + n <= 32 {
+            let value = *self.0.as_ref().get(block)?;
+            Some((value >> offset) & n_mask)
+        } else {
+            let inset = u32::BITS - offset;
+            let msb_0 = self.0.as_ref().get(block)? >> offset;
+            let lsb_1 = self.0.as_ref().get(block + 1)?.wrapping_shl(inset);
+
+            let mask = safe_n_mask(inset);
+
+            let value = (msb_0 & mask) | (lsb_1 & !mask);
+            Some(value & n_mask)
         }
     }
     pub fn ones_in_range(&self, range: Range<usize>) -> Ones {

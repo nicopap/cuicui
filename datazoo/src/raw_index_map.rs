@@ -4,7 +4,7 @@
 
 use std::{fmt, marker::PhantomData};
 
-use crate::{bitset::Ones, div_ceil, Bitset, Index, MostSignificantBit};
+use crate::{bitset::Ones, div_ceil, safe_n_mask, Bitset, Index, MostSignificantBit};
 
 /// Parametrize [`RawIndexMap`] to implement equality in terms of `V` rather
 /// than raw bit value.
@@ -197,15 +197,14 @@ impl<K: Index, V: From<u32>, Eq> RawIndexMap<K, V, Eq> {
     }
     #[inline]
     fn value_mask(&self) -> Option<u32> {
-        // https://stackoverflow.com/questions/52573447/creating-a-mask-with-n-least-significant-bits-set
-        // used to be:  (1 << self.value_width) - 1 but fails on 32
         let shift = self.value_width as u32;
-        (shift != 0).then(|| if shift == u32::BITS { u32::MAX } else { (1 << shift) - 1 })
+        (shift != 0).then(|| safe_n_mask(shift))
     }
     fn get_index(&self, index: usize) -> Option<V> {
-        let (Ok(value) | Err(value)) = self.indices.u32_at(self.row_offset(index));
+        let offset = self.row_offset(index);
+        let width = self.value_width as u32;
         let mask = self.value_mask()?;
-        let value = value & mask;
+        let value = mask & self.indices.n_at(width, offset)?;
         // != means the row is not empty
         (value != mask && index < self.capacity()).then(|| V::from(value))
     }
@@ -245,14 +244,14 @@ impl<K: Index, V: From<u32>, Eq> RawIndexMap<K, V, Eq> {
         V: Index,
     {
         let value = value.get() as u32;
+        let key = key.get();
         let mask = self.value_mask()?;
 
         // either max value or larger than bitmask
-        if value >= self.capacity() as u32 || value == mask || value & mask != value {
+        if key >= self.capacity() || value == mask || value & mask != value {
             return None;
         }
-        let value = value.get() as u32;
-        let offset = self.row_offset(key.get());
+        let offset = self.row_offset(key);
 
         self.indices
             .disable_range(offset..offset + self.value_width);

@@ -8,6 +8,8 @@ use crate::{BitMatrix, Index};
 /// A [multimap] that goes from an integer to multiple integers.
 ///
 /// This is a N-to-M mapping, see [`RawIndexMap`] for 1-to-(1|0) mapping.
+/// [`JaggedBitset`] is an alternative in case you expect the largest
+/// row to be way larger than the smaller ones.
 ///
 /// The size in bytes of this `struct` is the lowest multiple of 4 over
 /// `max(K) * max(V) / 8`
@@ -25,10 +27,29 @@ use crate::{BitMatrix, Index};
 /// # Example
 ///
 /// ```
-/// todo!()
+/// use cuicui_datazoo::IndexMultimap;
+///
+/// let multimap: IndexMultimap<usize, usize> = [
+///     (0, 1), (0, 5), (0, 2), (0, 2),
+///     (1, 7), (1, 0), (1, 1),
+///     (2, 32), (2, 0), (2, 12), (2, 2), (2, 11), (2, 10), (2, 13), (2, 4),
+///     (4, 1)
+/// ].into_iter().collect();
+/// let rows: [&[usize]; 5] = [
+///     &[1, 2, 5],
+///     &[0, 1, 7],
+///     &[0, 2, 4, 10, 11, 12, 13, 32],
+///     &[],
+///     &[1],
+/// ];
+/// for (i, row) in rows.iter().enumerate() {
+///     let multimap_row: Box<[usize]> = multimap.get(&i).collect();
+///     assert_eq!(*row, &*multimap_row, "{i}");
+/// }
 /// ```
 ///
 /// [`IndexMap`]: crate::IndexMap
+/// [`JaggedBitset`]: crate::JaggedBitset
 #[derive(Debug, Clone)]
 pub struct IndexMultimap<K: Index, V: From<usize>> {
     assocs: BitMatrix,

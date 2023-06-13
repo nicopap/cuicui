@@ -19,6 +19,13 @@ pub mod sorted;
 const fn div_ceil(lhf: usize, rhs: usize) -> usize {
     (lhf + rhs - 1) / rhs
 }
+const fn safe_n_mask(n: u32) -> u32 {
+    // https://stackoverflow.com/questions/52573447/creating-a-mask-with-n-least-significant-bits-set
+    match n {
+        n if n >= u32::BITS => u32::MAX,
+        n => (1 << n) - 1,
+    }
+}
 trait MostSignificantBit {
     fn most_significant_bit(&self) -> u32;
 }

@@ -112,18 +112,67 @@ fn u32_at() {
 
     let bitset = Bitset(&[u32::MAX, u32::MAX, u32::MAX]);
 
-    assert_eq!(bitset.u32_at(0).unwrap(), u32::MAX, "{at:08x}");
-    assert_eq!(bitset.u32_at(1).unwrap(), u32::MAX, "{at:08x}");
-    assert_eq!(bitset.u32_at(2).unwrap(), u32::MAX, "{at:08x}");
-    assert_eq!(bitset.u32_at(7).unwrap(), u32::MAX, "{at:08x}");
-    assert_eq!(bitset.u32_at(16).unwrap(), u32::MAX, "{at:08x}");
-    assert_eq!(bitset.u32_at(64).unwrap(), u32::MAX, "{at:08x}");
-    assert_eq!(bitset.u32_at(31).unwrap(), u32::MAX, "{at:08x}");
-    assert_eq!(bitset.u32_at(32).unwrap(), u32::MAX, "{at:08x}");
-    assert_eq!(bitset.u32_at(33).unwrap(), u32::MAX, "{at:08x}");
+    assert_eq!(bitset.u32_at(0).unwrap(), u32::MAX);
+    assert_eq!(bitset.u32_at(1).unwrap(), u32::MAX);
+    assert_eq!(bitset.u32_at(2).unwrap(), u32::MAX);
+    assert_eq!(bitset.u32_at(7).unwrap(), u32::MAX);
+    assert_eq!(bitset.u32_at(16).unwrap(), u32::MAX);
+    assert_eq!(bitset.u32_at(64).unwrap(), u32::MAX);
+    assert_eq!(bitset.u32_at(31).unwrap(), u32::MAX);
+    assert_eq!(bitset.u32_at(32).unwrap(), u32::MAX);
+    assert_eq!(bitset.u32_at(33).unwrap(), u32::MAX);
 
     assert_eq!(bitset.u32_at(65).ok(), None);
     assert_eq!(bitset.u32_at(96).ok(), None);
+}
+#[test]
+fn n_at() {
+    // =======
+    // 32 bits
+    // =======
+
+    let bitset = Bitset(&[0xf0f0_00ff, 0xfff0_000f, 0xfff0_0f0f]);
+
+    let (at, expected) = (bitset.n_at(32, 0).unwrap(), 0xf0f0_00ff);
+    assert_eq!(at, expected, "left: {at:08x}, right: {expected:08x}");
+
+    let (at, expected) = (bitset.n_at(32, 4).unwrap(), 0xff0f_000f);
+    assert_eq!(at, expected, "left: {at:08x}, right: {expected:08x}");
+
+    let (at, expected) = (bitset.n_at(32, 16).unwrap(), 0x000f_f0f0);
+    assert_eq!(at, expected, "left: {at:08x}, right: {expected:08x}");
+
+    let (at, expected) = (bitset.n_at(32, 64).unwrap(), 0xfff0_0f0f);
+    assert_eq!(at, expected, "left: {at:08x}, right: {expected:08x}");
+
+    assert_eq!(bitset.n_at(32, 65), None);
+    assert_eq!(bitset.n_at(32, 96), None);
+
+    let bitset = Bitset(&[u32::MAX, u32::MAX, u32::MAX]);
+
+    assert_eq!(bitset.n_at(32, 0).unwrap(), u32::MAX);
+    assert_eq!(bitset.n_at(32, 1).unwrap(), u32::MAX);
+    assert_eq!(bitset.n_at(32, 2).unwrap(), u32::MAX);
+    assert_eq!(bitset.n_at(32, 7).unwrap(), u32::MAX);
+    assert_eq!(bitset.n_at(32, 16).unwrap(), u32::MAX);
+    assert_eq!(bitset.n_at(32, 64).unwrap(), u32::MAX);
+    assert_eq!(bitset.n_at(32, 31).unwrap(), u32::MAX);
+    assert_eq!(bitset.n_at(32, 32).unwrap(), u32::MAX);
+    assert_eq!(bitset.n_at(32, 33).unwrap(), u32::MAX);
+
+    assert_eq!(bitset.n_at(32, 65), None);
+    assert_eq!(bitset.n_at(32, 96), None);
+
+    // ================
+    // more interesting
+    // ================
+
+    assert_eq!(bitset.n_at(96, 0).unwrap(), u32::MAX);
+    assert_eq!(bitset.n_at(95, 1).unwrap(), u32::MAX);
+    assert_eq!(bitset.n_at(90, 5).unwrap(), u32::MAX);
+    assert_eq!(bitset.n_at(90, 7), None);
+    assert_eq!(bitset.n_at(65, 31).unwrap(), u32::MAX);
+    assert_eq!(bitset.n_at(64, 32).unwrap(), u32::MAX);
 }
 #[test]
 fn disable_range() {
