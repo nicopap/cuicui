@@ -318,8 +318,8 @@ impl<K: Index, V: From<u32> + Index> FromIterator<(K, V)> for RawIndexMap<K, V> 
         let key_values = iter
             .into_iter()
             .map(|(k, v)| {
-                max_key = max_key.max(k.get());
-                max_value = max_value.max(v.get());
+                max_key = max_key.max(k.get() + 1);
+                max_value = max_value.max(v.get() + 1);
                 (k, v)
             })
             .collect::<Box<[_]>>();
