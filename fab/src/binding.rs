@@ -5,7 +5,7 @@ mod entry;
 use std::{fmt, mem, num::NonZeroU32};
 
 use anyhow::anyhow;
-use datazoo::{index_multimap::Index, sorted, SortedPairIterator};
+use datazoo::{sorted, Index, SortedPairIterator};
 use smallvec::SmallVec;
 use string_interner::{backend::StringBackend, StringInterner, Symbol};
 
@@ -26,6 +26,12 @@ impl Index for Id {
     #[inline]
     fn get(&self) -> usize {
         self.0.get() as usize - 1
+    }
+}
+impl From<usize> for Id {
+    fn from(value: usize) -> Self {
+        let u32 = u32::try_from(value).unwrap();
+        Id(NonZeroU32::new(u32.saturating_add(1)).unwrap())
     }
 }
 impl Symbol for Id {

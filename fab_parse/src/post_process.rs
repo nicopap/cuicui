@@ -69,6 +69,11 @@ impl<'a, 'b: 'a, K: AsRef<str> + 'a, V: AsRef<str> + 'a> StringPair<'a> for &'b 
         (self.0.as_ref(), self.1.as_ref())
     }
 }
+impl<'a> StringPair<'a> for (&'static str, &'static str) {
+    fn string_pair(self) -> (&'a str, &'a str) {
+        (self.0.as_ref(), self.1.as_ref())
+    }
+}
 
 #[derive(Debug)]
 struct Modifier<M> {
@@ -317,7 +322,7 @@ impl<'a, M: Modify> Styleable<'a, M> {
     /// meaning the following should work:
     ///
     /// ```no_run
-    /// # use cuicui_fab::__private::DummyModify;
+    /// # use fab::__private::DummyModify;
     /// # use cuicui_fab_parse::Styleable;
     /// # // This would be unsoud only if this code ran.
     /// # let transformed_tree: Styleable<DummyModify> = unsafe {

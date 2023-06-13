@@ -1,7 +1,7 @@
 //! A minimal resolver that only support binding to individual sections
 //! and ignores all other features.
 
-use datazoo::index_multimap::Index;
+use datazoo::Index;
 use log::{error, warn};
 use nonmax::NonMaxU32;
 

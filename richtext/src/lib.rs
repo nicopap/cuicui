@@ -23,7 +23,7 @@
 //! ```rust
 //! # use std::fmt;
 //! use bevy::prelude::*;
-//! use cuicui_richtext::{MakeRichText, modifiers, Queryable};
+//! use cuicui_richtext::{MakeRichText, modifiers, ReflectQueryable};
 //! # #[derive(Component, Reflect, Default)]
 //! # #[reflect(Component, Queryable)]
 //! # struct MaxValue(f32);
@@ -36,11 +36,11 @@
 //! #[reflect(Component, Queryable)]
 //! struct Slider(f32);
 //!
-//! #[derive(Component, Reflect)]
+//! #[derive(Component, Reflect, Default)]
 //! #[reflect(Component, Queryable)]
 //! struct Slider1;
 //!
-//! #[derive(Component, Reflect)]
+//! #[derive(Component, Reflect, Default)]
 //! #[reflect(Component, Queryable)]
 //! struct Slider2;
 //!

@@ -104,7 +104,7 @@ impl<M> Default for Styles<M> {
 /// In the format string, a hook is a special binding that declares a value
 /// to read from the ECS and how to interpret it.
 ///
-/// This typically looks like `{Res.ResourceType.field.to.value:formatting}`.
+/// This typically looks like `{Res(ResourceType).field.to.value:formatting}`.
 ///
 /// All hooks are added the the [`WorldBindings`] resource.
 ///
@@ -142,8 +142,8 @@ impl<M: BevyModify> Hook<M> {
         let state = self.read.query(world);
         let value = self.read.get(state, world)?;
         if value.is_changed() {
-            self.write
-                .modify(world, value.into_inner(), bindings.entry(self.binding));
+            let entry = bindings.entry(self.binding);
+            self.write.modify(world, value.into_inner(), entry);
         }
         Ok(())
     }

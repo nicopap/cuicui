@@ -5,8 +5,8 @@ mod minimal;
 use std::{mem::size_of, ops::Range};
 
 use datazoo::{
-    AssumeSortedByItemExt, EnumMultimap, IndexMultimap, JaggedBitset, RawIndexMap, SortedByItem,
-    SortedIterator,
+    AssumeSortedByItemExt, EnumMultimap, Index, IndexMultimap, JaggedBitset, RawIndexMap,
+    SortedByItem, SortedIterator,
 };
 use log::warn;
 
@@ -68,7 +68,7 @@ impl ModifyIndex {
         ModifyIndex(value as u32)
     }
 }
-impl datazoo::index_multimap::Index for ModifyIndex {
+impl Index for ModifyIndex {
     fn get(&self) -> usize {
         self.0 as usize
     }
