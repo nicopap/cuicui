@@ -524,40 +524,15 @@ of individual characters or words, in sync or other.
 
 ## TODO
 
-- [X] bevy_fab: Implement efficient writes as described in `design_doc/fab/binding_source_perf.md`
-- [ ] bevy_fab: Add way to register "Send event" as `formatter`…
-- [X] bevy_fab: Systems as formatters: this would allow sending events… pretty much doing anything
-      with formatters
-- [X] bevy_fab: Rename `formatter`. Clearly we can use them for more than formatting.
 - [ ] fab_derive: Split the path detection code in a different crate.
 - [ ] all: design feature gates to avoid compiling stuff not used.
-- [ ] fab parse: performance: use jagged array for `tree::Sections` to avoid insane amount of alloc
-- [X] richtext: put the public types such as RichText & MakeRichText & WorldBindings into their own mod
-- [X] all crates: Rename all occurences of "prefab"
-- [X] all crates: Do a pass on references to "text" in fab crates.
-- [X] rt_fmt: Fix formatting doing weird things
-- [X] fab_parse split: Make the API public.
-- [X] fab/datazoo cleanup: remove all u32::try_from(usize) and add a const () = assert!(sizeof);
-- [X] fab_derive: Write the doc strings of modify functions on the modify enum variants and constructor.
-- [X] bevy_fab: Reduce the trait boilerplate.
-- [X] fab_derive: Document which fields are accessed in modify enum variant and constructor.
+- [ ] fab_parse: performance: use jagged array for `tree::Sections` to avoid insane amount of alloc
 - [ ] fab_derive: Document `impl_modify` macro fully. Specifically: settle on a naming convention
       and use it consistently.
 - [ ] fab_derive: Test `impl_modify` more thourougfully
-- [X] fab: Let user specify `track::Write`s
 - [ ] fab resolve: Verify validaty of multiple write fields
-- [X] fab: Entry api to bindings, allows skipping allocations wholesale.
-- [X] fab resolve: Implement proper dependency resolution
-- [X] fab resolve: Fix modifiers overwritting static children
 - [ ] fab resolve + fab_derive: Context field access tracking (implemented, not tested)
-- [X] fab resolve + fab_derive: Nested fields handling, modifying (.foo → .foo.x + .foo.y)
-- [X] fab resolve: Lightweight dumb resolver
 - [ ] fab resolve: Test MinResolver
-- [X] richtext trackers: Cleanup error handling
-- [X] fab_parse post_process: Cleanup error handling (major issue)
-- [X] bevy_fab trackers: Manage when cached entity changes/not accessible
-- [X] bevy_fab trackers: Cleanup module tree
-- [X] bevy_fab trackers: Check is_changed of resources and components before updating binding
 - [ ] bevy_fab trackers: Test the reflection-component-based trackers
 - [ ] fab parse: review the informal_grammar.md file
 - [ ] richtext: Text2d support
@@ -565,19 +540,18 @@ of individual characters or words, in sync or other.
 - [ ] fab_parse: Consider using a `View<Box<Fn(&mut Style)>>` for styling
     - This would make it very much like bindings, which is cool
     - Would allow local styles, which is more sensible than having to define them not where they are used.
-- [X] richtext: way to apply the same Modify in series, by splitting text word/character
-- [X] richtext split: figure out why this isn't rendered nicely.
-- [X] richtext parse: Implement b2m (binding to modifier) probably with a smallvec of
-      (BindingId, ModifierIndex)
-- [X] richtext: Post-process content splitting as described in `post_process_content.md`
 - [ ] everything: Document the hell out of everything
 - [ ] bevy_fab: context-specific Resolvers. Could use a different resolver depending on the text
       being created, still sharing the same interner and Modify (though this conflicts with Resolver
       as a Modify associated type).
+
+### Questionable/very difficult
+
+- [ ] fab_parse: performance: Directly intern in parser, makes comparisons in post_process faster.
+- [ ] bevy_fab: Add way to register "Send event" as `formatter` (this doesn't make sense as a formatter)
 - [ ] fab parse: test and improve error messages
-- [ ] (unsure) bevy_fab trackers: Check that the target field changed before updating binding
-- [ ] (unsure) optimization: take inspiration from https://github.com/Wallacoloo/jagged_array/blob/master/src/lib.rs#L68 for `VarMatrix`s impls
-- [ ] (unsure) richtext parser: Allow compile-time verification of rich text spec through a proc macro
-- [ ] (unsure) fab resolve: Handle binding that depends on fields (Option<Modifier> in binding view)
+- [ ] bevy_fab trackers: Check that the target field changed before updating binding
+- [ ] richtext parser: Allow compile-time verification of rich text spec through a proc macro
+- [ ] fab resolve: Handle binding that depends on fields (Option<Modifier> in binding view)
     -> Problem: Requires clone + updating it is non-trivial
 
