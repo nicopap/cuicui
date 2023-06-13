@@ -2,7 +2,7 @@
 
 use std::marker::PhantomData;
 
-use crate::{index_multimap::Index, Bitset};
+use crate::{Bitset, Index};
 
 /// An [associative arrays] of small integers.
 ///

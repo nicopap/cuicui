@@ -3,21 +3,11 @@
 //! [multimap]: https://en.wikipedia.org/wiki/Multimap
 use std::marker::PhantomData;
 
-use crate::BitMatrix;
-
-/// Get an `usize` from `Self`.
-pub trait Index {
-    fn get(&self) -> usize;
-}
-impl Index for usize {
-    fn get(&self) -> usize {
-        *self
-    }
-}
+use crate::{BitMatrix, Index};
 
 /// A [multimap] that goes from an integer to multiple integers.
 ///
-/// This is a N-to-M mapping, see [`IndexMap`] for 1-to-(1|0) mapping.
+/// This is a N-to-M mapping, see [`RawIndexMap`] for 1-to-(1|0) mapping.
 ///
 /// The size in bytes of this `struct` is the lowest multiple of 4 over
 /// `max(K) * max(V) / 8`

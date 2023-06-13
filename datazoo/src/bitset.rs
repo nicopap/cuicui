@@ -132,6 +132,21 @@ impl<B: AsRef<[u32]> + AsMut<[u32]>> Bitset<B> {
     ///
     /// When [`Bitset::bit(bit)`] will be called next, it will be `true`
     /// if this returned `Some`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cuicui_datazoo::Bitset;
+    /// let mut bitset = Bitset([0, 0, 0]);
+    /// assert_eq!(bitset.bit(12), false);
+    /// assert_eq!(bitset.bit(54), false);
+    ///
+    /// bitset.enable_bit(12);
+    /// assert_eq!(bitset.bit(12), true);
+    ///
+    /// bitset.enable_bit(54);
+    /// assert_eq!(bitset.bit(54), true);
+    /// ```
     #[inline]
     pub fn enable_bit(&mut self, bit: usize) -> Option<()> {
         let block = bit / u32::BITS64;
@@ -146,6 +161,20 @@ impl<B: AsRef<[u32]> + AsMut<[u32]>> Bitset<B> {
     /// Returns `None` and does nothing if `bit` is out of range.
     ///
     /// When [`Bitset::bit(bit)`] will be called next, it will always return `false`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cuicui_datazoo::Bitset;
+    /// let mut bitset = Bitset([0, 0, 0]);
+    /// assert_eq!(bitset.bit(73), false);
+    ///
+    /// bitset.enable_bit(73);
+    /// assert_eq!(bitset.bit(73), true);
+    ///
+    /// bitset.disable_bit(73);
+    /// assert_eq!(bitset.bit(73), false);
+    /// ```
     #[inline]
     pub fn disable_bit(&mut self, bit: usize) -> Option<()> {
         let block = bit / u32::BITS64;
@@ -156,6 +185,22 @@ impl<B: AsRef<[u32]> + AsMut<[u32]>> Bitset<B> {
         })
     }
     /// Disables all bits in given range.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cuicui_datazoo::Bitset;
+    /// # use std::ops::Not;
+    /// let mut bitset = Bitset(vec![0xffff_ffff, 0xffff_ffff, 0xffff_ffff]);
+    ///
+    /// bitset.disable_range(0..16);
+    /// bitset.disable_range(35..54);
+    ///
+    /// assert!(bitset.bit(0).not());
+    /// assert!(bitset.bit(16));
+    /// assert!(bitset.bit(35).not());
+    /// assert!(bitset.bit(53).not());
+    /// ```
     #[inline]
     pub fn disable_range(&mut self, range: Range<usize>) {
         range.for_each(|i| {
@@ -164,6 +209,21 @@ impl<B: AsRef<[u32]> + AsMut<[u32]>> Bitset<B> {
     }
 }
 impl<B: AsRef<[u32]>> Bitset<B> {
+    /// How many bits in this array?
+    ///
+    /// Note that this will always return a multiple of 32.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cuicui_datazoo::Bitset;
+    /// let bitset = Bitset(&[0x0000_0000, 0x0000_0000, 0x0000_0000]);
+    /// assert_eq!(bitset.bit_len(), 32 * 3);
+    ///
+    /// assert_eq!(Bitset(vec![0x0000_1000]).bit_len(), 32);
+    ///
+    /// assert_eq!(Bitset([]).bit_len(), 0);
+    /// ```
     #[inline]
     pub fn bit_len(&self) -> usize {
         self.0.as_ref().len() * u32::BITS64
@@ -180,21 +240,40 @@ impl<B: AsRef<[u32]>> Bitset<B> {
     }
     /// Returns the 32 bits in the bitset starting at `at`.
     ///
-    /// `None` if `at + 32` is larger than the bitset.
+    /// `Err` with a truncated value if `at + 32` is larger than the bitset.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use cuicui_datazoo::Bitset;
+    /// let bitset = Bitset(&[0xf0f0_00ff, 0xfff0_000f, 0xfff0_0f0f]);
+    ///
+    /// assert_eq!(bitset.u32_at(0),  Ok(0xf0f0_00ff));
+    /// assert_eq!(bitset.u32_at(4),  Ok(0xff0f_000f));
+    /// assert_eq!(bitset.u32_at(16), Ok(0x000f_f0f0));
+    /// assert_eq!(bitset.u32_at(64), Ok(0xfff0_0f0f));
+    ///
+    /// assert_eq!(bitset.u32_at(96), Err(0));
+    /// assert_eq!(bitset.u32_at(80), Err(0xfff0));
+    /// ```
     #[inline]
-    pub fn u32_at(&self, at: usize) -> Option<u32> {
+    pub fn u32_at(&self, at: usize) -> Result<u32, u32> {
         // TODO(perf): use slice::align_to::<u64>
         let block = at / u32::BITS64;
         let offset = (at % u32::BITS64) as u32;
 
         if offset == 0 {
-            self.0.as_ref().get(block).copied()
+            self.0.as_ref().get(block).copied().ok_or(0)
         } else {
-            let first_half = *self.0.as_ref().get(block)? >> offset;
-            let second_half = *self.0.as_ref().get(block + 1)? << offset;
+            let inset = u32::BITS - offset;
+            let msb_0 = self.0.as_ref().get(block).map_or(0, |&t| t) >> offset;
+            let lsb_1 = self.0.as_ref().get(block + 1).map_or(0, |&t| t) << inset;
 
-            let mask = (1 << offset) - 1;
-            Some((first_half & mask) | (second_half & !mask))
+            let mask = (1 << inset) - 1;
+
+            let spills_out = at + 32 > self.bit_len();
+            let ctor = if spills_out { Err } else { Ok };
+            ctor((msb_0 & mask) | (lsb_1 & !mask))
         }
     }
     pub fn ones_in_range(&self, range: Range<usize>) -> Ones {
@@ -303,11 +382,11 @@ impl<'a> Ones<'a> {
     ///
     /// ```
     /// use cuicui_datazoo::bitset::Ones;
-    /// // read the bits fro right to left.
+    /// // read the bits from right to left.
     /// let my_bits = 0b1001_0000_1010;
     ///
     /// let bit_positions: Vec<_> = Ones::from_single(my_bits).collect();
-    /// assert_eq!(&bit_positions,6 &[1, 3, 8, 11]);
+    /// assert_eq!(&bit_positions, &[1, 3, 8, 11]);
     /// ```
     pub const fn from_single(value: u32) -> Self {
         Ones {

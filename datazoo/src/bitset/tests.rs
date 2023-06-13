@@ -91,3 +91,67 @@ fn full_range() {
         .collect();
     assert_eq!(&expected, &actual);
 }
+#[test]
+fn u32_at() {
+    let bitset = Bitset(&[0xf0f0_00ff, 0xfff0_000f, 0xfff0_0f0f]);
+
+    let (at, expected) = (bitset.u32_at(0).unwrap(), 0xf0f0_00ff);
+    assert_eq!(at, expected, "left: {at:08x}, right: {expected:08x}");
+
+    let (at, expected) = (bitset.u32_at(4).unwrap(), 0xff0f_000f);
+    assert_eq!(at, expected, "left: {at:08x}, right: {expected:08x}");
+
+    let (at, expected) = (bitset.u32_at(16).unwrap(), 0x000f_f0f0);
+    assert_eq!(at, expected, "left: {at:08x}, right: {expected:08x}");
+
+    let (at, expected) = (bitset.u32_at(64).unwrap(), 0xfff0_0f0f);
+    assert_eq!(at, expected, "left: {at:08x}, right: {expected:08x}");
+
+    assert_eq!(bitset.u32_at(65).ok(), None);
+    assert_eq!(bitset.u32_at(96).ok(), None);
+
+    let bitset = Bitset(&[u32::MAX, u32::MAX, u32::MAX]);
+
+    assert_eq!(bitset.u32_at(0).unwrap(), u32::MAX, "{at:08x}");
+    assert_eq!(bitset.u32_at(1).unwrap(), u32::MAX, "{at:08x}");
+    assert_eq!(bitset.u32_at(2).unwrap(), u32::MAX, "{at:08x}");
+    assert_eq!(bitset.u32_at(7).unwrap(), u32::MAX, "{at:08x}");
+    assert_eq!(bitset.u32_at(16).unwrap(), u32::MAX, "{at:08x}");
+    assert_eq!(bitset.u32_at(64).unwrap(), u32::MAX, "{at:08x}");
+    assert_eq!(bitset.u32_at(31).unwrap(), u32::MAX, "{at:08x}");
+    assert_eq!(bitset.u32_at(32).unwrap(), u32::MAX, "{at:08x}");
+    assert_eq!(bitset.u32_at(33).unwrap(), u32::MAX, "{at:08x}");
+
+    assert_eq!(bitset.u32_at(65).ok(), None);
+    assert_eq!(bitset.u32_at(96).ok(), None);
+}
+#[test]
+fn disable_range() {
+    use std::ops::Not;
+    let mut bitset = Bitset(vec![0xffff_ffff, 0xffff_ffff, 0xffff_ffff]);
+
+    assert!(bitset.bit(0));
+    assert!(bitset.bit(10));
+    assert!(bitset.bit(15));
+    assert!(bitset.bit(16));
+    assert!(bitset.bit(32));
+    assert!(bitset.bit(35));
+    assert!(bitset.bit(53));
+    assert!(bitset.bit(54));
+    assert!(bitset.bit(64));
+    assert!(bitset.bit(73));
+
+    bitset.disable_range(0..16);
+    bitset.disable_range(35..54);
+
+    assert!(bitset.bit(0).not());
+    assert!(bitset.bit(10).not());
+    assert!(bitset.bit(15).not());
+    assert!(bitset.bit(16));
+    assert!(bitset.bit(32));
+    assert!(bitset.bit(35).not());
+    assert!(bitset.bit(53).not());
+    assert!(bitset.bit(54));
+    assert!(bitset.bit(64));
+    assert!(bitset.bit(73));
+}
