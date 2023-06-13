@@ -3,7 +3,10 @@
 #[cfg(test)]
 mod tests;
 
-use std::{fmt, iter, ops::Range};
+use std::{
+    fmt, iter,
+    ops::{Range, RangeBounds},
+};
 
 use sorted_iter::sorted_iterator::SortedByItem;
 
@@ -303,8 +306,17 @@ impl<B: AsRef<[u32]>> Bitset<B> {
             Some(value & n_mask)
         }
     }
-    pub fn ones_in_range(&self, range: Range<usize>) -> Ones {
-        let Range { start, end } = range;
+    pub fn ones_in_range(&self, range: impl RangeBounds<usize>) -> Ones {
+        let start = match range.start_bound() {
+            std::ops::Bound::Included(start) => *start,
+            std::ops::Bound::Excluded(start) => *start + 1,
+            std::ops::Bound::Unbounded => 0,
+        };
+        let end = match range.end_bound() {
+            std::ops::Bound::Included(end) => *end + 1,
+            std::ops::Bound::Excluded(end) => *end,
+            std::ops::Bound::Unbounded => self.bit_len(),
+        };
         assert!(start <= self.bit_len());
         assert!(end <= self.bit_len());
 
@@ -389,6 +401,34 @@ impl Extend<usize> for Bitset<Box<[u32]>> {
         iter.into_iter().for_each(|bit| {
             self.enable_bit(bit);
         })
+    }
+}
+impl FromIterator<u32> for Bitset<Box<[u32]>> {
+    fn from_iter<T: IntoIterator<Item = u32>>(iter: T) -> Self {
+        let acc: Bitset<Vec<_>> = iter.into_iter().collect();
+        Bitset(acc.0.into_boxed_slice())
+    }
+}
+impl FromIterator<u32> for Bitset<Vec<u32>> {
+    fn from_iter<T: IntoIterator<Item = u32>>(iter: T) -> Self {
+        let iter = iter.into_iter();
+        let mut acc = Bitset(Vec::new());
+        acc.extend(iter);
+        acc
+    }
+}
+impl FromIterator<usize> for Bitset<Box<[u32]>> {
+    fn from_iter<T: IntoIterator<Item = usize>>(iter: T) -> Self {
+        let acc: Bitset<Vec<_>> = iter.into_iter().collect();
+        Bitset(acc.0.into_boxed_slice())
+    }
+}
+impl FromIterator<usize> for Bitset<Vec<u32>> {
+    fn from_iter<T: IntoIterator<Item = usize>>(iter: T) -> Self {
+        let iter = iter.into_iter();
+        let mut acc = Bitset(Vec::new());
+        acc.extend(iter);
+        acc
     }
 }
 

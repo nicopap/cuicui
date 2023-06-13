@@ -7,7 +7,7 @@ use crate::{BitMatrix, Index};
 
 /// A [multimap] that goes from an integer to multiple integers.
 ///
-/// This is a N-to-M mapping, see [`RawIndexMap`] for 1-to-(1|0) mapping.
+/// This is a 1-to-N mapping, see [`RawIndexMap`] for 1-to-(1|0) mapping.
 /// [`JaggedBitset`] is an alternative in case you expect the largest
 /// row to be way larger than the smaller ones.
 ///
