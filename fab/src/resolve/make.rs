@@ -155,7 +155,7 @@ impl<'a, M: Modify> Make<'a, M> {
         let (sections, masks) = self.purge_static(ctx);
         let new_count = self.modifiers.len();
 
-        trace!("masks are {}", masks.braille_trans_display());
+        trace!("masks are {masks:?}");
         trace!("Removed {} static modifiers", old_count - new_count);
         trace!("now we have:");
         for (i, modi) in self.modifiers.iter().enumerate() {

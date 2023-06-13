@@ -1,11 +1,11 @@
 //! A bit matrix similar to [`BitMatrix`](super::BitMatrix),
 //! but with columns of variable length like [`JaggedVec`](super::JaggedVec).
 
-use std::{fmt, hint, iter, mem};
+use std::{fmt, iter, mem};
 
 use sorted_iter::{assume::AssumeSortedByItemExt, sorted_iterator::SortedByItem};
 
-use crate::{div_ceil, Bitset};
+use crate::{div_ceil, Bitset, RawIndexMap};
 
 /// A bit matrix similar to [`BitMatrix`](super::BitMatrix),
 /// but with columns of variable length like [`JaggedVec`](super::JaggedVec).
@@ -38,7 +38,7 @@ use crate::{div_ceil, Bitset};
 /// ```
 #[derive(Debug, Default, Clone)]
 pub struct JaggedBitset {
-    ends: Box<[u32]>,
+    ends: RawIndexMap<usize, u32>,
     bits: Bitset<Box<[u32]>>,
 }
 impl JaggedBitset {
@@ -46,13 +46,15 @@ impl JaggedBitset {
     /// if `(x, y)` is not within the array.
     #[inline]
     pub fn bit(&self, x: usize, y: usize) -> bool {
-        if y >= self.height() {
+        if y >= self.capacity() {
             return false;
         }
-        let start = y.checked_sub(1).map_or(0, |i| self.ends[i]) as usize;
-        let end = self.ends[y] as usize;
+        let start = y.checked_sub(1).map_or(Some(0), |i| self.ends.get(&i));
+        let end = self.ends.get(&y);
+        let (Some(start), Some(end)) = (start, end) else { return false; };
+        let (start, end) = (start as usize, end as usize);
 
-        if x >= end - start {
+        if x >= (end - start) {
             return false;
         }
         self.bits.bit(start + x)
@@ -62,13 +64,17 @@ impl JaggedBitset {
     /// `0` if `height == 0`.
     #[inline]
     pub fn max_width(&self) -> u32 {
-        let max = (0..self.height()).map(|i| self.width(i)).max();
+        let max = (0..self.capacity()).filter_map(|i| self.get_width(i)).max();
         max.unwrap_or(0)
     }
-    /// Return how many rows this jagged bitset has.
+    pub fn height(&self) -> usize {
+        let first_occupied = self.ends.rev_iter().nth(0);
+        first_occupied.map_or(0, |(k, _)| k)
+    }
+    /// Return an upper bound of how many rows this jagged bitset has.
     #[inline]
-    pub const fn height(&self) -> usize {
-        self.ends.len()
+    pub fn capacity(&self) -> usize {
+        self.ends.capacity()
     }
     /// Return the column count of `index` row.
     ///
@@ -82,11 +88,10 @@ impl JaggedBitset {
     /// `None` if `index` is greater or equal to the [`height`](Self::height).
     #[inline]
     pub fn get_width(&self, index: usize) -> Option<u32> {
-        if index >= self.height() {
-            return None;
-        }
-        let start = index.checked_sub(1).map_or(0, |i| self.ends[i]);
-        let end = self.ends[index];
+        let start = index
+            .checked_sub(1)
+            .map_or(Some(0), |i| self.ends.get(&i))?;
+        let end = self.ends.get(&index)?;
 
         Some(end - start)
     }
@@ -95,33 +100,23 @@ impl JaggedBitset {
     /// # Panics
     /// If `index` is greater or equal to the [`height`](Self::height).
     pub fn row(&self, index: usize) -> impl Iterator<Item = u32> + SortedByItem + '_ {
-        assert!(index < self.height());
-
-        // SAFETY: we just checked index < self.ends.len()
-        unsafe { self.row_unchecked(index) }
+        self.get_row(index).unwrap()
     }
     /// Iterate over all enabled bits in given `index` row.
     ///
-    /// # Safety
-    /// `index` **must be** lower than the row count.
-    pub unsafe fn row_unchecked(
-        &self,
-        index: usize,
-    ) -> impl Iterator<Item = u32> + SortedByItem + '_ {
-        if index >= self.height() {
-            // SAFETY: upheld by function invariants
-            unsafe { hint::unreachable_unchecked() }
-            // This allows skipping bound checks on self.ends[i]
-        }
-        let start = index.checked_sub(1).map_or(0, |i| self.ends[i]);
-        let end = self.ends[index];
+    /// Returns `None` if the row is out of bound.
+    pub fn get_row(&self, index: usize) -> Option<impl Iterator<Item = u32> + SortedByItem + '_> {
+        let start = index
+            .checked_sub(1)
+            .map_or(Some(0), |i| self.ends.get(&i))?;
+        let end = self.ends.get(&index)?;
 
         let range = start as usize..end as usize;
         let bits = self.bits.ones_in_range(range).map(move |i| i - start);
         let bits = bits.assume_sorted_by_item();
 
         let is_not_empty = start != end;
-        is_not_empty.then_some(bits).into_iter().flatten()
+        Some(is_not_empty.then_some(bits).into_iter().flatten())
     }
 
     /// Like [`JaggedBitset::braille_display`], but with rows and columns
@@ -201,7 +196,7 @@ impl Builder {
     /// Create the immutable [`JaggedBitset`], consuming this constructor.
     pub fn build(self) -> JaggedBitset {
         JaggedBitset {
-            ends: self.ends.into_boxed_slice(),
+            ends: self.ends.into_iter().enumerate().collect(),
             bits: Bitset(self.bits.0.into_boxed_slice()),
         }
     }

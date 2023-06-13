@@ -128,7 +128,7 @@ pub enum ValueEq {}
 /// ```
 ///
 /// [`IndexMultimap`]: crate::IndexMultimap
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct RawIndexMap<K: Index, V: From<u32>, Eq = ()> {
     /// A matrix of `max(K)` rows of `log₂(max(V) + 1)` bits, each row represents
     /// a single index.
@@ -262,7 +262,7 @@ impl<K: Index, V: From<u32>, Eq> RawIndexMap<K, V, Eq> {
     /// Set value of `key` to `value`.
     ///
     /// Increase the size of the buffer if `value` is out of bound.
-    /// If `key` is out of bound, does nothing and returns `None`
+    /// If `key` is out of bound, does nothing and returns `None`.
     #[inline]
     pub fn set_expanding_values(&mut self, key: &K, value: &V) -> Option<()>
     where
@@ -280,12 +280,23 @@ impl<K: Index, V: From<u32>, Eq> RawIndexMap<K, V, Eq> {
         }
         self.set(key, value)
     }
+    /// Iterate over all values.
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (K, V)> + '_
     where
         K: From<usize>,
     {
         (0..self.capacity()).filter_map(|k| self.get_index(k).map(|v| (K::from(k), v)))
+    }
+    /// Iterate over all values (reversed).
+    #[inline]
+    pub fn rev_iter(&self) -> impl Iterator<Item = (K, V)> + '_
+    where
+        K: From<usize>,
+    {
+        (0..self.capacity())
+            .rev()
+            .filter_map(|k| self.get_index(k).map(|v| (K::from(k), v)))
     }
 }
 impl<K: Index, V: From<u32>> PartialEq for RawIndexMap<K, V> {

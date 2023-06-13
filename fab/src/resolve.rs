@@ -209,7 +209,7 @@ impl<M: Modify, const MC: usize> DepsResolver<M, MC> {
     }
     fn masked(&self, index: ModifyIndex) -> impl Iterator<Item = u32> + SortedByItem + '_ {
         // SAFETY: same as above
-        unsafe { self.masks.row_unchecked(index.0 as usize) }
+        unsafe { self.masks.get_row(index.0 as usize).unwrap_unchecked() }
     }
 
     fn modify_at<'a>(

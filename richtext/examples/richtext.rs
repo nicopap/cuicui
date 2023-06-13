@@ -35,14 +35,14 @@ fn main() {
         .add_plugin(RichTextPlugin::new())
         .add_plugin(WorldInspectorPlugin::default())
         .add_sys_fmt(
-            "show_right",
+            "show_bottom",
             |value: &dyn Reflect, entry: Entry<_>, cursor: Query<&Window, With<PrimaryWindow>>| {
                 let Some(value) = value.downcast_ref::<Interaction>() else {
                     panic!("We expected an Interaction");
                 };
                 let cursor = cursor.single();
                 println!("{:?}", cursor.physical_cursor_position());
-                println!("left interaction: {value:?}");
+                println!("Bottom interaction: {value:?}");
                 *entry.or_insert(Modifier::color(default())) = Modifier::color(match value {
                     Interaction::Clicked => Color::PINK,
                     Interaction::Hovered => Color::GREEN,
@@ -50,7 +50,7 @@ fn main() {
                 });
             },
         )
-        .add_fn_fmt("show_left", |i: &Interaction, entry| {
+        .add_fn_fmt("show_top", |i: &Interaction, entry| {
             let text = match i {
                 Interaction::Clicked => {
                     println!("Clicked!");
@@ -183,8 +183,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         // otherwise, the font doesn't show up.
         MakeRichText::new(
             "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold, Content:{Res(Fps).fps:.1}}\n\
-            Left button: {Marked(TopButton).Interaction:show_left}\n\
-            {Color: {Marked(BottomButton).Interaction:show_right}|Bottom Button state}",
+            Top button: {Marked(TopButton).Interaction:show_top}\n\
+            {Color: {Marked(BottomButton).Interaction:show_bottom}|Bottom Button state}",
         )
         .with_text_style(TextStyle {
             font: asset_server.load("fonts/FiraSans-Bold.ttf"),
