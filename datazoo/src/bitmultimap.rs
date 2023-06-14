@@ -1,4 +1,4 @@
-//! A sparse associative array.
+//! A read-only sparse associative array.
 
 use std::{collections::BTreeSet, fmt};
 
@@ -6,7 +6,7 @@ use sorted_iter::{assume::AssumeSortedByItemExt, SortedIterator};
 
 use crate::{sorted, BitMatrix};
 
-/// A sparse associative array.
+/// A read-only sparse associative array.
 ///
 /// This is a [multimap] with very good perf for small sets of key and values
 /// that themselves shouldn't take much memory.
