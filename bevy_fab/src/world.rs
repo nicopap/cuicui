@@ -1,9 +1,11 @@
 //! Global world-scopped data relevant to [`BevyModify`]s located in the bevy ECS.
 
-use bevy::prelude::{error, Mut, Resource, World};
+use bevy::prelude::{error, Entity, Mut, Resource, World};
+use bevy::utils::HashMap;
 use fab::binding;
 use fab_parse::{Hook as ParsedHook, Styleable};
 use log::warn;
+use smallvec::SmallVec;
 use thiserror::Error;
 
 use crate::track::{GetError, ParseError, Read, UserFmt, UserFmts, Write, WriteError};
@@ -149,6 +151,34 @@ impl<M: BevyModify> Hook<M> {
     }
 }
 
+struct Hooks<M> {
+    values: Vec<Hook<M>>,
+    text_hooks: HashMap<Entity, SmallVec<[binding::Id; 4]>>,
+    ref_counts: Vec<u8>,
+}
+impl<M> Default for Hooks<M> {
+    fn default() -> Self {
+        Hooks {
+            values: Vec::new(),
+            text_hooks: HashMap::default(),
+            ref_counts: Vec::new(),
+        }
+    }
+}
+impl<M: BevyModify> Hooks<M> {
+    fn push(&mut self, entity: Entity, hook: Hook<M>) {
+        let binding = hook.binding;
+        let entity_bindings = self.text_hooks.entry(entity).or_insert(SmallVec::default());
+
+        if !entity_bindings.contains(&binding) {
+            entity_bindings.push(binding);
+        }
+        if self.values.iter().any(|b| b.binding == binding) {
+            return; // Already exists
+        }
+    }
+}
+
 /// The binding for all [`M: BevyModify`] in the ECS, and the hooks used by those.
 ///
 /// In the format string, a hook is a special binding that declares a value
@@ -162,7 +192,7 @@ impl<M: BevyModify> Hook<M> {
 #[derive(Resource)]
 pub struct WorldBindings<M> {
     pub bindings: binding::World<M>,
-    hooks: Vec<Hook<M>>,
+    hooks: Hooks<M>,
     fmts: UserFmts<M>,
 }
 impl<M> Default for WorldBindings<M> {
@@ -179,12 +209,9 @@ impl<M: BevyModify> WorldBindings<M> {
         let binding = self.bindings.get_or_add(name);
         self.fmts.insert(binding, value);
     }
-    pub fn add_hooks(&mut self, iter: impl IntoIterator<Item = Hook<M>>) {
-        self.hooks.extend(iter)
-    }
     pub fn parse_hook(&mut self, hook: ParsedHook, world: &mut World) {
-        let Self { bindings, hooks, fmts: formatters } = self;
-        match Hook::from_parsed(hook, world, formatters, |n| bindings.get_or_add(n)) {
+        let Self { bindings, hooks, fmts } = self;
+        match Hook::from_parsed(hook, world, fmts, |n| bindings.get_or_add(n)) {
             Ok(hook) => hooks.push(hook),
             Err(err) => error!("A tracker failed to be loaded: {err}"),
         }

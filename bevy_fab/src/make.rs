@@ -138,7 +138,7 @@ pub fn parse_into_resolver_system<BM: BevyModify + 'static>(
     // To convert the parse::Hook into an actual world::Hook that goes into world::Hooks,
     // we need excluisve world access.
     world.resource_scope(|world, mut bindings: Mut<WorldBindings<BM>>| {
-        let parse_hook = |&hook| bindings.parse_hook(hook, world);
+        let parse_hook = |&hook| bindings.parse_hook(hook, entity, world);
         new_hooks.iter().for_each(parse_hook);
     });
 }

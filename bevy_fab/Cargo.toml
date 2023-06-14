@@ -20,6 +20,7 @@ bevy = { version = "0.10", default-features = false }
 # bevycheck = "0.5.2"
 enumset = { version = "1.1", features = ["std"] }
 log = "0.4"
+smallvec = { version = "1.10", features = ["union", "const_generics", "const_new"] }
 thiserror = "1"
 
 fab_parse = { path = "../fab_parse", package = "cuicui_fab_parse" }
