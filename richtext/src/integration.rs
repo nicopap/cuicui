@@ -164,7 +164,7 @@ pub struct RichTextPlugin {
 impl RichTextPlugin {
     /// Initialize the `RichTextPlugin` with given style.
     ///
-    /// See [`Styles`] documentation for a detailed breakdown on how to use this
+    /// See [`crate::Styles`] documentation for a detailed breakdown on how to use this
     /// to its full potential.
     pub fn no_default_styles() -> Self {
         RichTextPlugin { fab: FabPlugin::new(), default_styles: false }

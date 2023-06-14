@@ -105,7 +105,12 @@ mod color;
 mod integration;
 pub mod modifiers;
 
-pub use bevy_fab::{FmtSystem, IntoFmtSystem, ReflectQueryable, UserFmt};
+/// See [`bevy_fab::UserFmt`] docs.
+pub type UserFmt = bevy_fab::UserFmt<Modifier>;
+/// See [`bevy_fab::Styles`] docs.
+pub type Styles = bevy_fab::Styles<Modifier>;
+
+pub use bevy_fab::{FmtSystem, IntoFmtSystem, ReflectQueryable};
 pub use fab::binding::{Entry, Id};
 pub use integration::{
     MakeRichText, RichText, RichTextFetch, RichTextItem, RichTextPlugin, WorldBindings,
@@ -146,7 +151,7 @@ pub mod trait_extensions {
     /// Explicit [`AppFormattersExtension`] for this crate's [`Modifier`]
     pub trait AppTextFormattersExtension: AppFormattersExtension<Modifier> {
         /// Add a plain [`UserFmt`].
-        fn add_user_fmt(&mut self, name: impl AsRef<str>, fmt: UserFmt<Modifier>) -> &mut Self {
+        fn add_user_fmt(&mut self, name: impl AsRef<str>, fmt: UserFmt) -> &mut Self {
             AppFormattersExtension::add_user_fmt(self, name, fmt)
         }
 

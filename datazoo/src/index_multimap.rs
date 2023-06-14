@@ -48,7 +48,8 @@ use crate::{BitMatrix, Index};
 /// }
 /// ```
 ///
-/// [`IndexMap`]: crate::IndexMap
+/// [multimap]: https://en.wikipedia.org/wiki/Multimap
+/// [`RawIndexMap`]: crate::RawIndexMap
 /// [`JaggedBitset`]: crate::JaggedBitset
 #[derive(Debug, Clone)]
 pub struct IndexMultimap<K: Index, V: From<usize>> {

@@ -102,7 +102,8 @@ impl From<QueryStateInner> for QueryState {
     }
 }
 
-/// Read a value from the [`World`], through [`Read::world`], returning a [`&dyn Reflect`].
+/// Read a value from the [`World`], through [`Read::query`] and [`Read::get`],
+/// returning a [`&dyn Reflect`].
 pub struct Read {
     query: Query,
 }
