@@ -68,7 +68,7 @@ impl JaggedBitset {
         max.unwrap_or(0)
     }
     pub fn height(&self) -> usize {
-        let first_occupied = self.ends.rev_iter().nth(0);
+        let first_occupied = self.ends.rev_iter().next();
         first_occupied.map_or(0, |(k, _)| k)
     }
     /// Return an upper bound of how many rows this jagged bitset has.

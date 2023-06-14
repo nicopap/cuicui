@@ -71,7 +71,7 @@ impl<'a, 'b: 'a, K: AsRef<str> + 'a, V: AsRef<str> + 'a> StringPair<'a> for &'b 
 }
 impl<'a> StringPair<'a> for (&'static str, &'static str) {
     fn string_pair(self) -> (&'a str, &'a str) {
-        (self.0.as_ref(), self.1.as_ref())
+        self
     }
 }
 

@@ -185,8 +185,10 @@ impl<K: Index, V: From<u32>, Eq> RawIndexMap<K, V, Eq> {
     ///
     /// This might not be the `key_len` provided as argument to [`Self::with_capacity`],
     /// as the underlying array aligns the number of bits to the next multiple of 32.
+    #[allow(clippy::unnecessary_lazy_evaluations)] // see comment
     pub fn capacity(&self) -> usize {
         let bit_len = self.indices.bit_len();
+        // This prevents a division by zero when both bit_len and value_width are zero
         (bit_len != 0)
             .then(|| bit_len / self.value_width)
             .unwrap_or(0)
