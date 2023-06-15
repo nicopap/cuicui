@@ -8,7 +8,7 @@ mod track;
 pub mod trait_extensions;
 mod world;
 
-use std::{fmt, fmt::Arguments, marker::PhantomData};
+use std::{fmt::Arguments, marker::PhantomData};
 
 use bevy::app::{App, CoreSet, Plugin};
 use bevy::ecs::prelude::*;
@@ -26,17 +26,17 @@ pub use reflect_query::ReflectQueryable;
 pub use track::UserFmt;
 pub use world::{update_hooked, Hook, StyleFn, Styles, WorldBindings};
 
-pub trait WriteItem: fmt::Debug + Send + Sync + Clone + 'static {
-    type Target<'a>
-    where
-        Self: 'a;
-    fn update(&self, to_update: Self::Target<'_>);
-    fn read_as<'a>(&'a mut self) -> Self::Target<'a>;
-}
+// omg please don't look at this, I swear this is temporary
 /// A [`fab::Modify`] that works on a bevy component and can be inserted in the ECS.
-pub trait BevyModify: Parsable + Send + Sync + 'static {
+pub trait BevyModify: Send + Sync + 'static
+where
+    Self: for<'a, 'w, 's> Parsable<
+        Items<'a, 'w, 's> = Items<'a, 'w, 's, Self::Wq>,
+        Item<'a> = <Self::Wq as WorldQuery>::Item<'a>,
+    >,
+{
+    type Wq: WorldQuery;
     type Param: SystemParam;
-    type BevyItem: for<'a> WorldQuery<Item<'a> = Self::Item<'a>>;
     type ItemsCtorData: Send + Sync;
 
     fn set_content(&mut self, s: Arguments);
@@ -51,17 +51,18 @@ pub trait BevyModify: Parsable + Send + Sync + 'static {
 }
 
 #[derive(SystemParam)]
-struct Param<'w, 's, Ctx: SystemParam + 'static, It: WorldQuery + 'static> {
+pub struct Param<'w, 's, Ctx: SystemParam + 'static, It: WorldQuery + 'static> {
     context: StaticSystemParam<'w, 's, Ctx>,
     query: Query<'w, 's, It>,
 }
-struct Items<'a, 'w, 's, It: WorldQuery> {
+pub struct Items<'a, 'w, 's, It: WorldQuery> {
     children: Option<&'a Children>,
     query: Query<'w, 's, It>,
 }
-impl<'a, 'w, 's, It: WorldQuery, M> Indexed<M> for Items<'a, 'w, 's, It>
+impl<'a, 'w, 's, Wq, M> Indexed<M> for Items<'a, 'w, 's, Wq>
 where
-    for<'b> M: BevyModify<Item<'b> = It::Item<'b>>,
+    Wq: WorldQuery,
+    M: BevyModify<Wq = Wq>,
 {
     #[inline]
     fn get_mut(&mut self, index: usize) -> Option<M::Item<'_>> {
@@ -73,12 +74,11 @@ where
 pub fn update_items_system<BM: BevyModify>(
     mut query: Query<(&mut LocalBindings<BM>, &Children)>,
     mut world_bindings: ResMut<WorldBindings<BM>>,
-    params: StaticSystemParam<Param<BM::Param, BM::BevyItem>>,
+    params: StaticSystemParam<Param<BM::Param, BM::Wq>>,
 ) where
-    for<'b> &'b mut BM::MakeItem: Into<BM::Item<'b>>,
     FieldsOf<BM>: Sync + Send,
 {
-    let Param { context, query: mut param_query } = params.into_inner();
+    let Param { context, query: param_query } = params.into_inner();
     let mut items = Items { children: None, query: param_query };
     for (mut local_data, children) in &mut query {
         let context = &BM::context(&context);
@@ -91,12 +91,9 @@ pub fn update_items_system<BM: BevyModify>(
 /// Manages [`BevyModify`] living in the ECS as [`LocalBindings`] and a global
 /// [`WorldBindings`]. Also [`Hook`]s to automatically update reflection-based
 /// bindings.
-pub struct FabPlugin<BM: BevyModify>(PhantomData<fn(BM)>)
-where
-    for<'b> &'b mut BM::MakeItem: Into<BM::Item<'b>>;
+pub struct FabPlugin<BM: BevyModify>(PhantomData<fn(BM)>);
 impl<BM: BevyModify> FabPlugin<BM>
 where
-    for<'b> &'b mut BM::MakeItem: Into<BM::Item<'b>>,
     FieldsOf<BM>: Sync + Send,
 {
     pub fn new() -> Self {

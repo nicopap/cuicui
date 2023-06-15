@@ -67,7 +67,7 @@ pub type FieldsOf<M> = EnumSet<<M as Modify>::Field>;
 /// [update]: Modify::changes
 /// [`impl_modify!`]: crate::impl_modify
 pub trait Modify: Clone + fmt::Debug {
-    type MakeItem: for<'a> MakeItem<'a, Self::Item<'a>> + fmt::Debug + Send + Sync;
+    type MakeItem: for<'a> MakeItem<'a, Self::Item<'a>> + Clone + fmt::Debug + Send + Sync;
 
     /// The type on which `Modify` operates
     type Item<'a>;

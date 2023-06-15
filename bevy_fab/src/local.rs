@@ -1,5 +1,5 @@
 //! Local entity-scopped data relevant to [`Modify`]s located in the bevy ECS.
-use bevy::ecs::{prelude::Component, query::WorldQuery};
+use bevy::ecs::prelude::Component;
 
 use fab::{binding, modify::Changing, resolve::Resolver};
 
@@ -16,14 +16,12 @@ impl<M: BevyModify> LocalBindings<M> {
     ///
     /// Only the relevant sections of `to_update` are updated. The change trackers
     /// are then reset.
-    pub fn update<It: WorldQuery>(
+    pub fn update(
         &mut self,
-        items: &mut crate::Items<It>,
+        items: &mut crate::Items<M::Wq>,
         world: &WorldBindings<M>,
         ctx: &M::Context<'_>,
-    ) where
-        for<'b> M: BevyModify<Item<'b> = It::Item<'b>>,
-    {
+    ) {
         let Self { root_data, bindings, resolver } = self;
 
         // TODO(clean): this code should be in cuicui_fab
