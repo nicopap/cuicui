@@ -6,16 +6,47 @@ use crate::resolve::Resolver;
 
 use enumset::{EnumSet, EnumSetType};
 
-pub trait Indexed<M: Modify + ?Sized> {
-    fn get_mut(&mut self, index: usize) -> Option<&mut M::Item>;
+pub trait MakeItem<'a, I: 'a> {
+    fn make_item<'b, 'c>(&'b self, item: &'c mut I)
+    where
+        'a: 'c;
+    fn as_item(&'a mut self) -> I;
 }
-impl<T, M: Modify<Item = T>> Indexed<M> for [T] {
-    fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+impl<'a, T: Clone> MakeItem<'a, &'a mut T> for T {
+    fn make_item<'b, 'c>(&'b self, item: &'c mut &'a mut T)
+    where
+        'a: 'c,
+    {
+        **item = self.clone();
+    }
+    fn as_item(&mut self) -> &mut T {
+        self
+    }
+}
+impl<'a, T1: Clone, T2: Clone> MakeItem<'a, (&'a mut T1, &'a mut T2)> for (T1, T2) {
+    fn make_item<'b, 'c>(&self, item: &'c mut (&'a mut T1, &'a mut T2))
+    where
+        'a: 'c,
+    {
+        *item.0 = self.0.clone();
+        *item.1 = self.1.clone();
+    }
+    fn as_item(&mut self) -> (&mut T1, &mut T2) {
+        let (t1, t2) = self;
+        (t1, t2)
+    }
+}
+
+pub trait Indexed<M: Modify + ?Sized> {
+    fn get_mut(&mut self, index: usize) -> Option<M::Item<'_>>;
+}
+impl<T, M: for<'a> Modify<Item<'a> = &'a mut T>> Indexed<M> for [T] {
+    fn get_mut(&mut self, index: usize) -> Option<M::Item<'_>> {
         <[T]>::get_mut(self, index)
     }
 }
-impl<T, M: Modify<Item = T>> Indexed<M> for Vec<T> {
-    fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+impl<T, M: for<'a> Modify<Item<'a> = &'a mut T>> Indexed<M> for Vec<T> {
+    fn get_mut(&mut self, index: usize) -> Option<M::Item<'_>> {
         <[T]>::get_mut(self, index)
     }
 }
@@ -36,11 +67,15 @@ pub type FieldsOf<M> = EnumSet<<M as Modify>::Field>;
 /// [update]: Modify::changes
 /// [`impl_modify!`]: crate::impl_modify
 pub trait Modify: Clone + fmt::Debug {
+    type MakeItem: for<'a> MakeItem<'a, Self::Item<'a>> + fmt::Debug + Send + Sync;
+
     /// The type on which `Modify` operates
-    type Item: Clone + fmt::Debug + Send + Sync;
+    type Item<'a>;
 
     /// The underlying [`Self::Item`] storage.
-    type Items: Indexed<Self> + Send + Sync;
+    type Items<'a, 'b, 'c>: Indexed<Self> + Send + Sync
+    where
+        Self: 'a;
 
     /// The [set](EnumSet) of fields that `Self` accesses on `Item`.
     type Field: EnumSetType + fmt::Debug + Send + Sync;
@@ -62,7 +97,7 @@ pub trait Modify: Clone + fmt::Debug {
     /// - only updates [`Self::Field`]s returned by [`Self::changes`].
     ///
     /// Otherwise, [`Resolver`] will fail to work properly.
-    fn apply(&self, ctx: &Self::Context<'_>, item: &mut Self::Item) -> anyhow::Result<()>;
+    fn apply(&self, ctx: &Self::Context<'_>, item: Self::Item<'_>) -> anyhow::Result<()>;
 
     /// On what data in [`Self::Item`] does this modifier depends?
     fn depends(&self) -> EnumSet<Self::Field>;
@@ -77,13 +112,13 @@ pub trait Modify: Clone + fmt::Debug {
 /// track of the updated fields.
 ///
 /// To reset the field update tracking, use [`Changing::reset_updated`].
-pub struct Changing<M: Modify> {
-    pub(crate) updated: EnumSet<M::Field>,
-    pub(crate) value: M::Item,
+pub struct Changing<F: EnumSetType, T> {
+    pub(crate) updated: EnumSet<F>,
+    pub(crate) value: T,
 }
-impl<M: Modify> Changing<M> {
+impl<F: EnumSetType, T> Changing<F, T> {
     /// Store this `value` in a `Changing`, with no updated field.
-    pub fn new(value: M::Item) -> Self {
+    pub fn new(value: T) -> Self {
         Self { updated: EnumSet::EMPTY, value }
     }
     /// Update `self` with `f`, declaring that `update` is changed.
@@ -91,7 +126,7 @@ impl<M: Modify> Changing<M> {
     /// If you change fields other than the ones in `updated`, they won't be
     /// tracked as changed. So make sure to properly declare which fields
     /// you are changing.
-    pub fn update(&mut self, updated: M::Field, f: impl FnOnce(&mut M::Item)) {
+    pub fn update(&mut self, updated: F, f: impl FnOnce(&mut T)) {
         self.updated |= updated;
         f(&mut self.value);
     }

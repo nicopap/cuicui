@@ -1,36 +1,38 @@
 //! Local entity-scopped data relevant to [`Modify`]s located in the bevy ECS.
-use bevy::ecs::prelude::Component;
+use bevy::ecs::{prelude::Component, query::WorldQuery};
 
-use fab::{binding, modify::Changing, modify::Modify, resolve::Resolver};
+use fab::{binding, modify::Changing, resolve::Resolver};
 
-use crate::WorldBindings;
+use crate::{BevyModify, WorldBindings};
 
 #[derive(Component)]
-pub struct LocalBindings<M: Modify> {
+pub struct LocalBindings<M: BevyModify> {
     resolver: M::Resolver,
-    pub root_data: Changing<M>,
+    pub root_data: Changing<M::Field, M::MakeItem>,
     pub bindings: binding::Local<M>,
 }
-impl<M: Modify> LocalBindings<M> {
+impl<M: BevyModify> LocalBindings<M> {
     /// Update `to_update` with updated values from `world` and `self`-local bindings.
     ///
     /// Only the relevant sections of `to_update` are updated. The change trackers
     /// are then reset.
-    pub fn update(
+    pub fn update<It: WorldQuery>(
         &mut self,
-        to_update: &mut M::Items,
+        items: &mut crate::Items<It>,
         world: &WorldBindings<M>,
         ctx: &M::Context<'_>,
-    ) {
+    ) where
+        for<'b> M: BevyModify<Item<'b> = It::Item<'b>>,
+    {
         let Self { root_data, bindings, resolver } = self;
 
         // TODO(clean): this code should be in cuicui_fab
         let view = world.bindings.view_with_local(bindings).unwrap();
-        resolver.update(to_update, root_data, view, ctx);
+        resolver.update(items, root_data, view, ctx);
         root_data.reset_updated();
         bindings.reset_changes();
     }
-    pub(crate) fn new(resolver: M::Resolver, root_data: M::Item) -> Self {
+    pub(crate) fn new(resolver: M::Resolver, root_data: M::MakeItem) -> Self {
         LocalBindings {
             resolver,
             root_data: Changing::new(root_data),

@@ -296,8 +296,9 @@ impl Block {
             impl Modify for #modify_ty {
                 type Field = #field_ty;
                 type Context #context_generics = #context;
-                type Item = #item;
-                type Items = #items;
+                type Item<'a> = &'a mut #item;
+                type Items<'a,'b,'c> = #items;
+                type MakeItem = #item;
                 type Resolver = #resolver;
 
                 fn apply(

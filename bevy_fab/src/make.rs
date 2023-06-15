@@ -12,22 +12,22 @@ use crate::{BevyModify, LocalBindings, Styles, WorldBindings};
 #[derive(Component)]
 pub struct ParseFormatString<BM: BevyModify> {
     pub format_string: String,
-    pub default_item: BM::Item,
+    pub default_item: BM::MakeItem,
     pub items_extra: Option<BM::ItemsCtorData>,
     _p: PhantomData<fn(BM)>,
 }
-impl<P: BevyModify> ParseFormatString<P> {
+impl<BM: BevyModify> ParseFormatString<BM> {
     pub fn new(
         format_string: String,
-        default_item: P::Item,
-        items_extra: P::ItemsCtorData,
+        default_item: BM::MakeItem,
+        items_extra: BM::ItemsCtorData,
     ) -> Self {
         let _p = PhantomData;
         let items_extra = Some(items_extra);
         Self { format_string, default_item, items_extra, _p }
     }
     /// Drain all fields from a `&mut Self` to get an owned value.
-    fn take(&mut self) -> (P::ItemsCtorData, P::Item, String) {
+    fn take(&mut self) -> (BM::ItemsCtorData, BM::MakeItem, String) {
         (
             self.items_extra.take().unwrap(),
             self.default_item.clone(),
@@ -50,13 +50,10 @@ impl<P: BevyModify> ParseFormatString<P> {
 fn mk<'fstr, BM: BevyModify>(
     bindings: &mut WorldBindings<BM>,
     style: &mut Styles<BM>,
-    default_item: &BM::Item,
+    default_item: &BM::MakeItem,
     context: &BM::Context<'_>,
     format_string: &'fstr str,
-) -> anyhow::Result<(Vec<BM::Item>, BM::Resolver, Vec<parse::Hook<'fstr>>)>
-where
-    BM::Items: Component,
-{
+) -> anyhow::Result<(Vec<BM::MakeItem>, BM::Resolver, Vec<parse::Hook<'fstr>>)> {
     let mut new_hooks = Vec::new();
 
     let tree = fab_parse::format_string(format_string)?;
@@ -64,7 +61,7 @@ where
     let parsed = tree.finish(&mut bindings.bindings, &mut new_hooks);
     let parsed: Vec<_> = parsed.into_iter().collect::<anyhow::Result<_>>()?;
 
-    let (resolver, items) = BM::Resolver::new(parsed, default_item, context);
+    let (resolver, items) = BM::Resolver::new(parsed, || default_item.clone(), context);
 
     Ok((items, resolver, new_hooks))
 }
@@ -86,7 +83,6 @@ pub fn parse_into_resolver_system<BM: BevyModify + 'static>(
         )>,
     >,
 ) where
-    BM::Items: Component,
     FieldsOf<BM>: Sync + Send,
 {
     // The `format_string` are field of `ParseFormatString`, components of the ECS.
@@ -121,10 +117,9 @@ pub fn parse_into_resolver_system<BM: BevyModify + 'static>(
                 Ok((items, resolver, mut hooks)) => {
                     new_hooks.append(&mut hooks);
 
-                    let local = LocalBindings::<BM>::new(resolver, item.clone());
-                    let items = BM::make_items(ctor_data, items);
-
-                    cmds.entity(*entity).insert((local, items));
+                    let mut cmds = cmds.entity(*entity);
+                    cmds.insert(LocalBindings::<BM>::new(resolver, item.clone()));
+                    BM::spawn_items(ctor_data, items, &mut cmds);
                 }
                 Err(err) => {
                     error!("Error '{err}' when building '''{fmt}'''")

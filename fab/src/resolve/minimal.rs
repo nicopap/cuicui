@@ -1,6 +1,8 @@
 //! A minimal resolver that only support binding to individual sections
 //! and ignores all other features.
 
+use std::iter;
+
 use datazoo::Index;
 use log::{error, warn};
 use nonmax::NonMaxU32;
@@ -21,17 +23,23 @@ pub struct MinResolver {
     indices: Box<[Option<NonMaxU32>]>,
 }
 impl<M: Modify> Resolver<M> for MinResolver {
-    fn new(
+    fn new<T, F>(
         modifiers: Vec<MakeModify<M>>,
-        default_section: &<M as Modify>::Item,
-        ctx: &<M as Modify>::Context<'_>,
-    ) -> (Self, Vec<<M as Modify>::Item>) {
+        default_section: F,
+        ctx: &M::Context<'_>,
+    ) -> (Self, Vec<T>)
+    where
+        T: for<'a> AsMut<M::Item<'a>>,
+        F: Fn() -> T,
+    {
         let warn_range = "Skipping bindings touching more than a single sections in MinResolver.";
 
         let Some(section_count) = modifiers.iter().map(|m| m.range.end).max() else {
             return (MinResolver { indices: Box::new([])}, vec![])
         };
-        let mut sections = vec![default_section.clone(); section_count as usize];
+        let mut sections = iter::repeat_with(&default_section)
+            .take(section_count as usize)
+            .collect::<Vec<_>>();
         let mut bindings = Vec::new();
 
         for modifier in modifiers.into_iter() {
@@ -51,7 +59,7 @@ impl<M: Modify> Resolver<M> for MinResolver {
                     let sections = unsafe { sections.get_unchecked_mut(range) };
 
                     sections.iter_mut().for_each(|section| {
-                        if let Err(err) = modify.apply(ctx, section) {
+                        if let Err(err) = modify.apply(ctx, section.as_mut()) {
                             error!("Error occured when applying modify: {err}");
                         }
                     });
@@ -69,13 +77,15 @@ impl<M: Modify> Resolver<M> for MinResolver {
         (MinResolver { indices }, sections)
     }
 
-    fn update<'a>(
+    fn update<'a, T>(
         &'a self,
-        to_update: &mut <M as Modify>::Items,
-        _updates: &'a Changing<M>,
+        to_update: &mut M::Items<'_>,
+        _: &'a Changing<M::Field, T>,
         bindings: View<'a, M>,
-        ctx: &<M as Modify>::Context<'_>,
-    ) {
+        ctx: &M::Context<'_>,
+    ) where
+        for<'b> &'b T: Into<M::Item<'b>>,
+    {
         bindings.changed().for_each(|(binding, modify)| {
             let Some(Some(index)) = self.indices.get(binding.get()) else { return; };
             let index = index.get() as usize;

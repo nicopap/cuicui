@@ -3,6 +3,7 @@
 mod is_static;
 mod mask_range;
 
+use std::iter;
 use std::mem::size_of;
 
 use datazoo::{enum_multimap, IndexMultimap, JaggedBitset};
@@ -12,25 +13,25 @@ use log::{error, trace};
 use crate::binding::Id;
 use crate::modify::{FieldsOf, Modify};
 
-use super::{DepsResolver, MakeModify, ModifyIndex as Idx, ModifyKind};
+use super::{DepsResolver, MakeItem, MakeModify, ModifyIndex as Idx, ModifyKind};
 use is_static::CheckStatic;
 use mask_range::MaskRange;
 
 #[derive(Debug)]
-pub(super) struct Make<'a, M: Modify> {
-    default_section: &'a M::Item,
+pub(super) struct Make<M: Modify, F> {
+    default_section: F,
     modifiers: Vec<super::MakeModify<M>>,
     errors: Vec<anyhow::Error>,
 }
 
-impl<'a, M: Modify> Make<'a, M> {
+impl<M: Modify, T: for<'a> MakeItem<'a, M::Item<'a>>, F: Fn() -> T> Make<M, F> {
     /// Initialize a [`Make`] to create a [`DepsResolver`] using [`Make::build`].
     ///
     /// # Limitations
     ///
     /// - All [`Modify::changes`] of `modifiers` **must** be a subset of [`Modify::depends`].
     /// - [`Modify::depends`] may have exactly 1 or 0 components.
-    pub(super) fn new(modifiers: Vec<MakeModify<M>>, default_section: &'a M::Item) -> Self {
+    pub(super) fn new(modifiers: Vec<MakeModify<M>>, default_section: F) -> Self {
         Self { modifiers, default_section, errors: Vec::new() }
     }
 
@@ -43,13 +44,15 @@ impl<'a, M: Modify> Make<'a, M> {
     ///    by a static modifier child of itself. (TODO(pref) this isn't done yet)
     ///
     /// Note that if there is no `modifiers`, this does nothing.
-    fn purge_static(&mut self, ctx: &M::Context<'_>) -> (Vec<M::Item>, JaggedBitset) {
+    fn purge_static(&mut self, ctx: &M::Context<'_>) -> (Vec<T>, JaggedBitset) {
         assert!(size_of::<usize>() >= size_of::<u32>());
 
         let Some(section_count) = self.modifiers.iter().map(|m| m.range.end).max() else {
             return (vec![], JaggedBitset::default())
         };
-        let mut sections = vec![self.default_section.clone(); section_count as usize];
+        let mut sections = iter::repeat_with(&self.default_section)
+            .take(section_count as usize)
+            .collect::<Vec<_>>();
 
         let mut checker = CheckStatic::new();
         let mut masker = MaskRange::new(&self.modifiers);
@@ -64,7 +67,7 @@ impl<'a, M: Modify> Make<'a, M> {
                 let section = unsafe { sections.get_unchecked_mut(section as usize) };
                 let ModifyKind::Modify(modifier) = &modifier.kind else { continue; };
 
-                if let Err(err) = modifier.apply(ctx, section) {
+                if let Err(err) = modifier.apply(ctx, section.as_item()) {
                     self.errors.push(err);
                 };
             }
@@ -88,7 +91,10 @@ impl<'a, M: Modify> Make<'a, M> {
     /// The list of `Modify`s that directly depend on a root field.
     ///
     /// `field` is the property in question. A root field is the "parent style".
-    fn field_f2m(&self, field: M::Field) -> impl Iterator<Item = Idx> + '_ {
+    fn field_f2m<'a>(&'a self, field: M::Field) -> impl Iterator<Item = Idx> + 'a
+    where
+        T: 'a,
+    {
         let mut parent_field_range_end = 0;
 
         self.indices().filter_map(move |(i, modify)| {
@@ -108,7 +114,10 @@ impl<'a, M: Modify> Make<'a, M> {
     /// The list of `Modify`s that depend on other `Modify` for their value on `field`.
     ///
     /// This is a list of parent→child tuples.
-    fn field_m2m(&self, field: M::Field) -> impl Iterator<Item = (Idx, Idx)> + '_ {
+    fn field_m2m<'a>(&'a self, field: M::Field) -> impl Iterator<Item = (Idx, Idx)> + 'a
+    where
+        T: 'a,
+    {
         let mut parent = Vec::new();
 
         self.indices().filter_map(move |(i, modify)| {
@@ -137,7 +146,10 @@ impl<'a, M: Modify> Make<'a, M> {
     ///
     /// This is a list of parent→child tuples.
     /// Unlike `field_m2m`, this is for all properties.
-    fn m2m(&self) -> impl Iterator<Item = (Idx, Idx)> + '_ {
+    fn m2m<'a>(&'a self) -> impl Iterator<Item = (Idx, Idx)> + 'a
+    where
+        T: 'a,
+    {
         EnumSet::ALL
             .iter()
             .flat_map(|change| self.field_m2m(change))
@@ -145,7 +157,7 @@ impl<'a, M: Modify> Make<'a, M> {
     pub(super) fn build<const MC: usize>(
         mut self,
         ctx: &M::Context<'_>,
-    ) -> (DepsResolver<M, MC>, Vec<M::Item>) {
+    ) -> (DepsResolver<M, MC>, Vec<T>) {
         trace!("Building a RichText from modifiers:");
         for modi in &self.modifiers {
             trace!("\t{modi:?}");

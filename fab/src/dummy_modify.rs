@@ -1,3 +1,5 @@
+use std::iter;
+
 use enumset::{EnumSet, EnumSetType};
 
 use crate::{
@@ -21,24 +23,32 @@ impl Indexed<DummyModify> for () {
     }
 }
 impl Resolver<DummyModify> for () {
-    fn new(modifiers: Vec<MakeModify<DummyModify>>, (): &(), (): &()) -> (Self, Vec<()>) {
-        let Some(section_count) = modifiers.iter().map(|m| m.range.end).max() else {
+    fn new<T, F>(mods: Vec<MakeModify<DummyModify>>, f: F, _: &()) -> ((), Vec<T>)
+    where
+        T: for<'a> AsMut<()>,
+        F: Fn() -> T,
+    {
+        let Some(section_count) = mods.iter().map(|m| m.range.end).max() else {
             return ((), Vec::new())
         };
-        ((), vec![(); section_count as usize])
+        let dummies = iter::repeat_with(f).take(section_count as usize).collect();
+        ((), dummies)
     }
-    fn update<'a>(
+
+    fn update<'a, T>(
         &'a self,
         _: &mut (),
-        _: &'a Changing<DummyModify>,
+        _: &'a Changing<NoFields, T>,
         _: View<'a, DummyModify>,
         _: &(),
-    ) {
+    ) where
+        for<'b> &'b T: Into<()>,
+    {
     }
 }
 impl Modify for DummyModify {
-    type Item = ();
-    type Items = ();
+    type Item<'a> = ();
+    type Items<'a> = ();
     type Field = NoFields;
     type Context<'a> = ();
     type Resolver = ();

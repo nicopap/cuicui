@@ -1,19 +1,19 @@
 mod impl_fmt;
 mod make;
-mod minimal;
+// mod minimal;
 
 use std::{mem::size_of, ops::Range};
 
 use datazoo::{
-    AssumeSortedByItemExt, EnumMultimap, Index, IndexMultimap, JaggedBitset, RawIndexMap,
-    SortedByItem, SortedIterator,
+    AssumeSortedByItemExt, EnumMultimap, IndexMultimap, JaggedBitset, RawIndexMap, SortedByItem,
+    SortedIterator,
 };
 use log::warn;
 
 use crate::binding::{Id, View};
-use crate::modify::{Changing, FieldsOf, Indexed, Modify};
+use crate::modify::{Changing, FieldsOf, Indexed, MakeItem, Modify};
 
-pub use minimal::MinResolver;
+// pub use minimal::MinResolver;
 
 /// A Resolver for the [`Modify`] trait.
 ///
@@ -45,44 +45,33 @@ pub use minimal::MinResolver;
 ///   `DepsResover` will not only trigger updated modifiers, but also modifiers
 ///   that depends on updated modifiers (repeating, of course).
 pub trait Resolver<M: Modify>: Sized {
-    fn new(
+    fn new<F: Fn() -> M::MakeItem>(
         modifiers: Vec<MakeModify<M>>,
-        default_section: &M::Item,
+        default_section: F,
         ctx: &M::Context<'_>,
-    ) -> (Self, Vec<M::Item>);
-
+    ) -> (Self, Vec<M::MakeItem>);
     fn update<'a>(
         &'a self,
-        to_update: &mut M::Items,
-        updates: &'a Changing<M>,
+        to_update: &mut M::Items<'_, '_, '_>,
+        updates: &'a Changing<M::Field, M::MakeItem>,
         bindings: View<'a, M>,
         ctx: &M::Context<'_>,
     );
 }
 
-/// Index in `modifies`.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct ModifyIndex(u32);
-impl ModifyIndex {
-    fn new(value: usize) -> Self {
-        ModifyIndex(value as u32)
-    }
+#[rustfmt::skip]
+mod modify_index {
+    use datazoo::Index;
+
+    /// Index in `modifies`.
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    pub(super) struct ModifyIndex(pub u32);
+    impl ModifyIndex { pub fn new(value: usize) -> Self { ModifyIndex(value as u32) } }
+    impl Index for ModifyIndex { fn get(&self) -> usize { self.0 as usize } }
+    impl From<usize> for ModifyIndex { fn from(value: usize) -> Self { ModifyIndex::new(value) } }
+    impl From<u32>   for ModifyIndex { fn from(value: u32)   -> Self { ModifyIndex(value) } }
 }
-impl Index for ModifyIndex {
-    fn get(&self) -> usize {
-        self.0 as usize
-    }
-}
-impl From<usize> for ModifyIndex {
-    fn from(value: usize) -> Self {
-        ModifyIndex::new(value)
-    }
-}
-impl From<u32> for ModifyIndex {
-    fn from(value: u32) -> Self {
-        ModifyIndex(value)
-    }
-}
+use modify_index::ModifyIndex;
 
 /// A [`Modify`] either described as `M` or a binding [`Id`].
 pub enum ModifyKind<M: Modify> {
@@ -172,24 +161,24 @@ pub struct DepsResolver<M: Modify, const MOD_COUNT: usize> {
 }
 
 impl<M: Modify, const MC: usize> Resolver<M> for DepsResolver<M, MC> {
-    fn new(
+    fn new<F: Fn() -> M::MakeItem>(
         modifiers: Vec<MakeModify<M>>,
-        default_section: &M::Item,
+        default_section: F,
         ctx: &M::Context<'_>,
-    ) -> (Self, Vec<M::Item>) {
+    ) -> (Self, Vec<M::MakeItem>) {
         assert!(size_of::<usize>() >= size_of::<u32>());
 
         make::Make::new(modifiers, default_section).build(ctx)
     }
     fn update<'a>(
         &'a self,
-        to_update: &mut M::Items,
-        updates: &'a Changing<M>,
+        to_update: &mut M::Items<'_, '_, '_>,
+        updates: &'a Changing<M::Field, M::MakeItem>,
         bindings: View<'a, M>,
         ctx: &M::Context<'_>,
     ) {
-        let Changing { updated, value } = updates;
-        Evaluator { graph: self, root: value, bindings }.update_all(*updated, to_update, ctx);
+        let Changing { updated, value: root } = updates;
+        Evaluator { graph: self, root, bindings }.update_all(*updated, to_update, ctx);
     }
 }
 impl<M: Modify, const MC: usize> DepsResolver<M, MC> {
@@ -240,26 +229,26 @@ impl<M: Modify, const MC: usize> DepsResolver<M, MC> {
     }
 }
 
-struct Evaluator<'a, M: Modify, const MC: usize> {
-    root: &'a M::Item,
+struct Evaluator<'a, T, M: Modify, const MC: usize> {
+    root: &'a T,
     graph: &'a DepsResolver<M, MC>,
     bindings: View<'a, M>,
 }
-impl<'a, M: Modify, const MC: usize> Evaluator<'a, M, MC> {
+impl<'a, T: for<'m> MakeItem<'m, M::Item<'m>>, M: Modify, const MC: usize> Evaluator<'a, T, M, MC> {
     // TODO(clean): flag arguments are icky
     fn update(
         &self,
         index: ModifyIndex,
-        to_update: &mut M::Items,
+        to_update: &mut M::Items<'_, '_, '_>,
         ctx: &M::Context<'_>,
         field_depends: bool,
         overlay: Option<&M>,
     ) {
         let Some((modify, range)) = self.graph.modify_at(index, overlay) else { return; };
         for section in range {
-            let section = to_update.get_mut(section as usize).unwrap();
+            let mut section = to_update.get_mut(section as usize).unwrap();
             if field_depends {
-                *section = self.root.clone();
+                self.root.make_item(&mut section);
             }
             if let Err(error) = modify.apply(ctx, section) {
                 warn!("Error when applying modifier {index:?} {modify:?}: {error}");
@@ -272,7 +261,7 @@ impl<'a, M: Modify, const MC: usize> Evaluator<'a, M, MC> {
     fn update_all(
         &self,
         updated_fields: FieldsOf<M>,
-        to_update: &mut M::Items,
+        to_update: &mut M::Items<'_, '_, '_>,
         ctx: &M::Context<'_>,
     ) {
         let bindings = self.bindings.changed();
