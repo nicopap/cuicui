@@ -24,39 +24,55 @@ const BAD_ASSOC_TYPE: &str = "Modify as a trait requires the following \
     `MinimalResolver` instead. It doesn't have change dependency detection, but \
     it is much faster to build and run.";
 
+struct Generic {
+    ty: syn::Type,
+    gens: syn::Generics,
+}
+impl From<syn::ImplItemType> for Generic {
+    fn from(value: syn::ImplItemType) -> Self {
+        Generic { ty: value.ty, gens: value.generics }
+    }
+}
 /// Store encountered associated types used in the `Modify` definition.
 #[derive(Default)]
 struct AssociatedTypes {
     /// `Modify::Context`, type being the right side of `=` and geneirc the
     /// context's lifetime parameter.
-    context: Option<(syn::Type, syn::Generics)>,
+    context: Option<Generic>,
 
     /// `Modify::Item`.
-    item: Option<syn::Type>,
+    item: Option<Generic>,
 
     /// `Modify::Items`.
-    items: Option<syn::Type>,
+    items: Option<Generic>,
 
     /// the resolver to use for this `Modify`
     resolver: Option<syn::Type>,
+
+    /// The `Modify::MakeItem`. By default, same as `item`.
+    make_item: Option<syn::Type>,
 }
 fn read_item(item: syn::ImplItem, assoc: &mut AssociatedTypes) -> syn::Result<Option<ModifyFn>> {
     use syn::ImplItem::{Fn, Type};
     match item {
         Type(assoc_type) if assoc_type.ident == "Context" => {
-            assoc.context = Some((assoc_type.ty, assoc_type.generics));
+            assoc.context = Some(assoc_type.into());
             Ok(None)
         }
         Type(assoc_type) if assoc_type.ident == "Item" => {
-            assoc.item = Some(assoc_type.ty);
+            assoc.item = Some(assoc_type.into());
             Ok(None)
         }
         Type(assoc_type) if assoc_type.ident == "Items" => {
-            assoc.items = Some(assoc_type.ty);
+            assoc.items = Some(assoc_type.into());
             Ok(None)
         }
         Type(assoc_type) if assoc_type.ident == "Resolver" => {
             assoc.resolver = Some(assoc_type.ty);
+            Ok(None)
+        }
+        Type(assoc_type) if assoc_type.ident == "MakeItem" => {
+            assoc.make_item = Some(assoc_type.ty);
             Ok(None)
         }
         Fn(fn_item) => {
@@ -134,11 +150,11 @@ impl Config {
 
 pub(crate) struct Block {
     attributes: Vec<syn::Attribute>,
-    item: syn::Type,
-    items: syn::Type,
-    context: syn::Type,
-    context_generics: syn::Generics,
+    item: Generic,
+    items: Generic,
+    context: Generic,
     resolver: Option<syn::Type>,
+    make_item: Option<syn::Type>,
     functions: Vec<ModifyFn>,
     field_accessors: AtomicAccessors,
     // TODO(feat): allow generics
@@ -177,7 +193,7 @@ impl Block {
         if let Some(error) = errors.into_syn_errors() {
             return Err(error);
         }
-        let Some((context, context_generics)) = assocs.context else {
+        let Some(context) = assocs.context else {
             let msg = "modify_impl MUST declare a `type Context` associated type. \
                 If you are not using it, use `type Context = ();`";
             return Err(syn::Error::new(input.span(), msg));
@@ -195,8 +211,8 @@ impl Block {
             item,
             items,
             context,
-            context_generics,
             resolver: assocs.resolver,
+            make_item: assocs.make_item,
             functions,
             field_accessors,
             modify_ty,
@@ -210,10 +226,9 @@ impl Block {
     pub fn generate_impl(self) -> TokenStream {
         let Self {
             attributes,
-            item,
-            items,
-            context,
-            context_generics,
+            item: Generic { ty: item_ty, gens: item_gens },
+            items: Generic { ty: items_ty, gens: items_gens },
+            context: Generic { ty: context_ty, gens: context_gens },
             resolver,
             field_accessors,
             modify_ty,
@@ -222,6 +237,7 @@ impl Block {
             visibility,
             debug_derive,
             clone_derive,
+            make_item,
             ..
         } = &self;
 
@@ -252,13 +268,16 @@ impl Block {
             },
             |ty| quote!(#ty),
         );
+        let make_item = make_item
+            .as_ref()
+            .map_or_else(|| quote!(#item_ty), |ty| quote!(#ty));
 
         quote! {
             #[doc = concat!("Fields accessed by [`", stringify!(#modify_ty), "`].")]
             #[doc = "\n\n"]
             #[doc = concat!(
                 "Fields may be members of [`",
-                stringify!(#item),
+                stringify!(#item_ty),
                 "`], the Item of sections modified by [`",
                 stringify!(#modify_ty),
                 "`], or fields of the context [`",
@@ -295,16 +314,17 @@ impl Block {
             #[allow(clippy::ptr_arg)]
             impl Modify for #modify_ty {
                 type Field = #field_ty;
-                type Context #context_generics = #context;
-                type Item<'a> = &'a mut #item;
-                type Items<'a,'b,'c> = #items;
-                type MakeItem = #item;
+                type Context #context_gens = #context_ty;
+                // TODO: add &'a mut if Item not declared with <'a>
+                type Item #item_gens = #item_ty;
+                type Items #items_gens = #items_ty;
+                type MakeItem = #make_item;
                 type Resolver = #resolver;
 
-                fn apply(
+                fn apply #item_gens(
                     &self,
                     #ctx: &Self::Context<'_>,
-                    #item_param: &mut #item,
+                    #item_param: #item_ty,
                 ) -> #fab_path::__private::anyhow::Result<()> {
                     match self {
                         #(

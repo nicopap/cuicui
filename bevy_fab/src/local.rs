@@ -1,17 +1,17 @@
 //! Local entity-scopped data relevant to [`Modify`]s located in the bevy ECS.
 use bevy::ecs::prelude::Component;
 
-use fab::{binding, modify::Changing, resolve::Resolver};
+use fab::{binding, modify::Changing, resolve::Resolver, Modify};
 
-use crate::{BevyModify, WorldBindings};
+use crate::WorldBindings;
 
 #[derive(Component)]
-pub struct LocalBindings<M: BevyModify> {
+pub struct LocalBindings<M: Modify> {
     resolver: M::Resolver,
     pub root_data: Changing<M::Field, M::MakeItem>,
     pub bindings: binding::Local<M>,
 }
-impl<M: BevyModify> LocalBindings<M> {
+impl<M: Modify> LocalBindings<M> {
     /// Update `to_update` with updated values from `world` and `self`-local bindings.
     ///
     /// Only the relevant sections of `to_update` are updated. The change trackers

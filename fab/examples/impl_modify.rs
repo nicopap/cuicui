@@ -35,8 +35,9 @@ pub struct City {
 #[impl_modify]
 impl Modify for ModifyCity {
     type Context<'a> = MyContext;
-    type Item = City;
-    type Items = Vec<City>;
+    type Item<'a> = &'a mut City;
+    type MakeItem = City;
+    type Items<'a, 'b, 'c> = Vec<City>;
 
     /// This adds to the mayor's age to that of `additional_year` plus the city's name
     #[modify(read(admin_name = .admin.mayor.surname), read(.name), write(.admin.mayor.age))]

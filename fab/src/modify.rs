@@ -6,10 +6,21 @@ use crate::resolve::Resolver;
 
 use enumset::{EnumSet, EnumSetType};
 
+/// An owned view of `I` that can be read as or written to a mutably borrowed `I`.
 pub trait MakeItem<'a, I: 'a> {
+    /// Write `Self` into a pre-existing `I`.
+    ///
+    /// This is used by [`DepsResolver`] when the root item changes.
     fn make_item<'b, 'c>(&'b self, item: &'c mut I)
     where
         'a: 'c;
+
+    /// Turn `Self` into `I` so that it can be written to.
+    ///
+    /// Used by [`Resolver`] for the initial build of the format string.
+    ///
+    /// Otherwise, [`Resolver`] couldn't run [`Modify::apply`] on the list of
+    /// [`Modify::MakeItem`] to create this initial list.
     fn as_item(&'a mut self) -> I;
 }
 impl<'a, T: Clone> MakeItem<'a, &'a mut T> for T {
