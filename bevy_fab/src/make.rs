@@ -109,7 +109,7 @@ pub fn parse_into_resolver_system<BM: BevyModify + 'static>(
     {
         let (mut cmds, mut styles, mut world_bindings, params) = cache.get_mut(world);
 
-        let context = BM::context(&params);
+        let (context, _) = BM::context(params);
 
         // TODO(perf): batch commands update.
         for (entity, (ctor_data, item, fmt)) in to_make.iter() {

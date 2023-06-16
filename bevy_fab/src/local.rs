@@ -18,7 +18,7 @@ impl<M: BevyModify> LocalBindings<M> {
     /// are then reset.
     pub fn update(
         &mut self,
-        items: &mut crate::Items<M::Wq>,
+        items: &mut M::Items<'_, '_, '_>,
         world: &WorldBindings<M>,
         ctx: &M::Context<'_>,
     ) {

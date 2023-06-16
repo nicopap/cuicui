@@ -12,7 +12,7 @@ use std::{fmt::Arguments, marker::PhantomData};
 
 use bevy::app::{App, CoreSet, Plugin};
 use bevy::ecs::prelude::*;
-use bevy::ecs::query::WorldQuery;
+use bevy::ecs::query::{QueryItem, WorldQuery};
 use bevy::ecs::system::{EntityCommands, StaticSystemParam, SystemParam, SystemParamItem};
 use bevy::prelude::Children;
 use fab::modify::{FieldsOf, Indexed};
@@ -42,7 +42,13 @@ where
     fn set_content(&mut self, s: Arguments);
     fn init_content(s: Arguments) -> Self;
 
-    fn context<'a>(param: &'a SystemParamItem<Self::Param>) -> Self::Context<'a>;
+    fn context<'a, 'b, 'w, 's>(
+        param: SystemParamItem<'w, 's, Self::Param>,
+    ) -> (Self::Context<'a>, Self::Items<'b, 'w, 's>);
+    fn set_local_items<'a>(
+        items: &mut Self::Items<'a, '_, '_>,
+        local_data: QueryItem<'a, Self::Wq>,
+    );
     fn spawn_items(
         extra: &Self::ItemsCtorData,
         items: Vec<Self::MakeItem>,
@@ -72,18 +78,16 @@ where
 }
 
 pub fn update_items_system<BM: BevyModify>(
-    mut query: Query<(&mut LocalBindings<BM>, &Children)>,
+    mut query: Query<(&mut LocalBindings<BM>, BM::Wq)>,
     mut world_bindings: ResMut<WorldBindings<BM>>,
-    params: StaticSystemParam<Param<BM::Param, BM::Wq>>,
+    params: StaticSystemParam<BM::Param>,
 ) where
     FieldsOf<BM>: Sync + Send,
 {
-    let Param { context, query: param_query } = params.into_inner();
-    let mut items = Items { children: None, query: param_query };
-    for (mut local_data, children) in &mut query {
-        let context = &BM::context(&context);
-        items.children = Some(children);
-        local_data.update(&mut items, &world_bindings, context);
+    let (context, mut items) = BM::context(params.into_inner());
+    for (mut local_data, wq_item) in &mut query {
+        BM::set_local_items(&mut items, wq_item);
+        local_data.update(&mut items, &world_bindings, &context);
     }
     world_bindings.bindings.reset_changes();
 }
