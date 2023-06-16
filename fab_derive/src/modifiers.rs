@@ -184,7 +184,9 @@ impl Modifiers {
         item: &Ident,
         inputs: impl Iterator<Item = (bool, &'a Ident)>,
     ) -> TokenStream {
+        let is_dynamic = |it| self.dynamic.as_ref().is_some_and(|d| &d.param_name == it);
         let parameters = inputs.map(|(must_deref, param)| {
+            let must_deref = must_deref && !is_dynamic(param);
             let deref = if must_deref { quote!(*) } else { quote!() };
             match self.mods.iter().find(|m| m.has_ident(param)) {
                 Some(provided) => provided

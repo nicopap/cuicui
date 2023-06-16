@@ -175,6 +175,7 @@ impl ModifyFn {
     pub fn atomize_accessors(&mut self, atomic: &AtomicAccessors) {
         self.accessors = Some(FnAtomicAccessors::new(&self.modifiers, atomic));
     }
+    /// The call site: `item.path = fn_name(field1, field2, &item.input1, &mut item.inout)`
     pub fn call(&self, ctx: &Ident, item: &Ident) -> Tokens {
         let name = &self.name;
         let arguments = self.declaration.sig.inputs.iter().filter_map(|i| match i {
