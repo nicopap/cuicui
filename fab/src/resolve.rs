@@ -1,6 +1,6 @@
 mod impl_fmt;
 mod make;
-// mod minimal;
+mod minimal;
 
 use std::{mem::size_of, ops::Range};
 
@@ -13,7 +13,7 @@ use log::warn;
 use crate::binding::{Id, View};
 use crate::modify::{Changing, FieldsOf, Indexed, MakeItem, Modify};
 
-// pub use minimal::MinResolver;
+pub use minimal::MinResolver;
 
 /// A Resolver for the [`Modify`] trait.
 ///

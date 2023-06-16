@@ -9,7 +9,7 @@ use nonmax::NonMaxU32;
 
 use super::{MakeModify, ModifyKind, Resolver};
 use crate::binding::View;
-use crate::modify::{Changing, Indexed, Modify};
+use crate::modify::{Changing, Indexed, MakeItem, Modify};
 
 /// A resolver with minimal overhead and functionalities.
 ///
@@ -23,15 +23,11 @@ pub struct MinResolver {
     indices: Box<[Option<NonMaxU32>]>,
 }
 impl<M: Modify> Resolver<M> for MinResolver {
-    fn new<T, F>(
+    fn new<F: Fn() -> M::MakeItem>(
         modifiers: Vec<MakeModify<M>>,
         default_section: F,
         ctx: &M::Context<'_>,
-    ) -> (Self, Vec<T>)
-    where
-        T: for<'a> AsMut<M::Item<'a>>,
-        F: Fn() -> T,
-    {
+    ) -> (Self, Vec<M::MakeItem>) {
         let warn_range = "Skipping bindings touching more than a single sections in MinResolver.";
 
         let Some(section_count) = modifiers.iter().map(|m| m.range.end).max() else {
@@ -59,7 +55,7 @@ impl<M: Modify> Resolver<M> for MinResolver {
                     let sections = unsafe { sections.get_unchecked_mut(range) };
 
                     sections.iter_mut().for_each(|section| {
-                        if let Err(err) = modify.apply(ctx, section.as_mut()) {
+                        if let Err(err) = modify.apply(ctx, section.as_item()) {
                             error!("Error occured when applying modify: {err}");
                         }
                     });
@@ -77,15 +73,13 @@ impl<M: Modify> Resolver<M> for MinResolver {
         (MinResolver { indices }, sections)
     }
 
-    fn update<'a, T>(
+    fn update<'a>(
         &'a self,
-        to_update: &mut M::Items<'_>,
-        _: &'a Changing<M::Field, T>,
+        to_update: &mut M::Items<'_, '_, '_>,
+        _: &'a Changing<M::Field, M::MakeItem>,
         bindings: View<'a, M>,
         ctx: &M::Context<'_>,
-    ) where
-        for<'b> &'b T: Into<M::Item<'b>>,
-    {
+    ) {
         bindings.changed().for_each(|(binding, modify)| {
             let Some(Some(index)) = self.indices.get(binding.get()) else { return; };
             let index = index.get() as usize;

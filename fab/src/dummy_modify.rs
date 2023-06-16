@@ -23,32 +23,26 @@ impl Indexed<DummyModify> for () {
     }
 }
 impl Resolver<DummyModify> for () {
-    fn new<T, F>(mods: Vec<MakeModify<DummyModify>>, f: F, _: &()) -> ((), Vec<T>)
-    where
-        T: for<'a> AsMut<()>,
-        F: Fn() -> T,
-    {
+    fn new<F: Fn() -> ()>(mods: Vec<MakeModify<DummyModify>>, f: F, _: &()) -> ((), Vec<()>) {
         let Some(section_count) = mods.iter().map(|m| m.range.end).max() else {
             return ((), Vec::new())
         };
         let dummies = iter::repeat_with(f).take(section_count as usize).collect();
         ((), dummies)
     }
-
-    fn update<'a, T>(
+    fn update<'a>(
         &'a self,
         _: &mut (),
-        _: &'a Changing<NoFields, T>,
+        _: &'a Changing<NoFields, ()>,
         _: View<'a, DummyModify>,
         _: &(),
-    ) where
-        for<'b> &'b T: Into<()>,
-    {
+    ) {
     }
 }
 impl Modify for DummyModify {
-    type Item<'a> = ();
-    type Items<'a> = ();
+    type Item<'a> = &'a mut ();
+    type MakeItem = ();
+    type Items<'a, 'b, 'c> = ();
     type Field = NoFields;
     type Context<'a> = ();
     type Resolver = ();
