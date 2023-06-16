@@ -3,13 +3,14 @@ use std::{fmt, fmt::Write, marker::PhantomData};
 use bevy::{
     ecs::{
         query::WorldQuery,
-        system::{lifetimeless::SRes, SystemParam, SystemParamItem},
+        system::{lifetimeless::SRes, EntityCommands, SystemParam, SystemParamItem},
     },
     prelude::*,
     text::{BreakLineOn, Font, Text, TextAlignment, TextSection},
 };
 use bevy_fab::{
-    trait_extensions::AppStylesExtension, BevyModify, FabPlugin, LocalBindings, ParseFormatString,
+    trait_extensions::AppStylesExtension, update_component_items, BevyModify, FabPlugin,
+    LocalBindings, ParseFormatString,
 };
 use fab_parse::{Split, Styleable};
 
@@ -112,20 +113,7 @@ impl MakeRichText {
 
 impl BevyModify for Modifier {
     type Param = SRes<Assets<Font>>;
-
     type ItemsCtorData = TextGlobalStyle;
-
-    fn make_items(extra: &TextGlobalStyle, sections: Vec<TextSection>) -> Text {
-        Text {
-            sections,
-            alignment: extra.alignment,
-            linebreak_behaviour: extra.linebreak_behaviour,
-        }
-    }
-
-    fn context<'a>(fonts: &'a SystemParamItem<Self::Param>) -> Self::Context<'a> {
-        GetFont::new(fonts)
-    }
 
     fn set_content(&mut self, s: fmt::Arguments) {
         if let Modifier::Content { statik } = self {
@@ -136,9 +124,24 @@ impl BevyModify for Modifier {
             *self = Modifier::content(s.to_string().into());
         }
     }
-
     fn init_content(s: fmt::Arguments) -> Self {
         Modifier::content(s.to_string().into())
+    }
+
+    fn context<'a>(param: &'a SystemParamItem<Self::Param>) -> Self::Context<'a> {
+        GetFont::new(param)
+    }
+
+    fn spawn_items(extra: &TextGlobalStyle, sections: Vec<TextSection>, cmds: &mut EntityCommands) {
+        cmds.insert(Text {
+            sections,
+            alignment: extra.alignment,
+            linebreak_behaviour: extra.linebreak_behaviour,
+        });
+    }
+    fn add_update_system(app: &mut App) {
+        use bevy::prelude::CoreSet::PostUpdate;
+        app.add_system(update_component_items::<Self>.in_base_set(PostUpdate));
     }
 }
 

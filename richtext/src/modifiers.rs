@@ -39,8 +39,9 @@ impl Indexed<Modifier> for Text {
 #[derive(PartialEq)]
 impl Modify for Modifier {
     type Context<'a> = GetFont<'a>;
-    type Item = TextSection;
-    type Items = Text;
+    type Item<'a> = &'a mut TextSection;
+    type MakeItem = TextSection;
+    type Items<'a, 'b, 'c> = Text;
 
     /// Set the font to provided `path`.
     #[modify(context(get_font), write(.style.font))]
