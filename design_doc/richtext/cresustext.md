@@ -100,4 +100,46 @@ instances.
 
 Could be a method on a `MakeItem` trait?
 
+## This is ridiculous!
+
+New difficulty: Trying to get the old-style system working with the new one.
+
+I'm getting close to getting something working, but it basically looks like a
+giant hack that only exists to make `update_items_system` work with two completey
+different things.
+
+- `Richtext`: wants `Modify::Items` to be a component (`Text`), and `Modify::Item` an element
+  of this component (`TextSection`).
+  `update_items_system` iterates over all entities with a
+  `LocalBindings` and `Modify::Items` component, and updates `Modify::Items` based
+  on `LocalBindings`
+- `Cresustext`: `Modify::Items` is a `Query` + `WorldQuery` (`&Children`),
+  `Modify::Item` is return item of the `Query` in `Modify::Items` for each child.
+
+System in question that causes soooo much trouble is:
+
+```rust
+let (context, mut items) = BM::context(params.into_inner());
+for (mut local_data, wq_item) in &mut query {
+  BM::set_local_items(&mut items, wq_item);
+  local_data.update(&mut items, &world_bindings, &context);
+}
+world_bindings.bindings.reset_changes();
+```
+
+You notice `BM::context` and `BM::set_local_items` only exist for this system.
+If we left definition of the system to implementor, we don't need to infect
+the trait with so much nonsense.
+
+In fact, this is also true of types `BM::Wq` and `BM::Param`!
+
+Can't define system as an associated method or constant of `BevyModify`.
+We _could_ just leave the responsability of adding an update system to the
+end-user. But that seems error-prone.
+
+Instead, we'll add a required method called `add_update_system`. Which will
+force the implementor to be careful to add the method in question.
+
+We'll provide specialized systems, so that the user can directly use them
+in `add_update_system`.
 
