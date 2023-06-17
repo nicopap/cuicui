@@ -99,15 +99,15 @@ flowchart LR
   datazoo --> fab
   fab_derive --> fab
   fab --> fab_parse & bevy_fab
-  fab_parse --> bevy_fab & richtext
   reflect_query --> bevy_fab
+  fab_parse --> bevy_fab & richtext
   bevy_fab --> richtext
-  bevy_layout_offset-->|"feature = \"cresustext\""|richtext
+  bevy_layout_offset-->|"cresustext"|richtext
 ```
 
 ## Reflect Query
 
-Bevy lacks a to _query_ for reflected `Component`s.
+Bevy lacks a way to _query_ for reflected `Component`s.
 Without this ability, you would be stuck _iterating over all `EntityRef` and
 checking if it contains the component in question_.
 
