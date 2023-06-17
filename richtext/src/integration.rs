@@ -1,19 +1,21 @@
 use std::{fmt, fmt::Write, marker::PhantomData};
 
+#[cfg(feature = "richtext")]
+use bevy::text::{Text, TextSection};
 use bevy::{
     ecs::{
         query::WorldQuery,
         system::{lifetimeless::SRes, EntityCommands, SystemParam, SystemParamItem},
     },
     prelude::*,
-    text::{BreakLineOn, Font, Text, TextAlignment, TextSection},
+    text::{BreakLineOn, Font, TextAlignment},
 };
-use bevy_fab::{
-    trait_extensions::AppStylesExtension, update_component_items, BevyModify, FabPlugin,
-    LocalBindings, ParseFormatString,
-};
+use bevy_fab::trait_extensions::AppStylesExtension;
+use bevy_fab::{BevyModify, FabPlugin, LocalBindings, ParseFormatString};
 use fab_parse::{Split, Styleable};
 
+#[cfg(feature = "cresustext")]
+use crate::modifiers::ModifierQuery;
 use crate::modifiers::{GetFont, Modifier};
 
 #[derive(Clone, Copy)]
@@ -30,6 +32,7 @@ impl Default for TextGlobalStyle {
     }
 }
 
+#[cfg(not(feature = "cresustext"))]
 #[derive(SystemParam)]
 pub struct WorldBindings<'w, 's> {
     bindings: Res<'w, bevy_fab::WorldBindings<Modifier>>,
@@ -39,6 +42,10 @@ pub struct WorldBindings<'w, 's> {
 #[derive(SystemParam)]
 pub struct WorldBindingsMut<'w, 's> {
     bindings: ResMut<'w, bevy_fab::WorldBindings<Modifier>>,
+    #[cfg(feature = "cresustext")]
+    items: Query<'w, 's, ModifierQuery>,
+    #[cfg(feature = "cresustext")]
+    context: Res<'w, Assets<Font>>,
     _p: PhantomData<&'s ()>,
 }
 impl<'w, 's> WorldBindingsMut<'w, 's> {
@@ -54,16 +61,30 @@ impl<'w, 's> WorldBindingsMut<'w, 's> {
 #[world_query(mutable)]
 pub struct RichText {
     inner: &'static mut LocalBindings<Modifier>,
+    #[cfg(feature = "richtext")]
     text: &'static mut Text,
+    #[cfg(feature = "cresustext")]
+    children: Option<&'static Children>,
 }
 impl RichTextItem<'_> {
     /// Update `to_update` with updated values from `world` and `self`-local bindings.
     ///
     /// Only the relevant sections of `to_update` are updated. The change trackers
     /// are then reset.
+    #[cfg(feature = "richtext")]
     pub fn update(&mut self, world: &WorldBindings) {
         let fonts = GetFont::new(&world.context);
         self.inner.update(&mut self.text, &world.bindings, &fonts);
+    }
+    /// Update `to_update` with updated values from `world` and `self`-local bindings.
+    ///
+    /// Only the relevant sections of `to_update` are updated. The change trackers
+    /// are then reset.
+    #[cfg(feature = "cresustext")]
+    pub fn update(&mut self, world: WorldBindingsMut) {
+        let fonts = GetFont::new(&world.context);
+        let mut items = bevy_fab::Items::new(self.children, world.items);
+        self.inner.update(&mut items, &world.bindings, &fonts);
     }
     pub fn set(&mut self, key: &str, value: Modifier) {
         self.inner.bindings.set(key, value);
@@ -84,11 +105,27 @@ pub struct MakeRichText {
 }
 impl MakeRichText {
     pub fn new(format_string: impl Into<String>) -> Self {
-        let inner = ParseFormatString::new(format_string.into(), default(), default());
+        #[cfg(feature = "richtext")]
+        let default_text = default();
+        #[cfg(feature = "cresustext")]
+        let default_text = {
+            let default_section = TextSection::default();
+            let mut default_text = Text::default();
+            default_text.sections.push(default_section);
+            (default(), default_text)
+        };
+        let inner = ParseFormatString::new(format_string.into(), default_text, default());
         MakeRichText { inner, text_bundle: default() }
     }
     pub fn with_text_style(mut self, style: TextStyle) -> Self {
-        self.inner.default_item.style = style;
+        #[cfg(feature = "richtext")]
+        {
+            self.inner.default_item.style = style;
+        }
+        #[cfg(feature = "cresustext")]
+        {
+            self.inner.default_item.1.sections[0].style = style;
+        }
         self
     }
     /// Returns this [`MakeRichText`] with a new [`TextAlignment`] on [`Text`].
@@ -132,6 +169,7 @@ impl BevyModify for Modifier {
         GetFont::new(param)
     }
 
+    #[cfg(feature = "richtext")]
     fn spawn_items(extra: &TextGlobalStyle, sections: Vec<TextSection>, cmds: &mut EntityCommands) {
         cmds.insert(Text {
             sections,
@@ -139,9 +177,39 @@ impl BevyModify for Modifier {
             linebreak_behaviour: extra.linebreak_behaviour,
         });
     }
+    #[cfg(feature = "cresustext")]
+    fn spawn_items(
+        extra: &TextGlobalStyle,
+        sections: Vec<(Transform, Text)>,
+        cmds: &mut EntityCommands,
+    ) {
+        cmds.insert(NodeBundle::default());
+        cmds.with_children(|cmds| {
+            sections.into_iter().for_each(|(transform, text)| {
+                cmds.spawn(TextBundle {
+                    text: Text {
+                        alignment: extra.alignment,
+                        linebreak_behaviour: extra.linebreak_behaviour,
+                        ..text
+                    },
+                    transform,
+                    ..default()
+                });
+            });
+        });
+    }
     fn add_update_system(app: &mut App) {
         use bevy::prelude::CoreSet::PostUpdate;
-        app.add_system(update_component_items::<Self>.in_base_set(PostUpdate));
+        #[cfg(feature = "richtext")]
+        {
+            app.add_system(bevy_fab::update_component_items::<Self>.in_base_set(PostUpdate));
+        }
+        #[cfg(feature = "cresustext")]
+        {
+            app.add_system(
+                bevy_fab::update_children_system::<ModifierQuery, Self>.in_base_set(PostUpdate),
+            );
+        }
     }
 }
 

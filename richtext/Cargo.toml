@@ -12,7 +12,6 @@ edition = "2021"
 
 [features]
 default = ["cresustext"]
-min_richtext = []
 richtext = []
 cresustext = []
 

@@ -123,9 +123,10 @@ pub type Styles = bevy_fab::Styles<Modifier>;
 
 pub use bevy_fab::{FmtSystem, IntoFmtSystem, ReflectQueryable};
 pub use fab::binding::{Entry, Id};
+#[cfg(not(feature = "cresustext"))]
+pub use integration::WorldBindings;
 pub use integration::{
-    MakeRichText, RichText, RichTextFetch, RichTextItem, RichTextPlugin, WorldBindings,
-    WorldBindingsMut,
+    MakeRichText, RichText, RichTextFetch, RichTextItem, RichTextPlugin, WorldBindingsMut,
 };
 pub use modifiers::{GetFont, Modifier};
 
