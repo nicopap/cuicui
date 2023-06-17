@@ -11,10 +11,10 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["min_richtext"]
-no_tracked_debug = []
+default = ["cresustext"]
 min_richtext = []
 richtext = []
+cresustext = []
 
 [dependencies]
 anyhow = "1"

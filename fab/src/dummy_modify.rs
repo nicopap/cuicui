@@ -23,7 +23,7 @@ impl Indexed<DummyModify> for () {
     }
 }
 impl Resolver<DummyModify> for () {
-    fn new<F: Fn() -> ()>(mods: Vec<MakeModify<DummyModify>>, f: F, _: &()) -> ((), Vec<()>) {
+    fn new<F: Fn()>(mods: Vec<MakeModify<DummyModify>>, f: F, _: &()) -> ((), Vec<()>) {
         let Some(section_count) = mods.iter().map(|m| m.range.end).max() else {
             return ((), Vec::new())
         };

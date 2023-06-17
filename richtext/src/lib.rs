@@ -101,6 +101,17 @@
 //! [the README]: https://github.com/nicopap/cuicui/tree/main/richtext
 //! [`Resource`]: bevy::prelude::Resource
 
+#[cfg(any(
+    all(feature = "min_richtext", feature = "richtext"),
+    all(feature = "min_richtext", feature = "cresustext"),
+    all(feature = "richtext", feature = "cresustext"),
+))]
+compile_error!(
+    "The features 'min_richtext', 'richtext' and 'cresustext' cannot \
+    be enabled at the same time, please make sure to disable default features if \
+    you are not using cresustext"
+);
+
 mod color;
 mod integration;
 pub mod modifiers;

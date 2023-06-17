@@ -58,6 +58,12 @@ pub struct Items<'a, 'w, 's, It: WorldQuery> {
     children: Option<&'a Children>,
     query: Query<'w, 's, It>,
 }
+
+impl<'a, 'w, 's, It: WorldQuery> Items<'a, 'w, 's, It> {
+    pub fn new(children: Option<&'a Children>, query: Query<'w, 's, It>) -> Self {
+        Items { children, query }
+    }
+}
 impl<'a, 'w, 's, Wq, M> Indexed<M> for Items<'a, 'w, 's, Wq>
 where
     Wq: WorldQuery,
