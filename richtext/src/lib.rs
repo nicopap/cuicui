@@ -86,7 +86,7 @@
 //!     // Rich text will automatically be updated.
 //!     commands.spawn(
 //!         MakeRichText::new(
-//!             "{Color:{Res.DeathLineColor.0}|Death count: {Res.DeathCount.0}}\n\
+//!             "{Color:{Res(DeathLineColor).0}|Death count: {Res(DeathCount).0}}\n\
 //!          slider1 value: {Marked(Slider1).Slider.0}\n\
 //!          slider2 debug text: {Marked(Slider2).Slider:?}",
 //!         )
