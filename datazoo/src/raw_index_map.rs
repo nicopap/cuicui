@@ -128,7 +128,7 @@ pub enum ValueEq {}
 /// ```
 ///
 /// [`IndexMultimap`]: crate::IndexMultimap
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct RawIndexMap<K: Index, V: From<u32>, Eq = ()> {
     /// A matrix of `max(K)` rows of `log₂(max(V) + 1)` bits, each row represents
     /// a single index.
@@ -141,6 +141,15 @@ pub struct RawIndexMap<K: Index, V: From<u32>, Eq = ()> {
     indices: Bitset<Box<[u32]>>,
     value_width: usize,
     _tys: PhantomData<fn(K, V, Eq)>,
+}
+impl<K: Index, V: From<u32>, Eq> Default for RawIndexMap<K, V, Eq> {
+    fn default() -> Self {
+        RawIndexMap {
+            indices: Bitset(Vec::new().into_boxed_slice()),
+            value_width: 0,
+            _tys: PhantomData,
+        }
+    }
 }
 impl<K: Index, V: From<u32>, Eq> RawIndexMap<K, V, Eq> {
     /// Initialize a [`RawIndexMap`] with static size.
