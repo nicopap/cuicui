@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, ops::Deref};
 
 use bevy::prelude::*;
 use bevy_fab::Items;
@@ -9,6 +9,16 @@ use super::{GetFont, ModifyBox};
 
 pub type ModifierQuery = (&'static mut UiOffset, &'static mut Text);
 pub type ModifierItem<'a> = (&'a mut UiOffset, &'a mut Text);
+
+#[derive(Component)]
+pub struct Sections(pub Box<[Entity]>);
+
+impl Deref for Sections {
+    type Target = [Entity];
+    fn deref(&self) -> &Self::Target {
+        &self.0[..]
+    }
+}
 
 /// Operations on bevy [`TextSection`]s.
 ///
@@ -21,7 +31,7 @@ impl Modify for Modifier {
     type Context<'a> = GetFont<'a>;
     type MakeItem = (UiOffset, Text);
     type Item<'a> = ModifierItem<'a>;
-    type Items<'a, 'b, 'c> = Items<'a, 'b, 'c, ModifierQuery>;
+    type Items<'a, 'b, 'c> = Items<'a, 'b, 'c, Sections, ModifierQuery>;
 
     /// Set the font to provided `path`.
     #[modify(context(get_font), write(.1.sections[0].style.font))]

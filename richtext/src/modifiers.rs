@@ -14,7 +14,7 @@ use enumset::EnumSet;
 use fab_parse::{Deps, Parsable};
 
 #[cfg(feature = "cresustext")]
-pub use cresus_impl::{Modifier, ModifierField, ModifierItem, ModifierQuery};
+pub use cresus_impl::{Modifier, ModifierField, ModifierItem, ModifierQuery, Sections};
 #[cfg(feature = "richtext")]
 pub use rich_impl::{Modifier, ModifierField};
 

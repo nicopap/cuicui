@@ -64,7 +64,7 @@ pub struct RichText {
     #[cfg(feature = "richtext")]
     text: &'static mut Text,
     #[cfg(feature = "cresustext")]
-    children: Option<&'static Children>,
+    children: Option<&'static crate::modifiers::Sections>,
 }
 impl RichTextItem<'_> {
     /// Update `to_update` with updated values from `world` and `self`-local bindings.
@@ -181,20 +181,42 @@ impl BevyModify for Modifier {
         sections: Vec<(bevy_layout_offset::UiOffset, Text)>,
         cmds: &mut EntityCommands,
     ) {
-        cmds.insert(NodeBundle::default());
+        use crate::modifiers::Sections;
+        use FlexDirection::{Column, Row};
+        let direction = |d| NodeBundle {
+            style: Style { flex_direction: d, ..default() },
+            ..default()
+        };
+        let vertical = || direction(Column);
+        let horizontal = || direction(Row);
+        let line_ending = |text: &Text| text.sections[0].value.ends_with('\n');
+        let text_bundle = |text| TextBundle {
+            text: Text {
+                alignment: extra.alignment,
+                linebreak_behaviour: extra.linebreak_behaviour,
+                ..text
+            },
+            ..default()
+        };
+
+        let mut entities = Vec::with_capacity(sections.len());
+
+        cmds.insert(vertical());
         cmds.with_children(|cmds| {
-            sections.into_iter().for_each(|(offset, text)| {
-                cmds.spawn(TextBundle {
-                    text: Text {
-                        alignment: extra.alignment,
-                        linebreak_behaviour: extra.linebreak_behaviour,
-                        ..text
-                    },
-                    ..default()
-                })
-                .insert(offset);
-            });
+            let mut line_cmds = cmds.spawn(horizontal());
+
+            for (offset, text) in sections {
+                let ends_line = line_ending(&text);
+
+                line_cmds.with_children(|line_cmds| {
+                    entities.push(line_cmds.spawn(text_bundle(text)).insert(offset).id());
+                });
+                if ends_line {
+                    line_cmds = cmds.spawn(horizontal());
+                }
+            }
         });
+        cmds.insert(Sections(entities.into_boxed_slice()));
     }
     fn add_update_system(app: &mut App) {
         use bevy::prelude::CoreSet::PostUpdate;
@@ -202,7 +224,8 @@ impl BevyModify for Modifier {
         app.add_system(bevy_fab::update_component_items::<Self>.in_base_set(PostUpdate));
         #[cfg(feature = "cresustext")]
         app.add_system(
-            bevy_fab::update_children_system::<ModifierQuery, Self>.in_base_set(PostUpdate),
+            bevy_fab::update_children_system::<crate::modifiers::Sections, ModifierQuery, Self>
+                .in_base_set(PostUpdate),
         );
     }
 }
@@ -212,13 +235,18 @@ fn default_styles(tree: Styleable<Modifier>) -> Styleable<Modifier> {
 
     let sin_curve = CardinalSpline::new_catmull_rom([1., 0., 1., 0., 1., 0.]);
 
-    tree.acc_chop(ByChar, "Rainbow", |hue_offset: &mut f32, i, _| {
-        Modifier::hue_offset(*hue_offset * i as f32)
-    })
-    .curve_chop(ByWord, "Sine", sin_curve.to_curve(), |ampl: &mut f32, t| {
-        let size_change = (20.0 + t * *ampl).floor();
-        Modifier::font_size(size_change)
-    })
+    let tree = tree
+        .acc_chop(ByChar, "Rainbow", |hue_offset: &mut f32, i, _| {
+            Modifier::hue_offset(*hue_offset * i as f32)
+        })
+        .curve_chop(ByWord, "Sine", sin_curve.to_curve(), |ampl: &mut f32, t| {
+            let size_change = (20.0 + t * *ampl).floor();
+            Modifier::font_size(size_change)
+        });
+    #[cfg(feature = "cresustext")]
+    let tree = tree.split(Split::ByLine);
+
+    tree
 }
 
 /// Plugin to add to get `RichText` stuff working, it wouldn't otherwise, you silly goose.

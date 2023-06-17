@@ -193,6 +193,14 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         }),
         Name::new("Gold"),
     ));
+    commands.spawn((
+        MakeRichText::new("This is \n a test").with_text_style(TextStyle {
+            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+            font_size: 60.0,
+            color: Color::WHITE,
+        }),
+        Name::new("Linebreak text"),
+    ));
 }
 
 const GUESTS: &[&str] = &["bevy", "boovy", "noovy", "groovy", "bavy", "cuicui"];
