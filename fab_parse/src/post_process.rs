@@ -132,21 +132,30 @@ pub enum Split {
 
     /// Split the section by character.
     ByChar,
+
+    /// Split section by line.
+    ///
+    /// Resulting sections will always have '\n' at the end or beginning.
+    ByLine,
 }
 impl Split {
     fn iter(self, to_split: &str) -> impl Iterator<Item = &str> {
-        use Split::{ByChar, ByWord};
+        use Split::{ByChar, ByLine, ByWord};
         let split_by = move |c: char| match self {
             ByChar => true,
             // TODO(bug): this doesn't handle nicely multiple sequential spaces
             ByWord => c.is_whitespace(),
+            // TODO(bug): this doesn't handle nicely when starts by \n
+            ByLine => c == '\n',
         };
         to_split.split_inclusive(split_by)
     }
 
     fn first(self, to_split: &str) -> (&str, Vec<&str>) {
         let mut iter = self.iter(to_split);
-        let head = iter.next().unwrap(); // TODO(err)
+        // unwrap: This always succeeds because there is at least one item in
+        // iterator, since it will at least return the full str on no match.
+        let head = iter.next().unwrap();
         (head, iter.collect())
     }
 
@@ -158,21 +167,36 @@ impl Split {
 
 struct Splitter<'a, Mk: FnMut(&str, usize) -> M, M: Modify> {
     split: Split,
-    alias: &'a str,
-    chopper: Mk,
+    // When `None`, this applies to all sections
+    alias: Option<&'a str>,
+    // When `None` doesn't insert additional modifiers. (useful for linebreaks)
+    chopper: Option<Mk>,
     _p: PhantomData<M>,
 }
 impl<'a, Mk, M: Modify> Splitter<'a, Mk, M>
 where
     Mk: FnMut(&str, usize) -> M,
 {
-    fn rmod(&mut self, input: &str, count: usize) -> Modifier<M> {
-        Modifier { influence: 1, inner: (self.chopper)(input, count) }
+    fn new(split: Split, alias: &'a str, chopper: Mk) -> Self {
+        Self {
+            split,
+            alias: Some(alias),
+            chopper: Some(chopper),
+            _p: PhantomData,
+        }
+    }
+
+    fn rmod(&mut self, input: &str, count: usize) -> Option<Modifier<M>> {
+        let chopper = self.chopper.as_mut()?;
+        Some(Modifier { influence: 1, inner: chopper(input, count) })
     }
     fn is(&self, modi: &tree::Modifier) -> bool {
-        modi.name == self.alias
+        Some(modi.name) == self.alias
     }
     fn extract_from<'b>(&self, section: &mut Section<'b, M>) -> Option<(&'b str, usize)> {
+        if self.alias.is_none() {
+            return Some(("", 1));
+        }
         let index = section.0.modifiers.iter().position(|m| self.is(m))?;
         let modifier = section.0.modifiers.remove(index);
 
@@ -211,11 +235,14 @@ where
                     for (prev_i, section) in start.iter_mut().enumerate() {
                         section.increment_exceeding(i - prev_i, tail.len());
                     }
-                    current.1.push(self.rmod(repeat_value, content_count));
+                    if let Some(rmod) = self.rmod(repeat_value, content_count) {
+                        current.1.push(rmod);
+                    }
 
                     let tail = tail.into_iter().map(|content| {
                         let rmod = self.rmod(repeat_value, content_count);
-                        Section(tree::Section::free(content).unwrap(), vec![rmod])
+                        let rmod = rmod.into_iter().collect();
+                        Section(tree::Section::free(content).unwrap(), rmod)
                     });
                     replacements.extend(iter::once(current).chain(tail));
                 }
@@ -396,8 +423,13 @@ impl<'a, M: Modify> Styleable<'a, M> {
 }
 /// Cut the tree in various ways
 impl<'a, M: Modify> Styleable<'a, M> {
+    pub fn split(self, split: Split) -> Self {
+        let split: Splitter<fn(&str, usize) -> M, M> =
+            Splitter { split, alias: None, chopper: None, _p: PhantomData };
+        Styleable { sections: split.process(self.sections) }
+    }
     pub fn chop(self, split: Split, alias: &str, chopper: impl FnMut(&str, usize) -> M) -> Self {
-        let split = Splitter { split, alias, chopper, _p: PhantomData };
+        let split = Splitter::new(split, alias, chopper);
         Styleable { sections: split.process(self.sections) }
     }
     pub fn acc_chop<Acc: FromStr>(
