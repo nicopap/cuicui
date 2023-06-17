@@ -16,7 +16,7 @@ use fab_parse::{Split, Styleable};
 
 #[cfg(feature = "cresustext")]
 use crate::modifiers::ModifierQuery;
-use crate::modifiers::{GetFont, Modifier};
+use crate::modifiers::{Context, GetFont, Modifier};
 
 #[derive(Clone, Copy)]
 pub struct TextGlobalStyle {
@@ -36,7 +36,8 @@ impl Default for TextGlobalStyle {
 #[derive(SystemParam)]
 pub struct WorldBindings<'w, 's> {
     bindings: Res<'w, bevy_fab::WorldBindings<Modifier>>,
-    context: Res<'w, Assets<Font>>,
+    fonts: Res<'w, Assets<Font>>,
+    time: Res<'w, Time>,
     _p: PhantomData<&'s ()>,
 }
 #[derive(SystemParam)]
@@ -45,7 +46,9 @@ pub struct WorldBindingsMut<'w, 's> {
     #[cfg(feature = "cresustext")]
     items: Query<'w, 's, ModifierQuery>,
     #[cfg(feature = "cresustext")]
-    context: Res<'w, Assets<Font>>,
+    fonts: Res<'w, Assets<Font>>,
+    #[cfg(feature = "cresustext")]
+    time: Res<'w, Time>,
     _p: PhantomData<&'s ()>,
 }
 impl<'w, 's> WorldBindingsMut<'w, 's> {
@@ -73,8 +76,12 @@ impl RichTextItem<'_> {
     /// are then reset.
     #[cfg(feature = "richtext")]
     pub fn update(&mut self, world: &WorldBindings) {
-        let fonts = GetFont::new(&world.context);
-        self.inner.update(&mut self.text, &world.bindings, &fonts);
+        let WorldBindings { bindings, fonts, time, .. } = world;
+        let ctx = Context {
+            fonts: GetFont::new(fonts),
+            time: time.elapsed_seconds_f64(),
+        };
+        self.inner.update(&mut self.text, bindings, &ctx);
     }
     /// Update `to_update` with updated values from `world` and `self`-local bindings.
     ///
@@ -82,9 +89,13 @@ impl RichTextItem<'_> {
     /// are then reset.
     #[cfg(feature = "cresustext")]
     pub fn update(&mut self, world: WorldBindingsMut) {
-        let fonts = GetFont::new(&world.context);
-        let mut items = bevy_fab::Items::new(self.children, world.items);
-        self.inner.update(&mut items, &world.bindings, &fonts);
+        let WorldBindingsMut { bindings, items, fonts, time, .. } = world;
+        let ctx = Context {
+            fonts: GetFont::new(&fonts),
+            time: time.elapsed_seconds_f64(),
+        };
+        let mut items = bevy_fab::Items::new(self.children, items);
+        self.inner.update(&mut items, &bindings, &ctx);
     }
     pub fn set(&mut self, key: &str, value: Modifier) {
         self.inner.bindings.set(key, value);
@@ -147,7 +158,7 @@ impl MakeRichText {
 }
 
 impl BevyModify for Modifier {
-    type Param = SRes<Assets<Font>>;
+    type Param = (SRes<Assets<Font>>, SRes<Time>);
     type ItemsCtorData = TextGlobalStyle;
 
     fn set_content(&mut self, s: fmt::Arguments) {
@@ -163,8 +174,11 @@ impl BevyModify for Modifier {
         Modifier::content(s.to_string().into())
     }
 
-    fn context<'a>(param: &'a SystemParamItem<Self::Param>) -> Self::Context<'a> {
-        GetFont::new(param)
+    fn context<'a>((fonts, time): &'a SystemParamItem<Self::Param>) -> Context<'a> {
+        Context {
+            fonts: GetFont::new(fonts),
+            time: time.elapsed_seconds_f64(),
+        }
     }
 
     #[cfg(feature = "richtext")]

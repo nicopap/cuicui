@@ -529,7 +529,7 @@ of individual characters or words, in sync or other.
       and use it consistently.
 - [ ] fab_derive: Test `impl_modify` more thourougfully
 - [ ] fab resolve: Verify validaty of multiple write fields
-- [ ] fab resolve + fab_derive: Context field access tracking (implemented, not tested)
+- [X] fab resolve + fab_derive: Context field access tracking (implemented, not tested)
 - [ ] fab resolve: Test MinResolver
 - [X] bevy_fab trackers: Test the reflection-component-based trackers
 - [ ] fab parse: review the informal_grammar.md file

@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use bevy::prelude::*;
 use fab::{impl_modify, modify::Indexed, Modify};
 
-use super::{GetFont, ModifyBox};
+use super::{Context, GetFont, ModifyBox};
 
 impl Indexed<Modifier> for Text {
     fn get_mut(&mut self, index: usize) -> Option<&mut TextSection> {
@@ -19,16 +19,16 @@ impl Indexed<Modifier> for Text {
 #[impl_modify(cuicui_fab_path = fab, no_derive(Debug))]
 #[derive(PartialEq)]
 impl Modify for Modifier {
-    type Context<'a> = GetFont<'a>;
+    type Context<'a> = Context<'a>;
     type Item<'a> = &'a mut TextSection;
     type MakeItem = TextSection;
     type Items<'a, 'b, 'c> = Text;
 
     /// Set the font to provided `path`.
-    #[modify(context(get_font), write(.style.font))]
-    pub fn font(path: &Cow<'static, str>, get_font: &GetFont) -> Handle<Font> {
+    #[modify(context(.fonts), write(.style.font))]
+    pub fn font(path: &Cow<'static, str>, fonts: &GetFont) -> Handle<Font> {
         trace!("Apply =font=: {path:?}");
-        get_font.get(path).unwrap_or_default()
+        fonts.get(path).unwrap_or_default()
     }
     /// Increase the font size relative to the current section.
     #[modify(read_write(.style.font_size))]
@@ -64,7 +64,7 @@ impl Modify for Modifier {
     }
     /// Use an arbitrary [`ModifyBox`] to modify this section.
     #[modify(dynamic_read_write(depends, changes, item), context(ctx))]
-    pub fn dynamic(boxed: &ModifyBox, ctx: &GetFont, item: &mut TextSection) {
+    pub fn dynamic(boxed: &ModifyBox, ctx: &Context, item: &mut TextSection) {
         boxed.apply(ctx, item);
     }
 }

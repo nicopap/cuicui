@@ -23,6 +23,11 @@ pub use rich_impl::{Modifier, ModifierField};
 pub type ModifyBox = Box<dyn TextModify + Send + Sync + 'static>;
 
 #[derive(Default, Clone, Copy)]
+pub struct Context<'a> {
+    pub fonts: GetFont<'a>,
+    pub time: f64,
+}
+#[derive(Default, Clone, Copy)]
 pub struct GetFont<'a>(Option<&'a Assets<Font>>);
 impl<'a> GetFont<'a> {
     pub fn new(assets: &'a Assets<Font>) -> Self {
@@ -104,9 +109,9 @@ impl<T: TextModify + Send + Sync + 'static> From<T> for Modifier {
 
 pub trait TextModify {
     #[cfg(feature = "richtext")]
-    fn apply(&self, ctx: &GetFont, section: &mut bevy::text::TextSection);
+    fn apply(&self, ctx: &Context, section: &mut bevy::text::TextSection);
     #[cfg(feature = "cresustext")]
-    fn apply(&self, ctx: &GetFont, item: ModifierItem);
+    fn apply(&self, ctx: &Context, item: ModifierItem);
     fn depends(&self) -> EnumSet<ModifierField>;
     fn changes(&self) -> EnumSet<ModifierField>;
 

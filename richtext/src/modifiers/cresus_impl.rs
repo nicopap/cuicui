@@ -5,7 +5,7 @@ use bevy_fab::Items;
 use bevy_layout_offset::UiOffset;
 use fab::{impl_modify, Modify};
 
-use super::{GetFont, ModifyBox};
+use super::{Context, GetFont, ModifyBox};
 
 pub type ModifierQuery = (&'static mut UiOffset, &'static mut Text);
 pub type ModifierItem<'a> = (&'a mut UiOffset, &'a mut Text);
@@ -28,16 +28,16 @@ impl Deref for Sections {
 #[impl_modify(cuicui_fab_path = fab, no_derive(Debug))]
 #[derive(PartialEq)]
 impl Modify for Modifier {
-    type Context<'a> = GetFont<'a>;
+    type Context<'a> = Context<'a>;
     type MakeItem = (UiOffset, Text);
     type Item<'a> = ModifierItem<'a>;
     type Items<'a, 'b, 'c> = Items<'a, 'b, 'c, Sections, ModifierQuery>;
 
     /// Set the font to provided `path`.
-    #[modify(context(get_font), write(.1.sections[0].style.font))]
-    pub fn font(path: &Cow<'static, str>, get_font: &GetFont) -> Handle<Font> {
+    #[modify(context(.fonts), write(.1.sections[0].style.font))]
+    pub fn font(path: &Cow<'static, str>, fonts: &GetFont) -> Handle<Font> {
         trace!("Apply =font=: {path:?}");
-        get_font.get(path).unwrap_or_default()
+        fonts.get(path).unwrap_or_default()
     }
     /// Increase the font size relative to the current section.
     #[modify(read_write(.1.sections[0].style.font_size))]
@@ -73,7 +73,7 @@ impl Modify for Modifier {
     }
     /// Use an arbitrary [`ModifyBox`] to modify this section.
     #[modify(dynamic_read_write(depends, changes, item), context(ctx))]
-    pub fn dynamic(boxed: &ModifyBox, ctx: &GetFont, item: ModifierItem) {
+    pub fn dynamic(boxed: &ModifyBox, ctx: &Context, item: ModifierItem) {
         boxed.apply(ctx, item);
     }
 }
