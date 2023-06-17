@@ -13,7 +13,7 @@ edition = "2021"
 [features]
 default = ["cresustext"]
 richtext = []
-cresustext = []
+cresustext = ["bevy_layout_offset"]
 
 [dependencies]
 anyhow = "1"
@@ -21,6 +21,7 @@ bevy = { version = "0.10", default-features = false, features = ["bevy_render", 
 enumset = { version = "1.1", features = ["std"] }
 thiserror = "1"
 
+bevy_layout_offset = { path = "../bevy_layout_offset", package = "cuicui_bevy_layout_offset", optional = true }
 fab = { path = "../fab", package = "cuicui_fab" }
 fab_parse = { path = "../fab_parse", package = "cuicui_fab_parse" }
 bevy_fab = { path = "../bevy_fab", package = "cuicui_bevy_fab" }

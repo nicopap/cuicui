@@ -14,7 +14,7 @@ use enumset::EnumSet;
 use fab_parse::{Deps, Parsable};
 
 #[cfg(feature = "cresustext")]
-pub use cresus_impl::{Modifier, ModifierField, ModifierQuery};
+pub use cresus_impl::{Modifier, ModifierField, ModifierItem, ModifierQuery};
 #[cfg(feature = "richtext")]
 pub use rich_impl::{Modifier, ModifierField};
 
@@ -106,12 +106,7 @@ pub trait TextModify {
     #[cfg(feature = "richtext")]
     fn apply(&self, ctx: &GetFont, section: &mut bevy::text::TextSection);
     #[cfg(feature = "cresustext")]
-    fn apply(
-        &self,
-        ctx: &GetFont,
-        transform: &mut bevy::prelude::Transform,
-        text: &mut bevy::text::Text,
-    );
+    fn apply(&self, ctx: &GetFont, item: ModifierItem);
     fn depends(&self) -> EnumSet<ModifierField>;
     fn changes(&self) -> EnumSet<ModifierField>;
 

@@ -2,11 +2,13 @@ use std::borrow::Cow;
 
 use bevy::prelude::*;
 use bevy_fab::Items;
+use bevy_layout_offset::UiOffset;
 use fab::{impl_modify, Modify};
 
 use super::{GetFont, ModifyBox};
 
-pub type ModifierQuery = (&'static mut Transform, &'static mut Text);
+pub type ModifierQuery = (&'static mut UiOffset, &'static mut Text);
+pub type ModifierItem<'a> = (&'a mut UiOffset, &'a mut Text);
 
 /// Operations on bevy [`TextSection`]s.
 ///
@@ -17,8 +19,8 @@ pub type ModifierQuery = (&'static mut Transform, &'static mut Text);
 #[derive(PartialEq)]
 impl Modify for Modifier {
     type Context<'a> = GetFont<'a>;
-    type MakeItem = (Transform, Text);
-    type Item<'a> = (&'a mut Transform, &'a mut Text);
+    type MakeItem = (UiOffset, Text);
+    type Item<'a> = ModifierItem<'a>;
     type Items<'a, 'b, 'c> = Items<'a, 'b, 'c, ModifierQuery>;
 
     /// Set the font to provided `path`.
@@ -61,7 +63,7 @@ impl Modify for Modifier {
     }
     /// Use an arbitrary [`ModifyBox`] to modify this section.
     #[modify(dynamic_read_write(depends, changes, item), context(ctx))]
-    pub fn dynamic(boxed: &ModifyBox, ctx: &GetFont, item: (&mut Transform, &mut Text)) {
-        boxed.apply(ctx, item.0, item.1);
+    pub fn dynamic(boxed: &ModifyBox, ctx: &GetFont, item: ModifierItem) {
+        boxed.apply(ctx, item);
     }
 }

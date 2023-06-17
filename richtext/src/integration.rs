@@ -119,13 +119,11 @@ impl MakeRichText {
     }
     pub fn with_text_style(mut self, style: TextStyle) -> Self {
         #[cfg(feature = "richtext")]
-        {
-            self.inner.default_item.style = style;
-        }
+        let style_field = &mut self.inner.default_item.style;
         #[cfg(feature = "cresustext")]
-        {
-            self.inner.default_item.1.sections[0].style = style;
-        }
+        let style_field = &mut self.inner.default_item.1.sections[0].style;
+
+        *style_field = style;
         self
     }
     /// Returns this [`MakeRichText`] with a new [`TextAlignment`] on [`Text`].
@@ -180,36 +178,32 @@ impl BevyModify for Modifier {
     #[cfg(feature = "cresustext")]
     fn spawn_items(
         extra: &TextGlobalStyle,
-        sections: Vec<(Transform, Text)>,
+        sections: Vec<(bevy_layout_offset::UiOffset, Text)>,
         cmds: &mut EntityCommands,
     ) {
         cmds.insert(NodeBundle::default());
         cmds.with_children(|cmds| {
-            sections.into_iter().for_each(|(transform, text)| {
+            sections.into_iter().for_each(|(offset, text)| {
                 cmds.spawn(TextBundle {
                     text: Text {
                         alignment: extra.alignment,
                         linebreak_behaviour: extra.linebreak_behaviour,
                         ..text
                     },
-                    transform,
                     ..default()
-                });
+                })
+                .insert(offset);
             });
         });
     }
     fn add_update_system(app: &mut App) {
         use bevy::prelude::CoreSet::PostUpdate;
         #[cfg(feature = "richtext")]
-        {
-            app.add_system(bevy_fab::update_component_items::<Self>.in_base_set(PostUpdate));
-        }
+        app.add_system(bevy_fab::update_component_items::<Self>.in_base_set(PostUpdate));
         #[cfg(feature = "cresustext")]
-        {
-            app.add_system(
-                bevy_fab::update_children_system::<ModifierQuery, Self>.in_base_set(PostUpdate),
-            );
-        }
+        app.add_system(
+            bevy_fab::update_children_system::<ModifierQuery, Self>.in_base_set(PostUpdate),
+        );
     }
 }
 
@@ -254,6 +248,8 @@ impl Plugin for RichTextPlugin {
         self.fab.build(app);
         if self.default_styles {
             app.add_style(default_styles);
+            #[cfg(feature = "cresustext")]
+            app.add_plugin(bevy_layout_offset::OffsetPlugin);
         }
     }
 }
