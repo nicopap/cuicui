@@ -8,13 +8,13 @@ mod track;
 pub mod trait_extensions;
 mod world;
 
+use std::ops::Deref;
 use std::{fmt::Arguments, marker::PhantomData};
 
 use bevy::app::{App, CoreSet, Plugin};
 use bevy::ecs::prelude::*;
 use bevy::ecs::query::WorldQuery;
 use bevy::ecs::system::{EntityCommands, StaticSystemParam, SystemParam, SystemParamItem};
-use bevy::prelude::Children;
 use fab::modify::{FieldsOf, Indexed};
 use fab_parse::Parsable;
 use reflect_query::predefined::QueryablePlugin;
@@ -54,18 +54,19 @@ pub trait BevyModify: Parsable + Send + Sync + 'static {
     fn add_update_system(app: &mut App);
 }
 
-pub struct Items<'a, 'w, 's, It: WorldQuery> {
-    children: Option<&'a Children>,
+pub struct Items<'a, 'w, 's, C, It: WorldQuery> {
+    children: Option<&'a C>,
     query: Query<'w, 's, It>,
 }
 
-impl<'a, 'w, 's, It: WorldQuery> Items<'a, 'w, 's, It> {
-    pub fn new(children: Option<&'a Children>, query: Query<'w, 's, It>) -> Self {
+impl<'a, 'w, 's, C: Component + Deref<Target = [Entity]>, It: WorldQuery> Items<'a, 'w, 's, C, It> {
+    pub fn new(children: Option<&'a C>, query: Query<'w, 's, It>) -> Self {
         Items { children, query }
     }
 }
-impl<'a, 'w, 's, Wq, M> Indexed<M> for Items<'a, 'w, 's, Wq>
+impl<'a, 'w, 's, C, Wq, M> Indexed<M> for Items<'a, 'w, 's, C, Wq>
 where
+    C: Component + Deref<Target = [Entity]>,
     Wq: WorldQuery,
     M: BevyModify,
     for<'b> Wq::Item<'b>: MakeMut<'b, M::Item<'b>>,
@@ -77,13 +78,14 @@ where
     }
 }
 
-pub fn update_children_system<Wq: WorldQuery, BM: BevyModify>(
-    mut query: Query<(&mut LocalBindings<BM>, Option<&Children>)>,
+pub fn update_children_system<C, Wq: WorldQuery, BM: BevyModify>(
+    mut query: Query<(&mut LocalBindings<BM>, Option<&C>)>,
     mut world_bindings: ResMut<WorldBindings<BM>>,
     ctx_params: StaticSystemParam<BM::Param>,
     items_query: Query<Wq>,
 ) where
-    BM: for<'a, 'w, 's> Parsable<Items<'a, 'w, 's> = Items<'a, 'w, 's, Wq>>,
+    C: Component + Deref<Target = [Entity]>,
+    BM: for<'a, 'w, 's> Parsable<Items<'a, 'w, 's> = Items<'a, 'w, 's, C, Wq>>,
     for<'b> Wq::Item<'b>: MakeMut<'b, BM::Item<'b>>,
     FieldsOf<BM>: Sync + Send,
 {
