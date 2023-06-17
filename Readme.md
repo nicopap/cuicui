@@ -95,12 +95,14 @@ flowchart LR
   reflect_query["reflect_query"]
   bevy_fab["bevy_fab"]
   richtext["richtext"]
+  bevy_layout_offset["bevy_layout_offset"]
   datazoo --> fab
   fab_derive --> fab
   fab --> fab_parse & bevy_fab
   fab_parse --> bevy_fab & richtext
   reflect_query --> bevy_fab
   bevy_fab --> richtext
+  bevy_layout_offset --> |feature = "cresustext"| richtext
 ```
 
 ## Reflect Query
