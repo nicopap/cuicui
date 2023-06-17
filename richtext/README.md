@@ -502,8 +502,6 @@ fn update_color_system(mut bindings: WorldBindingsMut, time: Res<Time>) {
 
 > **Warning**
 > TODO: complete this section when context fields land.
->
-> TODO: This is false until we do Entity as section.
 
 `cuicui_richtext` can also make your dialog's text more dynamic.
 Very much like the [febucci Unity plugin], `cucui_richtext` has a set of primitives to give
@@ -533,10 +531,10 @@ of individual characters or words, in sync or other.
 - [ ] fab resolve: Verify validaty of multiple write fields
 - [ ] fab resolve + fab_derive: Context field access tracking (implemented, not tested)
 - [ ] fab resolve: Test MinResolver
-- [ ] bevy_fab trackers: Test the reflection-component-based trackers
+- [X] bevy_fab trackers: Test the reflection-component-based trackers
 - [ ] fab parse: review the informal_grammar.md file
 - [ ] richtext: Text2d support
-- [ ] richtext: Modify a Vec<&mut Text> over TextSections, to allow all kind of effects
+- [X] richtext: Modify a Vec<&mut Text> over TextSections, to allow all kind of effects
 - [ ] fab_parse: Consider using a `View<Box<Fn(&mut Style)>>` for styling
     - This would make it very much like bindings, which is cool
     - Would allow local styles, which is more sensible than having to define them not where they are used.
