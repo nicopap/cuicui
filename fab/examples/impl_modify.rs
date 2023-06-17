@@ -66,9 +66,14 @@ impl Modify for ModifyCity {
         to_set.clone()
     }
 
-    #[modify(context(ctx), write(.name))]
-    pub fn read_context(ctx: &MyContext) -> &'static str {
-        ctx.closest_city
+    #[modify(context(.closest_city), write(.name))]
+    pub fn read_context(closest_city: &'static str) -> &'static str {
+        closest_city
+    }
+
+    #[modify(context(general_context), write(.streets[0].people))]
+    pub fn read_context_general(general_context: &MyContext) -> usize {
+        general_context.admin
     }
 
     /// Always set name of the third street to that of the city secretary.

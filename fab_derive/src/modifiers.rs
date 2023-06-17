@@ -109,16 +109,12 @@ impl Modify {
     fn call_param(&self, ctx: &Ident, item: &Ident) -> Option<TokenStream> {
         use ModifyType::*;
 
+        let path = self.path.to_tokens();
+
         match self.ty {
-            Context => Some(quote! { & #ctx }),
-            WriteMut | ReadWrite => {
-                let path = self.path.to_tokens();
-                Some(quote! { &mut #item #path })
-            }
-            Read => {
-                let path = self.path.to_tokens();
-                Some(quote! { & #item #path })
-            }
+            WriteMut | ReadWrite => Some(quote! { &mut #item #path }),
+            Context => Some(quote! { & #ctx #path }),
+            Read => Some(quote! { & #item #path }),
             Write => None,
         }
     }
