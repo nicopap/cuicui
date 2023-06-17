@@ -39,6 +39,8 @@ Cuicui is a collection of crates.
   not only how `Resolver` fits in bevy's ECS, but also how to hooks into the ECS
   to read values declared in the format string
 - `cuicui_richtext`: A rich text component for bevy
+- `cuicui_bevy_layout_offset`: A small bevy plugin to manipulate UI element transform
+
 
 ### History
 

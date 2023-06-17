@@ -1,5 +1,7 @@
 [workspace]
 members = [
+    "bevy_fab",
+    "bevy_layout_offset",
     "datazoo",
     "fab",
     "fab_derive",
