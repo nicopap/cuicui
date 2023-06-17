@@ -25,7 +25,8 @@ impl Plugin for OffsetPlugin {
         app.add_system(
             offset
                 .after(UiSystem::Flex)
-                .before(TransformSystem::TransformPropagate),
+                .before(TransformSystem::TransformPropagate)
+                .in_base_set(CoreSet::PostUpdate),
         );
     }
 }
