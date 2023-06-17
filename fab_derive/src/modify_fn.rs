@@ -135,6 +135,7 @@ fn mk_declaration(function: &mut ItemFn) {
 pub struct ModifyFn {
     name: Ident,
     inputs: Vec<syn::FnArg>,
+    vis: syn::Visibility,
     pub declaration: ItemFn,
     pub constructor: Option<ItemFn>,
     pub modifiers: Modifiers,
@@ -155,6 +156,7 @@ impl ModifyFn {
 
         let constructor = if modifiers.dynamic_field(Mode::Read).is_none() {
             let block = Box::new(syn::parse2(block)?);
+            let vis = vis.clone();
             Some(mk_constructor(vis, &modifiers, input.clone(), block))
         } else {
             None
@@ -166,6 +168,7 @@ impl ModifyFn {
         Ok(ModifyFn {
             name,
             inputs,
+            vis,
             declaration,
             constructor,
             modifiers,
@@ -214,7 +217,7 @@ impl ModifyFn {
 
         let enums = quote!(::#root::EnumSet);
         let ident = AsSnakeCase(self.name.to_string());
-        let vis = &self.declaration.vis;
+        let vis = &self.vis;
 
         let changes_name = Ident::new(&format!("{ident}_changes"), self.name.span());
         let depends_name = Ident::new(&format!("{ident}_depends"), self.name.span());
