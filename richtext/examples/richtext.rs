@@ -2,6 +2,7 @@
 
 use bevy::{
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
+    ecs::system::EntityCommands,
     prelude::*,
     window::PrimaryWindow,
 };
@@ -11,6 +12,10 @@ use cuicui_richtext::{
     modifiers, trait_extensions::*, Entry, MakeRichText, Modifier, ReflectQueryable, RichText,
     RichTextPlugin,
 };
+
+const MED: f32 = 40.0;
+const BIG: f32 = 60.0;
+const SML: f32 = 30.0;
 
 fn main() {
     App::new()
@@ -94,24 +99,16 @@ struct TopButton;
 #[reflect(Component, Queryable)]
 struct BottomButton;
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    // UI camera
-    commands.spawn(Camera2dBundle::default());
-
-    // Buttons
-    let button_text = |text: &'static str| {
-        TextBundle::from_section(
-            text,
-            TextStyle {
-                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                font_size: 40.0,
-                color: Color::rgb(0.9, 0.9, 0.9),
-            },
-        )
-    };
-    let button_style = || ButtonBundle {
+fn button<'a, 'w, 's>(
+    font: Handle<Font>,
+    text: &'static str,
+    cmds: &'a mut ChildBuilder<'w, 's, '_>,
+) -> EntityCommands<'w, 's, 'a> {
+    let color = Color::rgb(0.9, 0.9, 0.9);
+    let button_text = TextBundle::from_section(text, TextStyle { font, font_size: SML, color });
+    let button_style = ButtonBundle {
         style: Style {
-            size: Size { width: Val::Px(200.0), height: Val::Px(65.0) },
+            size: Size { width: Val::Px(250.0), height: Val::Px(65.0) },
             justify_content: JustifyContent::Center,
             margin: UiRect::all(Val::Px(30.0)),
             align_items: AlignItems::Center,
@@ -120,44 +117,19 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         background_color: Color::FUCHSIA.into(),
         ..default()
     };
-    commands
-        .spawn(NodeBundle {
-            style: Style {
-                size: Size { width: Val::Percent(100.0), ..default() },
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                flex_direction: FlexDirection::Column,
-
-                ..default()
-            },
-            ..default()
-        })
-        .with_children(|parent| {
-            parent
-                .spawn(button_style())
-                .with_children(|p| {
-                    p.spawn(button_text("Top Button"));
-                })
-                .insert(TopButton);
-            parent
-                .spawn(button_style())
-                .with_children(|p| {
-                    p.spawn(button_text("Bottom Button"));
-                })
-                .insert(BottomButton);
-        });
-
-    // Rich Text
-    commands.spawn((
+    let mut cmds = cmds.spawn(button_style);
+    cmds.with_children(|p| {
+        p.spawn(button_text);
+    });
+    cmds
+}
+fn fancy_text(font: Handle<Font>, mut cmds: EntityCommands) {
+    cmds.insert((
         MakeRichText::new(
             "{Color:{color}|{Rainbow:20.0|Bonjour} {greeted}!\n\
             {Color:Yellow, Sine:80|We are having fun here, woopy!}}",
         )
-        .with_text_style(TextStyle {
-            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-            font_size: 100.0,
-            color: Color::WHITE,
-        })
+        .with_text_style(TextStyle { font, font_size: BIG, color: Color::WHITE })
         .with_text_alignment(TextAlignment::Left)
         .with_style(Style {
             position_type: PositionType::Absolute,
@@ -169,38 +141,87 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         }),
         ColorText,
-        Name::new("Greet"),
+        Name::new("Fancy text"),
     ));
+}
+fn button_reactors(font: Handle<Font>, mut cmds: EntityCommands) {
+    cmds.insert((
+        MakeRichText::new(
+            "Top button: {Marked(TopButton).Interaction:show_top}\n\
+            {Color: {Marked(BottomButton).Interaction:show_bottom}|Bottom Button state}",
+        )
+        .with_text_style(TextStyle { font, font_size: MED, color: Color::WHITE }),
+        Name::new("Reactors"),
+    ));
+}
+fn fps_text(font: Handle<Font>, mut cmds: EntityCommands) {
+    cmds.insert((
+        // To use a specific font, you need to hold a handle on it.
+        // This is why we added the `FiraMediumHolder` resource earlier,
+        // otherwise, the font doesn't show up.
+        MakeRichText::new(
+            "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold, Content:{Res(Fps).fps:.1}}",
+        )
+        .with_text_style(TextStyle { font, font_size: MED, color: Color::WHITE }),
+        Name::new("FPS"),
+    ));
+}
+fn break_text(font: Handle<Font>, mut cmds: EntityCommands) {
+    cmds.insert((
+        MakeRichText::new("This is \n a test")
+            .with_text_style(TextStyle { font, font_size: MED, ..default() })
+            .with_text_alignment(TextAlignment::Right),
+        Name::new("Linebreak test"),
+    ));
+}
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+    // UI camera
+    commands.spawn(Camera2dBundle::default());
 
+    // Standard font
+    let font = asset_server.load("fonts/FiraSans-Bold.ttf");
+
+    // Mono font
     #[derive(Resource)]
     struct FiraMediumHolder(Handle<Font>);
     commands.insert_resource(FiraMediumHolder(
         asset_server.load("fonts/FiraMono-Medium.ttf"),
     ));
-    commands.spawn((
-        // To use a specific font, you need to hold a handle on it.
-        // This is why we added the `FiraMediumHolder` resource earlier,
-        // otherwise, the font doesn't show up.
-        MakeRichText::new(
-            "FPS: {Font:fonts/FiraMono-Medium.ttf, Color:gold, Content:{Res(Fps).fps:.1}}\n\
-            Top button: {Marked(TopButton).Interaction:show_top}\n\
-            {Color: {Marked(BottomButton).Interaction:show_bottom}|Bottom Button state}",
-        )
-        .with_text_style(TextStyle {
-            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-            font_size: 60.0,
-            color: Color::WHITE,
-        }),
-        Name::new("Gold"),
-    ));
-    commands.spawn((
-        MakeRichText::new("This is \n a test").with_text_style(TextStyle {
-            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-            font_size: 60.0,
-            color: Color::WHITE,
-        }),
-        Name::new("Linebreak text"),
-    ));
+    //--------layout----------
+    // FPS   |       |    test
+    //       | top B |    text
+    //       |       |
+    // Bonjo | bot B | B text1
+    // wavy  |       | B color
+    //------------------------
+
+    let direction = |direction, percent| NodeBundle {
+        style: Style {
+            size: Size::all(Val::Percent(percent)),
+            justify_content: JustifyContent::SpaceBetween,
+            align_items: AlignItems::Center,
+            flex_direction: direction,
+            ..default()
+        },
+        ..default()
+    };
+    let vertical = |percent| direction(FlexDirection::Column, percent);
+    let horizontal = |percent| direction(FlexDirection::Row, percent);
+
+    commands.spawn(horizontal(100.0)).with_children(|cmds| {
+        cmds.spawn(vertical(100.0)).with_children(|cmds| {
+            fps_text(font.clone(), cmds.spawn_empty());
+            fancy_text(font.clone(), cmds.spawn_empty());
+        });
+        cmds.spawn(vertical(50.0)).with_children(|cmds| {
+            button(font.clone(), "Top Button", cmds).insert(TopButton);
+            button(font.clone(), "Bottom Button", cmds).insert(BottomButton);
+        });
+        cmds.spawn(vertical(100.0)).with_children(|cmds| {
+            break_text(font.clone(), cmds.spawn_empty());
+            button_reactors(font.clone(), cmds.spawn_empty());
+        });
+    });
 }
 
 const GUESTS: &[&str] = &["bevy", "boovy", "noovy", "groovy", "bavy", "cuicui"];

@@ -183,12 +183,18 @@ impl BevyModify for Modifier {
     ) {
         use crate::modifiers::Sections;
         use FlexDirection::{Column, Row};
-        let direction = |d| NodeBundle {
-            style: Style { flex_direction: d, ..default() },
+
+        let justify_content = match extra.alignment {
+            TextAlignment::Left => JustifyContent::Start,
+            TextAlignment::Center => JustifyContent::Center,
+            TextAlignment::Right => JustifyContent::End,
+        };
+        let direction = |flex_direction, justify_content| NodeBundle {
+            style: Style { flex_direction, justify_content, ..default() },
             ..default()
         };
-        let vertical = || direction(Column);
-        let horizontal = || direction(Row);
+        let vertical = || direction(Column, JustifyContent::Start);
+        let horizontal = || direction(Row, justify_content);
         let line_ending = |text: &Text| text.sections[0].value.ends_with('\n');
         let text_bundle = |text| TextBundle {
             text: Text {
