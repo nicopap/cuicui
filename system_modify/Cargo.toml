@@ -1,0 +1,42 @@
+[package]
+name = "cuicui_system_modify"
+authors = ["Nicola Papale"]
+description = "An experimental extensible version of cuicui_richtext"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["bevy", "markup", "text", "template", "styling"]
+categories = ["game-development", "gui", "value-formatting", "template-engine"]
+repository = "https://github.com/nicopap/cuicui"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["cresustext"]
+richtext = []
+cresustext = ["bevy_layout_offset"]
+
+[dependencies]
+anyhow = "1"
+bevy = { version = "0.10", default-features = false, features = ["bevy_render", "bevy_core_pipeline", "bevy_text", "bevy_ui"] }
+enumset = { version = "1.1", features = ["std"] }
+string-interner = { version = "0.14", default-features = false, features = ["std", "inline-more", "backends"] }
+thiserror = "1"
+
+bevy_layout_offset = { path = "../bevy_layout_offset", package = "cuicui_bevy_layout_offset", optional = true }
+datazoo = { path = "../datazoo", package = "cuicui_datazoo" }
+fab = { path = "../fab", package = "cuicui_fab" }
+fab_parse = { path = "../fab_parse", package = "cuicui_fab_parse" }
+bevy_fab = { path = "../bevy_fab", package = "cuicui_bevy_fab" }
+reflect_query = { path = "../reflect_query", package = "cuicui_reflect_query", features = [
+ "register_core_pipeline",
+ "register_pbr",
+ "register_sprite",
+ "register_render",
+ "register_ui",
+ "register_text",
+] }
+
+[dev-dependencies]
+bevy = { version = "0.10", features = ["png", "x11", "bevy_asset", "bevy_render" ] }
+bevy-inspector-egui = "0.18.3"
+pretty_assertions = "1.3"
