@@ -112,15 +112,16 @@ mod impls {
 
                 fn into_modifier_state<'a: 'c, 'b: 'c, 'c>(
                     self,
-                    #[allow(unused_variables)] internal_world: &mut World,
+                    #[allow(unused_variables)]
+                    internal_world: &mut World,
                     rec: &'c mut FnAccessRecorder<'a, 'b>,
                     d: Self::InitData,
                 ) -> ModifierBox {
                     Box::new(ModifierState {
                         function: self,
                         state: (
-                            $( State::<$s>::init(internal_world, d.0), )?
-                            $( Item::<$c_i, $a_i>::init(rec, d. $i) ,)*
+                            $( State::<$s>::init(internal_world, d.0) , )?
+                            $( Item::<$c_i, $a_i>::init(rec, d. $i) , )*
                         ),
                         _dummy: PhantomData::<fn(($($s,)? $($c_i, $a_i,)*))>,
                     })
@@ -128,11 +129,11 @@ mod impls {
             }
             impl<F, $($s,)? $($c_i, $a_i,)*>  Modifier for ModifierState<
                 F,
-                ( $(for_t![$s, Entity],)?  $(<$a_i as Access>::ParsedPaths,)* ),
+                ( $(for_t![$s, Entity],)?  $( <$a_i as Access>::ParsedPaths, )* ),
                 ( $($s,)? $($c_i, $a_i,)* ),
             >
             where
-                F: FnMut( $(State<$s>,)? $(Item<$c_i, $a_i::Concrete<'_>>,)* ),
+                F: FnMut( $(State<$s>,)? $( Item<$c_i, $a_i::Concrete<'_>>, )* ),
                 $($s : Send + Sync + 'static,)?
                 $(
                     $c_i : Component + Reflect,
@@ -146,7 +147,8 @@ mod impls {
                     &mut self,
                     entity: Entity,
                     world: &mut World,
-                    #[allow(unused_variables)] internal_world: &mut World,
+                    #[allow(unused_variables)]
+                    internal_world: &mut World,
                 ) {
                     let items = world.query::<($(&mut $c_i,)*)>().get_mut(world, entity).unwrap();
                     (self.function)(
@@ -157,13 +159,13 @@ mod impls {
             }
         }
     }
-    make_modifier_state!(S, [C0, A0, 1, 0]);
-    make_modifier_state!(S, [C0, A0, 1, 0], [C1, A1, 2, 1]);
-    make_modifier_state!(S, [C0, A0, 1, 0], [C1, A1, 2, 1], [C2, A2, 3, 2]);
-    make_modifier_state!(S, [C0, A0, 1, 0], [C1, A1, 2, 1], [C2, A2, 3, 2], [C3, A3, 4, 3]);
-    make_modifier_state!(S, [C0, A0, 1, 0], [C1, A1, 2, 1], [C2, A2, 3, 2], [C3, A3, 4, 3], [C4, A4, 5, 4]);
-    make_modifier_state!(S, [C0, A0, 1, 0], [C1, A1, 2, 1], [C2, A2, 3, 2], [C3, A3, 4, 3], [C4, A4, 5, 4], [C5, A5, 6, 5]);
-    make_modifier_state!([C0, A0, 0, 0]);
+    make_modifier_state!(S, [C0, A0, 1,0]);
+    make_modifier_state!(S, [C0, A0, 1,0], [C1, A1, 2,1]);
+    make_modifier_state!(S, [C0, A0, 1,0], [C1, A1, 2,1], [C2, A2, 3,2]);
+    make_modifier_state!(S, [C0, A0, 1,0], [C1, A1, 2,1], [C2, A2, 3,2], [C3, A3, 4,3]);
+    make_modifier_state!(S, [C0, A0, 1,0], [C1, A1, 2,1], [C2, A2, 3,2], [C3, A3, 4,3], [C4, A4, 5,4]);
+    make_modifier_state!(S, [C0, A0, 1,0], [C1, A1, 2,1], [C2, A2, 3,2], [C3, A3, 4,3], [C4, A4, 5,4], [C5, A5, 6,5]);
+    make_modifier_state!([C0, A0, 0,0]);
     make_modifier_state!([C0, A0, 0,0], [C1, A1, 1,1]);
     make_modifier_state!([C0, A0, 0,0], [C1, A1, 1,1], [C2, A2, 2,2]);
     make_modifier_state!([C0, A0, 0,0], [C1, A1, 1,1], [C2, A2, 2,2], [C3, A3, 3,3]);
@@ -178,17 +180,14 @@ mod tests {
     use super::*;
     use bevy::prelude::{Quat, Style, Transform, Val, Vec3};
 
-    const M1: (i32, [&str; 3], &str) = (
-        32,
-        [".translation.x", ".scale", ".rotation"],
-        ".margin.left",
-    );
     fn m1(
         State(state): State<i32>,
-        Item((x, scale, rot), ..): Item<Transform, (Set<f32>, &mut Vec3, &Quat)>,
+        Item((mut x, scale, rot), ..): Item<Transform, (Set<f32>, &mut Vec3, &Quat)>,
         Item(left, ..): Item<Style, &mut Val>,
     ) {
-        todo!();
+        x.set(rot.length_squared());
+        *scale *= 3.0;
+        *left = Val::Px(*state as f32);
     }
 
     #[test]
@@ -196,7 +195,12 @@ mod tests {
         let mut world = World::new();
 
         let mut builder = Builder::default();
-        builder.add(&mut world, "m1", M1, m1);
+        let m1_args = (
+            32,
+            [".translation.x", ".scale", ".rotation"],
+            ".margin.left",
+        );
+        builder.add(&mut world, "m1", m1, m1_args);
         let mods = builder.finish();
     }
 }

@@ -58,7 +58,7 @@ impl Builder {
 
         f(internal_world, rec)
     }
-    pub fn add<T, M, S>(&mut self, world: &mut World, name: &'static str, init: S, function: M)
+    pub fn add<T, M, S>(&mut self, world: &mut World, name: &'static str, function: M, init: S)
     where
         M: IntoModifierState<T, InitData = S>,
     {
@@ -79,12 +79,12 @@ impl Builder {
     }
 }
 pub trait AppExt {
-    fn add_modifer<T, M, S>(&mut self, name: &'static str, init: S, f: M)
+    fn add_modifer<T, M, S>(&mut self, name: &'static str, f: M, init: S)
     where
         M: IntoModifierState<T, InitData = S>;
 }
 impl AppExt for App {
-    fn add_modifer<T, M, S>(&mut self, name: &'static str, init: S, f: M)
+    fn add_modifer<T, M, S>(&mut self, name: &'static str, f: M, init: S)
     where
         M: IntoModifierState<T, InitData = S>,
     {
@@ -92,7 +92,7 @@ impl AppExt for App {
             self.world.init_resource::<Builder>();
         }
         self.world.resource_scope(|world, mut mods: Mut<Builder>| {
-            mods.add(world, name, init, f);
+            mods.add(world, name, f, init);
         })
     }
 }
