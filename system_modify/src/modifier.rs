@@ -7,6 +7,29 @@ use crate::access_registry::FnAccessRecorder;
 
 pub type ModifierBox = Box<dyn Modifier + Send + Sync + 'static>;
 
+/// A `Modifier` expressed as a system.
+pub trait Modifier {
+    fn state(&self) -> Option<Entity>;
+    // TODO(clean) instead of `internal_world` consider newtyping World
+    fn run(&mut self, entity: Entity, world: &mut World, internal_world: &mut World);
+}
+
+/// Convert a `FnMut` into a [`Modifier`].
+pub trait IntoModifierState<T> {
+    type InitData;
+
+    fn into_modifier_state<'a: 'c, 'b: 'c, 'c>(
+        self,
+        internal_world: &mut World,
+        rec: &'c mut FnAccessRecorder<'a, 'b>,
+        data: Self::InitData,
+    ) -> ModifierBox;
+}
+
+/// Internal state of a modifier system.
+///
+/// This can be read and written to inside the modifier system, and through
+/// a binding.
 pub struct State<'a, C>(pub Mut<'a, C>);
 
 #[derive(Component)]
@@ -37,52 +60,11 @@ fn item_fetch<'w, C: Component + Reflect, A: Access>(
 ) -> Item<C, A::Concrete<'w>> {
     item_from_query::<C, A>(item, state)
 }
-// impl<C: Component + Reflect, A: Access> Item<C, A> {
-//     fn init<'z>(stuff: &mut FnAccessRecorder, data: A::Paths) -> A::ParsedPaths {
-//         Self::record(&data, stuff);
-//         A::parse_path(data)
-//     }
-//     fn fetch<'z>(state: &mut A::ParsedPaths, entity: Entity, world: &'z mut World) -> Self
-//     where
-//         A: Access<Concrete<'z> = A>,
-//     {
-//         let item = world.query::<&mut C>().get_mut(world, entity).unwrap();
-//         item_from_query::<C, A>(item, state)
-//     }
-// }
-
-pub trait Modifier {
-    fn state(&self) -> Option<Entity>;
-    // TODO(clean) instead of `internal_world` consider newtyping World
-    fn run(&mut self, entity: Entity, world: &mut World, internal_world: &mut World);
-}
 
 struct ModifierState<F, S, Dummy> {
     function: F,
     state: S,
     _dummy: PhantomData<fn(Dummy)>,
-}
-
-pub trait IntoModifierState<T> {
-    type InitData;
-
-    fn into_modifier_state<'a: 'c, 'b: 'c, 'c>(
-        self,
-        internal_world: &mut World,
-        rec: &'c mut FnAccessRecorder<'a, 'b>,
-        data: Self::InitData,
-    ) -> ModifierBox;
-}
-pub fn can_be_modifier_state<M, S, T>()
-where
-    M: IntoModifierState<T, InitData = S>,
-{
-}
-pub fn can_be_modifier_item<C, A>()
-where
-    C: Component + Reflect,
-    A: Access + 'static,
-{
 }
 
 #[rustfmt::skip]
@@ -201,6 +183,6 @@ mod tests {
             ".margin.left",
         );
         builder.add(&mut world, "m1", m1, m1_args);
-        let mods = builder.finish();
+        let _ = builder.finish();
     }
 }

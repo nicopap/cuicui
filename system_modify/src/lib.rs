@@ -1,7 +1,7 @@
 mod access;
 mod access_registry;
 mod id;
-mod path;
+mod modifier;
 mod split_reflect_path;
 
 use bevy::prelude::{App, Mut, Resource, World};
@@ -11,7 +11,7 @@ use string_interner::{backend::BucketBackend, StringInterner};
 pub use access::Set;
 use access_registry::{AccessRegistry, FnAccessRecorder};
 pub use id::Id;
-pub use path::{IntoModifierState, ModifierBox};
+pub use modifier::{IntoModifierState, ModifierBox};
 
 type Fid = Id;
 type Fix = u32;
@@ -25,7 +25,7 @@ pub struct ModifierInit<F, I> {
 pub struct Builder {
     interner: StringInterner<BucketBackend<Fid>>,
     f_map: RawIndexMap<Fid, Fix>,
-    fns: Vec<ModifierBox>,
+    modifiers: Vec<ModifierBox>,
 
     internal_world: World,
     reg: AccessRegistry,
@@ -41,7 +41,7 @@ impl Default for Builder {
         Builder {
             interner: StringInterner::new(),
             f_map: RawIndexMap::default(),
-            fns: Vec::new(),
+            modifiers: Vec::new(),
             internal_world: World::new(),
             reg: AccessRegistry::default(),
         }
@@ -67,15 +67,16 @@ impl Builder {
             return; // TODO(err): Show to user there is a conflicting name.
         }
         let id = self.interner.get_or_intern_static(name);
-        let f_id = self.fns.len() as u32;
+        let f_id = self.modifiers.len() as u32;
         self.f_map.set_expanding(&id, &f_id);
+
         let modifier = self.record(world, |internal_world, mut rec| {
             function.into_modifier_state(internal_world, &mut rec, init)
         });
-        self.fns.push(modifier)
+        self.modifiers.push(modifier)
     }
     pub fn finish(self) -> Modifiers {
-        Modifiers { fns: self.fns.into_boxed_slice() }
+        Modifiers { fns: self.modifiers.into_boxed_slice() }
     }
 }
 pub trait AppExt {
