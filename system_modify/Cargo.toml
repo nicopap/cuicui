@@ -27,6 +27,7 @@ datazoo = { path = "../datazoo", package = "cuicui_datazoo" }
 fab = { path = "../fab", package = "cuicui_fab" }
 fab_parse = { path = "../fab_parse", package = "cuicui_fab_parse" }
 bevy_fab = { path = "../bevy_fab", package = "cuicui_bevy_fab" }
+reflect_path = { path = "../reflect_path", package = "cuicui_reflect_path" }
 reflect_query = { path = "../reflect_query", package = "cuicui_reflect_query", features = [
  "register_core_pipeline",
  "register_pbr",

@@ -2,6 +2,8 @@ mod atom;
 mod parse;
 mod split_borrow;
 
+pub use split_borrow::{Multipath, PathBorrower, SplitPath};
+
 /// A component of a [`Path`] from a source value to a target value.
 ///
 /// Each `Access` goes from a "containing" type (such as a `struct`, a tuple or an array)

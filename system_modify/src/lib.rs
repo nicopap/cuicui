@@ -2,7 +2,6 @@ mod access;
 mod access_registry;
 mod id;
 mod modifier;
-mod split_reflect_path;
 
 use bevy::prelude::{App, Mut, Resource, World};
 use datazoo::RawIndexMap;

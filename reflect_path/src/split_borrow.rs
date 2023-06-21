@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use std::mem::{self, MaybeUninit};
 
 use bevy::reflect::{ParsedPath, Reflect};
@@ -17,29 +18,47 @@ pub unsafe fn split_element_out<'a, T: Reflect + 'a>(
     (source, unsafe { field_static.as_mut().unwrap_unchecked() })
 }
 
-pub trait SplitPathTarget<'a, const N: usize>: Sized + sealed::SplitPathTarget<'a, N> {}
-impl<'a, T: sealed::SplitPathTarget<'a, N>, const N: usize> SplitPathTarget<'a, N> for T {}
+pub trait SplitPath: Sized + sealed::SplitPath {
+    type Target<'a>;
+
+    fn split<'a>(
+        &mut self,
+        source: &'a mut (dyn Reflect + 'static),
+    ) -> <Self as SplitPath>::Target<'a>;
+}
+impl<T: sealed::SplitPath> SplitPath for T {
+    type Target<'a> = <T as sealed::SplitPath>::Target<'a>;
+    fn split<'a>(
+        &mut self,
+        source: &'a mut (dyn Reflect + 'static),
+    ) -> <Self as SplitPath>::Target<'a> {
+        <T as sealed::SplitPath>::split(self, source)
+    }
+}
 
 mod sealed {
     use super::*;
 
-    pub trait SplitPathTarget<'a, const N: usize>: Sized {
-        fn split(paths: &mut Multipath<N>, source: &'a mut (dyn Reflect + 'static))
-            -> Option<Self>;
+    pub trait SplitPath: Sized {
+        type Target<'a>;
+
+        fn split<'a>(&mut self, source: &'a mut (dyn Reflect + 'static)) -> Self::Target<'a>;
     }
     macro_rules! impl_split_path_target {
         ($n:tt $([$t_i:ident, $p_i:ident, $i:tt]),*) => {
             #[allow(unused_parens, unused_variables)]
-            impl<'a, $($t_i: Reflect),*> SplitPathTarget<'a, $n> for ($(&'a mut $t_i),*) {
-                fn split(
-                    multipath: &mut Multipath<$n>,
+            impl<$($t_i: Reflect),*> SplitPath for Multipath<($($t_i),*), $n> {
+                type Target<'a> = ($(&'a mut $t_i),*);
+
+                fn split<'a>(
+                    &mut self,
                     source: &'a mut (dyn Reflect + 'static),
-                ) -> Option<Self> {
+                ) -> Self::Target<'a> {
                     $(
                         // SAFETY: `Multipath` guarentees each path within is mutually exclusive.
-                        let (source, $p_i) = unsafe { split_element_out(&mut multipath.0[$i], source) };
+                        let (source, $p_i) = unsafe { split_element_out(&mut self.0[$i], source) };
                     )*
-                    Some(($($p_i),*))
+                    ($($p_i),*)
                 }
             }
         };
@@ -52,11 +71,12 @@ mod sealed {
 
 /// List of indices in `paths` that share data, therefore excludes
 /// a split mutable borrow.
+#[derive(Debug)]
 pub struct Incompatible;
 
-pub struct Multipath<const N: usize>([ParsedPath; N]);
+pub struct Multipath<T, const N: usize>([ParsedPath; N], PhantomData<fn(T)>);
 
-impl<const N: usize> Multipath<N> {
+impl<T, const N: usize> Multipath<T, N> {
     pub fn new(paths: [&str; N]) -> Result<Self, Incompatible> {
         let mut parsed: [MaybeUninit<ParsedPath>; N] =
             unsafe { MaybeUninit::uninit().assume_init() };
@@ -76,13 +96,7 @@ impl<const N: usize> Multipath<N> {
                 return Err(Incompatible);
             }
         }
-        Ok(Multipath(parsed))
-    }
-    pub fn split<'r, T: SplitPathTarget<'r, N>>(
-        &mut self,
-        source: &'r mut (dyn Reflect + 'static),
-    ) -> Option<T> {
-        T::split(self, source)
+        Ok(Multipath(parsed, PhantomData))
     }
 }
 
@@ -179,6 +193,18 @@ mod tests {
         }
     }
 
+    #[test]
+    fn multisplit() {
+        let mut a = a_sample();
+
+        let mut multi =
+            Multipath::<(f32, bool, f32), 3>::new([".tuple.1", ".tuple.0", ".y[0].baz"]).unwrap();
+        {
+            let (tuple_1, tuple_0, baz) = multi.split(&mut a);
+            *tuple_1 += *baz + (*tuple_0 as u8 as f32);
+            *baz = -*tuple_1;
+        }
+    }
     #[test]
     fn path_borrower() {
         let mut a = a_sample();

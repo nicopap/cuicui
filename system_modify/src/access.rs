@@ -2,10 +2,10 @@ use std::marker::PhantomData;
 
 use bevy::prelude::{Component, Mut};
 use bevy::reflect::{ParsedPath, Reflect};
+use reflect_path::{Multipath, SplitPath};
 
 use crate::access_registry::CompAccessRecorder;
 use crate::access_registry::FnAccessRecorder;
-use crate::split_reflect_path::Multipath;
 
 pub trait AccessField {
     type Concrete<'z>;
@@ -103,7 +103,7 @@ where
 {
     type Concrete<'a> = (T0::Concrete<'a>, T1::Concrete<'a>, T2::Concrete<'a>);
     type Paths = [&'static str; 3];
-    type ParsedPaths = [ParsedPath; 3];
+    type ParsedPaths = Multipath<(T0::From, T1::From, T2::From), 3>;
 
     fn record(paths: &Self::Paths, rec: &mut CompAccessRecorder) {
         if T0::READ {
@@ -126,14 +126,13 @@ where
         }
     }
     fn parse_path(paths: Self::Paths) -> Self::ParsedPaths {
-        paths.map(|p| ParsedPath::parse(p).unwrap())
+        Multipath::new(paths).unwrap()
     }
     fn extract<'k, C: Component + Reflect>(
         value: Mut<'k, C>,
-        path: &mut Self::ParsedPaths,
+        multi: &mut Self::ParsedPaths,
     ) -> Self::Concrete<'k> {
-        let multi = Multipath::new(path);
-        let (p0, p1, p2) = multi.split(value.into_inner()).unwrap();
+        let (p0, p1, p2) = multi.split(value.into_inner());
         (T0::new(p0), T1::new(p1), T2::new(p2))
     }
 }

@@ -7,7 +7,6 @@ use crate::{Access, Path};
 
 enum Token<'a> {
     Dot,
-    CrossHatch,
     OpenBracket,
     CloseBracket,
     Ident(&'a str),
