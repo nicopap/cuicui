@@ -86,31 +86,11 @@ impl<'z> AtomicAccess<'z> {
     pub fn with_capacity(capacity: usize) -> Self {
         AtomicAccess(Vec::with_capacity(capacity))
     }
-    fn atomized<'a>(&'a self, rel: &'a Path<'a>) -> impl Iterator<Item = &'_ Path<'z>> + 'a {
-        self.0
-            .iter()
-            .filter(|a| a.atom_of(rel) != Atom::Diverges)
-            .filter(|a| a.atom_of(rel) != Atom::Parent)
-    }
     fn index_of_subset(&self, rel: &Path) -> Option<Found> {
         self.0
             .iter()
             .enumerate()
             .find_map(|(i, a)| a.atom_of(rel).found(i))
-    }
-    /// Accumulates `accessors` into `Self`, removing duplicates & parents
-    /// of existing children.
-    pub fn from_non_atomic(paths: impl IntoIterator<Item = Path<'z>>) -> Self {
-        let mut atomic = Self::new();
-
-        for path in paths {
-            match atomic.index_of_subset(&path) {
-                Some(Found::Parent(index)) => atomic.0[index] = path,
-                Some(Found::Child(_) | Found::Equal) => {}
-                None => atomic.0.push(path),
-            }
-        }
-        atomic
     }
     /// Try to add `path` to the list of accessor. If it conflicts, then
     /// returns `true`. `false` otherwise.

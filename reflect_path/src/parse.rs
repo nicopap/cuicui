@@ -17,8 +17,6 @@ impl<'a> Token<'a> {
     const CROSSHATCH: char = '#';
     const OPEN_BRACKET: char = '[';
     const CLOSE_BRACKET: char = ']';
-    const OPEN_BRACKET_STR: &'static str = "[";
-    const CLOSE_BRACKET_STR: &'static str = "]";
 }
 
 /// # Panics
@@ -28,7 +26,7 @@ impl<'a> Token<'a> {
 /// # Safety
 ///
 /// `path` must be a valid path according to bevy's implementation.
-pub(crate) unsafe fn parse_path<'a>(path: &'a str) -> Path<'a> {
+pub(crate) unsafe fn parse_path(path: &str) -> Path {
     let mut parser = PathParser::new(path);
 
     let iter = iter::from_fn(|| {
@@ -85,10 +83,8 @@ impl<'a> PathParser<'a> {
 
         // we can assume we are parsing an ident now
         for (char_index, character) in self.path.chars().enumerate() {
-            let is_terminal = matches!(
-                character,
-                Token::DOT | Token::OPEN_BRACKET | Token::CLOSE_BRACKET
-            );
+            let is_terminal =
+                [Token::DOT, Token::OPEN_BRACKET, Token::CLOSE_BRACKET].contains(&character);
             if is_terminal {
                 let ident = Token::Ident(&self.path[..char_index]);
                 self.path = &self.path[char_index..];
